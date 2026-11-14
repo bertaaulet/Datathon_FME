@@ -70,7 +70,7 @@ def read_prompt(messages):
             options[match.group(1)] = match.group(2)
         elif line.startswith("Hint from a classmate: "):
             hint = line[len("Hint from a classmate: "):]
-        elif line.strip() != "Answer:":
+        elif line.strip() not in ("Answer:", "Expression:"):
             question.append(line)
     full = "\n".join(json.dumps(m["content"], ensure_ascii=False) for m in messages)
     return "\n".join(question).strip(), options, hint, full
@@ -92,8 +92,27 @@ def letter_logits(model, question, options, hint):
     return logits
 
 
+def fake_expression(model, question, options):
+    """Like a weak model: often the right value, written as a sum; sometimes a wrong one."""
+    from copilot.mathexpr import option_value
+    right = option_value(model.answers.get(question))
+    if right is None or noise("expr", question) < -0.3:
+        numbers = re.findall(r"\d+", question) or ["1"]
+        return " + ".join(numbers[:3])
+    whole = int(right) if right == int(right) else right
+    return f"{whole} - 1 + 1"
+
+
 def completion(model, request):
     question, options, hint, full = read_prompt(request["messages"])
+    if str(request.get("grammar", "")).startswith("root ::= expr"):
+        with model.lock:
+            model.calls.append({"question": question, "hint": "", "prompt_n": len(full) // 4,
+                                "options": options, "expression": True})
+        text = fake_expression(model, question, options)
+        return {"choices": [{"index": 0, "finish_reason": "stop",
+                             "message": {"role": "assistant", "content": text}}],
+                "timings": {"prompt_n": len(full) // 4, "predicted_n": len(text) // 2}}
     logits = letter_logits(model, question, options, hint)
     # Other tokens compete with the letters, as in the real model before the grammar
     tokens = dict(logits)

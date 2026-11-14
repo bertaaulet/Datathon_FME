@@ -75,6 +75,32 @@ def build_messages(problem, examples=(), image_b64=None, order=None, hint=None):
     return messages
 
 
+EXPR_SYSTEM = ("You solve multiple-choice math competition problems for school students. "
+               "Write one arithmetic expression whose value is the correct answer. "
+               "Use only numbers, + - * / ^ and parentheses. Do not compute it.")
+EXPR_MAX_TOKENS = 32
+
+
+def expression(problem, timeout=60, url=URL):
+    """Ask the model to write the answer as an expression. Return (text, timings).
+
+    A grammar (copilot/mathexpr.py) allows only numbers, operators and
+    parentheses, so Python can compute the value exactly.
+    """
+    from .mathexpr import GRAMMAR
+    messages = [{"role": "system", "content": EXPR_SYSTEM},
+                {"role": "user", "content": format_problem(problem) + "\nExpression:"}]
+    response = post(url, {
+        "messages": messages,
+        "grammar": GRAMMAR,
+        "max_tokens": EXPR_MAX_TOKENS,
+        "temperature": 0,
+        "seed": int(CONFIG["SEED"]),
+        "cache_prompt": True,
+    }, timeout=timeout)
+    return response["choices"][0]["message"]["content"].strip(), response.get("timings", {})
+
+
 def answer_letter(problem, examples=(), timeout=60, image_b64=None, url=URL):
     """Return (letter, timings). The grammar makes any other output impossible."""
     response = post(url, {

@@ -148,9 +148,15 @@ class Solver(WithServers):
     def test_rotations_make_more_calls_and_respect_the_clock(self):
         CONFIG["PREDICT_ROTATIONS"] = "3"
         self.assertEqual(pipeline.solve(SAMPLE, llm_url=self.url)["calls"], 4)
-        # No time left for a second pass: keep the first answer, don't fail
+        # Just enough time for the first call: answer, don't fail, stay inside the limit
+        limit = pipeline.MARGIN + pipeline.estimate_seconds(len(SAMPLE["text"]) + 30) + 0.5
+        result = pipeline.solve(SAMPLE, llm_url=self.url, time_limit=limit)
+        self.assertEqual(result["status"], "ok")
+        self.assertGreaterEqual(result["calls"], 1)
+        self.assertLessEqual(result["seconds"], limit)
+        # No time for even one call: the prior, with no call at all
         result = pipeline.solve(SAMPLE, llm_url=self.url, time_limit=pipeline.MARGIN)
-        self.assertEqual((result["calls"], result["status"]), (1, "ok"))
+        self.assertEqual((result["calls"], result["stage"], result["status"]), (0, "prior", "ok"))
 
     def test_survives_a_dead_or_broken_server(self):
         dead = pipeline.solve(SAMPLE, llm_url="http://127.0.0.1:9/v1/chat/completions")
@@ -228,6 +234,94 @@ class Calibration(unittest.TestCase):
         leaning = {"full": True, "passes": [("ABCDE", {"A": 0.5, "B": 0.3, "C": 0.1, "D": 0.05,
                                                       "E": 0.05})]}
         self.assertEqual(pipeline.rescore(leaning, bias)["answer"], "B")
+
+
+class Guardrails(WithServers):
+    def test_clean_problem(self):
+        clean = pipeline.clean_problem({"id": 3, "text": None,
+                                        "options": {"a": " 1 ", "B)": 2, "C": "", "F": "x", "D": None}})
+        self.assertEqual((clean["id"], clean["text"]), ("3", ""))
+        self.assertEqual(clean["options"], {"A": "1", "B": "2"})
+        self.assertEqual(pipeline.clean_problem("nonsense")["options"], {})
+
+    def test_fit_text_keeps_start_and_end(self):
+        short = "How many apples? " * 3
+        self.assertEqual(pipeline.fit_text(short, 40, 30), short)
+        long = "START " + "word " * 3000 + " QUESTION?"
+        fitted = pipeline.fit_text(long, 40, 30)
+        self.assertTrue(fitted.startswith("START") and fitted.endswith("QUESTION?"))
+        self.assertLessEqual(pipeline.estimate_seconds(len(fitted) + 40), 30)
+        self.assertIsNone(pipeline.fit_text(long, 40, 5))
+
+    def test_long_problem_is_shortened_not_timed_out(self):
+        problem = dict(SAMPLE, text="Story. " * 2000 + SAMPLE["text"])
+        result = pipeline.solve(problem, llm_url=self.url)
+        self.assertEqual((result["status"], result["shortened"], result["stage"]), ("ok", True, "model"))
+
+    def test_garbage_still_gets_a_letter(self):
+        for problem in (None, "text", {"options": {"A": 1}}, {"id": "x", "text": 5}):
+            result = pipeline.solve(problem, llm_url=self.url)
+            self.assertIn(result["answer"], tuple("ABCDE"))
+
+    def test_batch_mode_solves_without_the_file_bias(self):
+        CONFIG["PREDICT_DEBIAS"] = "batch"
+        self.assertIsNone(calib.letter_bias())
+
+
+class Expressions(WithServers):
+    def test_evaluate_is_safe_and_exact(self):
+        from copilot import mathexpr
+        self.assertEqual(mathexpr.evaluate("2 + 3 * 4"), 14)
+        self.assertEqual(mathexpr.evaluate("(1 + 2)^2 - -1"), 10)
+        for bad in ("10 / 0", "2^100", "__import__('os')", "2 +", "", None, "9" * 200, "1e400"):
+            self.assertIsNone(mathexpr.evaluate(bad), bad)
+
+    def test_option_values(self):
+        from copilot import mathexpr
+        cases = {"12": 12, "3,5": 3.5, "1/2": 0.5, "25%": 25, "12 cm\u00b2": 12, "\u22123": -3,
+                 "1 000": 1000, "10 \u20ac": 10}
+        for text, value in cases.items():
+            self.assertAlmostEqual(mathexpr.option_value(text), value, msg=text)
+        for text in ("3 and 4", "a triangle", "x + 1", "", None):
+            self.assertIsNone(mathexpr.option_value(text), text)
+        options = {"A": "8", "B": "9", "C": "10", "D": "12", "E": "1/2"}
+        self.assertTrue(mathexpr.numeric(options))
+        self.assertFalse(mathexpr.numeric({"A": "red", "B": "blue", "C": "1", "D": "2", "E": "3"}))
+        self.assertEqual(mathexpr.match(0.5, options), "E")
+        self.assertIsNone(mathexpr.match(11, options))
+        self.assertIsNone(mathexpr.match(8, {"A": "8", "B": "8.0"}))
+
+    def test_expression_stage(self):
+        CONFIG["PREDICT_EXPRESSION"] = "on"
+        result = pipeline.solve(SAMPLE, llm_url=self.url)
+        self.assertEqual(result["calls"], 2)
+        self.assertTrue(result["expr"])
+        if result["expr_letter"]:
+            self.assertEqual((result["answer"], result["stage"]), (result["expr_letter"], "expr"))
+        # Off by default: one call, as before
+        CONFIG["PREDICT_EXPRESSION"] = "off"
+        self.assertEqual(pipeline.solve(SAMPLE, llm_url=self.url)["calls"], 1)
+        # Options that aren't numbers: no expression call
+        CONFIG["PREDICT_EXPRESSION"] = "on"
+        words = dict(SAMPLE, options={l: w for l, w in zip("ABCDE", ("red", "blue", "green", "pink", "grey"))})
+        self.assertEqual(pipeline.solve(words, llm_url=self.url)["calls"], 1)
+
+    def test_vote_and_override(self):
+        result = {"probs": {"A": 0.5, "B": 0.2, "C": 0.1, "D": 0.1, "E": 0.1}, "answer": "A",
+                  "expr_letter": "B"}
+        CONFIG["PREDICT_EXPR_MODE"] = "override"
+        self.assertEqual(pipeline.apply_expression(dict(result))["answer"], "B")
+        CONFIG["PREDICT_EXPR_MODE"], CONFIG["PREDICT_EXPR_WEIGHT"] = "vote", "2"
+        self.assertEqual(pipeline.apply_expression(dict(result))["answer"], "A")   # 0.4 < 0.5
+        CONFIG["PREDICT_EXPR_WEIGHT"] = "4"
+        self.assertEqual(pipeline.apply_expression(dict(result))["answer"], "B")   # 0.8 > 0.5
+
+    def test_expression_failure_keeps_the_letter(self):
+        CONFIG["PREDICT_EXPRESSION"] = "on"
+        plain = pipeline.solve(dict(SAMPLE, id="e1"), llm_url=self.url)
+        self.model.fail_next = 0
+        self.assertIn(plain["answer"], tuple("ABCDE"))
+        self.assertEqual(plain["status"], "ok")
 
 
 class Leaks(unittest.TestCase):
@@ -585,9 +679,9 @@ class TutorFlow(WithServers):
 class Scripts(WithServers):
     """predict.py and eval.py as the jury runs them, against the stand-in servers."""
 
-    def run_script(self, *args, cwd):
+    def run_script(self, *args, cwd, **settings):
         env = dict(os.environ, LLM_PORT=str(self.llm.server_port),
-                   EMBED_PORT=str(self.embed.server_port), PYTHONIOENCODING="utf-8")
+                   EMBED_PORT=str(self.embed.server_port), PYTHONIOENCODING="utf-8", **settings)
         return subprocess.run([sys.executable, *args], capture_output=True, text=True,
                               encoding="utf-8", env=env, cwd=cwd)
 
@@ -618,16 +712,42 @@ class Scripts(WithServers):
 
             done = self.run_script(os.path.join(ROOT, "eval.py"), "--input", data, "--limit", "12",
                                    "--rotations", "1", "--debias", "batch", "--name", "batch",
-                                   cwd=folder)
+                                   "--expression", "on", cwd=folder, PREDICT_BATCH_MIN="5")
             self.assertEqual(done.returncode, 0, done.stderr)
-            self.assertIn("Batch letter bias", done.stdout)
+            self.assertIn("Letter bias from batch", done.stdout)
+            self.assertIn("Expression stage: asked", done.stdout)
             with open(os.path.join(folder, "results", "ablations.csv"), encoding="utf-8") as f:
                 log = list(csv.DictReader(f))
             self.assertIn("debias=batch", log[1]["settings"])
+            self.assertIn("expression=on/override", log[1]["settings"])
             with open(os.path.join(folder, log[1]["details"]), encoding="utf-8") as f:
                 details = list(csv.DictReader(f))
             self.assertEqual(len(details), 12)
             self.assertTrue(all(r["answer"] in tuple("ABCDE") for r in details))
+
+    def test_predict_survives_bad_input(self):
+        with tempfile.TemporaryDirectory() as folder:
+            data = os.path.join(folder, "test.jsonl")
+            good = english(VAL)[:6]
+            with open(data, "w", encoding="utf-8") as f:
+                f.write(json.dumps(good[0]) + "\n")
+                f.write('{"id": "broken-1", "text": "no closing brace"\n')
+                f.write("[1, 2, 3]\n\n")
+                f.write(json.dumps({"id": 7, "text": None, "options": ["x"]}) + "\n")
+                f.writelines(json.dumps(r) + "\n" for r in good[1:])
+            out = os.path.join(folder, "predictions.csv")
+            done = self.run_script(os.path.join(ROOT, "predict.py"), "--input", data, "--output", out,
+                                   "--rag", "1", "--index", os.path.join(folder, "missing.db"),
+                                   cwd=ROOT, PREDICT_DEBIAS="batch", PREDICT_BATCH_MIN="3")
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertIn("No retrieval", done.stderr)
+            self.assertIn("Letter bias from batch", done.stderr)
+            with open(out, encoding="utf-8") as f:
+                rows = list(csv.DictReader(f))
+            self.assertEqual(len(rows), 9)
+            self.assertEqual([r["id"] for r in rows[1:4]], ["broken-1", "line-3", "7"])
+            self.assertTrue(all(r["answer"] in tuple("ABCDE") for r in rows))
+            self.assertFalse(os.path.exists(out + ".tmp"))
 
     def test_web_server_endpoints(self):
         from app.server import make_handler
