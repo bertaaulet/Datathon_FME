@@ -10,7 +10,7 @@ Cada problema porta què passa, la causa (comprovada o no), l'arreglo, de qui é
 
 | # | Problema | Gravetat | De qui | Depèn de | Estat |
 |---|---|---|---|---|---|
-| 1 | `predict.py` només respon D o A | Alta | A (+ C) | Dades de B | ⬜ |
+| 1 | `predict.py` només respon D o A | Alta | A (+ C) | Dades de B | 🟡 biaix per lot i biaix robust (`berta/rag-split`); falta mesurar a la placa |
 | 2 | La caché no serveix per a les pistes | Alta | A i B | — | 🟡 A: decidit; B: pendent |
 | 3 | Les pistes es tallen a 200 caràcters sense avisar | Mitjana | Tutor | — | 🟨 fet a `irene/tutor-fixes`, provat a la placa |
 | 4 | El Cangur gairebé mai es convenç | Mitjana | B i tutor | Dades de B | ⬜ |
