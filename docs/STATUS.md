@@ -46,7 +46,7 @@ Tot el codi de la v1 és a `projecte/`, però **no hi ha cap resultat real**: no
 | baseline (organitzadors) | 22,5% | 40 | 8,7 s |
 
 ## Bloquejos / dubtes oberts
-- **Preguntes per als organitzadors** (llista a `docs/PLA.md`): on s'executa el test ocult, si porta opcions i `level`, si es poden publicar xifres agregades i un model ajustat amb M3Kang, si es poden preparar pistes amb un model gran, i com i quan es lliura el dashboard.
+- **Preguntes per als organitzadors** (llista a `docs/PLA.md`): on s'executa el test ocult, si porta opcions i `level`, si es poden publicar xifres agregades i un model ajustat amb M3Kang, i com i quan es lliura el dashboard.
 - **Per decidir com a equip:** validació (15% a l'atzar o `--val-years 2023,2024`), llengües, les tres propostes de Claude a `DECISIONS.md`, el llindar de D4, l'idioma del README i el nom a la `LICENSE`.
 - L'app de la matriu LED pot no arribar al tutor per `127.0.0.1` si App Lab l'executa en un contenidor.
 
@@ -54,3 +54,4 @@ Tot el codi de la v1 és a `projecte/`, però **no hi ha cap resultat real**: no
 - Importar el repo base: còpia sense historial a `projecte/` (commit `d6e3f1b` dels organitzadors).
 - Idea final: Teach ("Ensenya el Cangur") amb `predict.py` millorat com a part del projecte.
 - Pla d'execució escrit a `docs/PLA.md`.
+- Es poden preparar pistes i els altres lots amb un model gran fora de la placa (confirmat per Marc, 14 nov).

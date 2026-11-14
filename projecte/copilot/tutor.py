@@ -15,7 +15,7 @@ import os
 import threading
 import time
 
-from . import elo, leak, led, topics
+from . import elo, embed, hintsim, leak, led, topics
 from .config import CONFIG, ROOT
 from .llm import LETTERS, letter_probs, split_problem
 from .pipeline import solve
@@ -54,9 +54,11 @@ def bar_value(margin):
 
 
 class Tutor:
-    def __init__(self, store, ask=letter_probs, index=None, images_dir=None, background=True):
+    def __init__(self, store, ask=letter_probs, index=None, images_dir=None, background=True,
+                 embedder=embed.embed):
         self.store = store
         self.ask = ask                    # letter_probs, or a fake one in the tests
+        self.embedder = embedder          # embeds a student's hint; None switches it off
         self.index = index                # copilot.rag.Index, to place outside problems
         self.images_dir = images_dir or os.path.join(ROOT, "data", "images")
         self.background = background      # False runs model calls inline (tests)
@@ -76,6 +78,24 @@ class Tutor:
 
     def _say(self, who, text, kind=""):
         self.messages.append({"who": who, "text": text, "kind": kind})
+
+    def _say_method(self, topic, n, lead="", who="sistema", kind="pista", reveal=True):
+        """A topic's method hint in Catalan, plus the student's language as the stage allows.
+
+        Stage 1: both languages. Stage 2: the student's language sits behind the same
+        "see it in my language" button as the problem (reveal=False when there is no
+        button, as for an outside problem). Stage 3: Catalan only.
+        """
+        hint = topics.method_hint(topic, n)
+        message = {"who": who, "text": f"{lead}{hint}", "kind": kind}
+        student = self.student or {}
+        if self._has_origin() and student.get("etapa") in (1, 2):
+            origin = student["lang_origen"]
+            translated = topics.method_hint(topic, n, origin)
+            if translated != hint and (student["etapa"] == 1 or reveal):
+                message["origen"] = {"lang": origin, "text": translated,
+                                     "behind_button": student["etapa"] == 2}
+        self.messages.append(message)
 
     def _show(self, frame):
         self.frame = frame
@@ -325,6 +345,9 @@ class Tutor:
             state = kangaroo(answer["probs"], current["label"])
         except Exception:
             state = None
+        # Only the new hint is embedded; None (no server) stores it without the signals.
+        signals = None if state is None else hintsim.assess(
+            self.store, current["id"], current["row"]["topic"], text, self.embedder)
         with self.lock:
             if self.current is not current:
                 return
@@ -336,7 +359,12 @@ class Tutor:
             delta = state["margin"] - current["ref"]["margin"]
             tau = self._tau()
             convinced = delta > tau and state["margin"] > 0
-            self.store.add_hint(current["id"], 1, text, delta, convinced)
+            if signals and signals["duplicate_of"]:
+                self.store.hint_duplicate(signals["duplicate_of"], convinced)
+            else:
+                self.store.add_hint(current["id"], 1, text, delta, convinced,
+                                    relevance=(signals or {}).get("relevance"),
+                                    vec=(signals or {}).get("vec"))
             current["bar"] = bar_value(state["margin"])
             self._show(led.bar(current["bar"]))
             if convinced:
@@ -371,16 +399,23 @@ class Tutor:
                 else:
                     rung = 2
             if rung == 2:
-                self._say("sistema", f"És un problema de «{topics.name(topic)}». "
-                                     f"{topics.method_hint(topic, 0)}", "pista")
+                self._say_method(topic, 0, f"És un problema de «{topics.name(topic)}». ")
             elif rung == 3:
-                peer = self.store.best_hint(current["id"])
+                peer = self.store.best_hint(current["id"], hintsim.min_relevance())
+                similar = None if peer else self._neighbour_hint(current)
                 if peer:
                     current["hint_n"] = peer["n"]
                     self.store.hint_shown(peer["n"])
-                    self._say("sistema", f"Una pista d'un company: «{peer['text']}»", "pista")
+                    # Only a student's hint is "from a classmate"; the agent's bank is not.
+                    lead = ("Una pista d'un company" if peer.get("source", "student") == "student"
+                            else "Una pista")
+                    self._say("sistema", f"{lead}: «{peer['text']}»", "pista")
+                elif similar:
+                    # Not counted as shown or solved: those counts belong to its own problem.
+                    self._say("sistema", f"Una pista d'un problema semblant: «{similar['text']}»",
+                              "pista")
                 else:
-                    self._say("sistema", topics.method_hint(topic, 1), "pista")
+                    self._say_method(topic, 1)
             elif rung == 4:
                 if not current["answered"]:
                     self._record_first("", False)   # seeing the solution counts as not solved
@@ -391,6 +426,19 @@ class Tutor:
                 self._say("sistema", f"La resposta és la {label}) "
                                      f"{current['options'].get(label, '')}.", "solucio")
             return self.view()
+
+    def _neighbour_hint(self, current):
+        """The best hint of a similar problem, if it says nothing about this answer."""
+        found = self.store.best_neighbour_hint(current["row"]["neighbours"],
+                                               hintsim.min_relevance())
+        if not found:
+            return None
+        statements = [current["model"]["text"], (current["cat"] or {}).get("text"),
+                      (current["origen"] or {}).get("text")]
+        for options in (current["options"], current["model"]["options"]):
+            if leak.check(found["text"], current["label"], options, statements):
+                return None
+        return found
 
     def _easier_neighbour(self, current):
         """A similar problem with a lower rating, with its answer."""
@@ -456,9 +504,10 @@ class Tutor:
                     outside["level"] = round(sum(w * level for w, level in weights)
                                              / sum(w for w, _ in weights), 1)
                 level = "" if outside["level"] is None else f" (nivell aproximat: {outside['level']})"
-                self._say("cangur", "Aquest problema no és al meu banc, o sigui que no en sé la "
-                                    f"resposta segura. Sembla de «{topics.name(outside['topic'])}»"
-                                    f"{level}. {topics.method_hint(outside['topic'], 0)}")
+                self._say_method(outside["topic"], 0,
+                                 "Aquest problema no és al meu banc, o sigui que no en sé la "
+                                 f"resposta segura. Sembla de «{topics.name(outside['topic'])}»"
+                                 f"{level}. ", who="cangur", kind="", reveal=False)
                 if outside["similar"]:
                     self._say("sistema", "Aquí tens problemes semblants del banc per practicar.")
                 self._show(led.text("?"))
@@ -494,10 +543,23 @@ class Tutor:
 
     # ------------------------------------------------------------------ what the page shows
 
+    def _messages(self):
+        """The chat, with each translated hint shown only when the stage allows it."""
+        current = self.current
+        revealed = bool(current) and (current["shown"] in ("both", "origen") or current["revealed"])
+        out = []
+        for message in self.messages:
+            origen = message.get("origen")
+            message = {k: v for k, v in message.items() if k != "origen"}
+            if origen and (not origen["behind_button"] or revealed):
+                message["origen"] = {"lang": origen["lang"], "text": origen["text"]}
+            out.append(message)
+        return out
+
     def view(self):
         with self.lock:
             student = self.student
-            view = {"phase": self.phase, "busy": self.busy, "messages": list(self.messages),
+            view = {"phase": self.phase, "busy": self.busy, "messages": self._messages(),
                     "student": None, "problem": None, "outside": None,
                     "languages": self.store.languages(), "classroom_lang": LANG}
             if student:
