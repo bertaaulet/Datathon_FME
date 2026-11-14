@@ -63,6 +63,8 @@ button:disabled { cursor: default; }
 .ladder span { padding: 4px 10px; border-radius: 6px; white-space: nowrap; }
 .ladder span.on { background: var(--accent-bg); color: var(--accent-text); font-weight: 600; }
 .level { font-size: 14px; color: var(--soft); white-space: nowrap; }
+/* the home language, to switch it during the session */
+.langpick select { width: auto; max-width: 11.5em; padding: 5px 34px 5px 10px; font-size: 14px; background-position: right 10px center; }
 .steps { display: inline-flex; align-items: flex-end; gap: 3px; margin-left: 6px; vertical-align: -2px; }
 .steps i { width: 6px; height: calc(7px + var(--k) * 1.6px); border-radius: 2px; background: var(--line); transition: background-color .3s var(--ease); }
 .steps i.on { background: var(--blue); }
@@ -114,6 +116,8 @@ button:disabled { cursor: default; }
 .text { white-space: pre-wrap; overflow-wrap: anywhere; font: clamp(20px, 2.1vw, 23px)/1.6 var(--serif); text-wrap: pretty; }
 .text small { display: block; font: 600 12px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--soft); margin-bottom: 8px; }
 .text.second { border-left: 1px solid var(--line); padding-left: 22px; }
+/* a machine translation says so, next to the language's name */
+.text small .mt { margin-inline-start: 8px; padding: 2px 6px; border: 1px solid currentColor; border-radius: 4px; letter-spacing: .04em; text-transform: none; font-weight: 500; }
 @media (max-width: 640px) { .text.second { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: 16px; } }
 .text img { max-width: 100%; height: auto; border-radius: 8px; outline: 1px solid rgba(0,0,0,.1); outline-offset: -1px; background: #fff; }
 /* a new problem arrives in two small steps: statement, then options one after another */
@@ -131,6 +135,7 @@ button.opt:active:not(:disabled) .bub { scale: .94; }
 .opt .bub { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--ink); display: grid; place-items: center; font: 600 16px/1 var(--sans);
   background: var(--surface); transition: background-color .15s, color .15s, border-color .15s, scale .2s var(--ease); }
 .opt .t { overflow-wrap: anywhere; font: clamp(19px, 2vw, 21px)/1.45 var(--serif); text-wrap: pretty; }
+.opt .t .own { display: block; font-size: .84em; line-height: 1.35; color: var(--soft); }   /* the option in the student's language */
 .opt.wrong { opacity: .55; }
 .opt.wrong .t { text-decoration: line-through 1.5px var(--soft); }
 .opt.wrong .bub { border-color: var(--soft); color: var(--soft); border-style: dashed; }
@@ -330,6 +335,8 @@ form.hint textarea { min-height: 78px; }
 <header class="mast">
   <h1 class="title" id="title" translate="no"></h1>
   <span class="spacer"></span>
+  <label class="langpick hidden" id="lang-box"><span class="vh">La meva llengua</span>
+    <select id="sw-lang" name="language"></select></label>
   <div class="ladder hidden" id="ladder" role="group" aria-label="Etapa de llengua"></div>
   <span class="level hidden" id="level" role="img">Nivell <span class="steps" id="level-steps"></span></span>
   <button class="link" id="btn-teacher" aria-expanded="false" aria-controls="teacher">Docent</button>
@@ -354,7 +361,7 @@ form.hint textarea { min-height: 78px; }
       <input type="text" id="in-name" name="name" maxlength="40" autocomplete="off" spellcheck="false" autocapitalize="words" enterkeyhint="go">
       <div class="lab" id="lab-level">Quin curs fas?</div>
       <div class="levels" id="levels" role="group" aria-labelledby="lab-level"></div>
-      <label class="lab" for="in-lang">Vols veure els problemes també en una altra llengua?</label>
+      <label class="lab" for="in-lang">Quina llengua entens millor? Ho veuràs tot en català i en la teva llengua.</label>
       <select id="in-lang" name="lang"></select>
       <div class="row"><button class="btn primary big" id="btn-start" type="submit">Comencem</button></div>
       <p class="fine">Tot el que facis es queda en aquesta placa.</p>
@@ -471,8 +478,8 @@ async function act(path, body) {
   try { render(await call(path, body || {})); offline(false); } catch (error) { offline(true); }
   finally { inflight = false; $("app").removeAttribute("aria-busy"); }
 }
-const ISO1 = {cat: "ca", eng: "en", esp: "es", fra: "fr", deu: "de", ita: "it", por: "pt", arb: "ar", zho: "zh",
-  tur: "tr", vie: "vi", ind: "id", swh: "sw", kor: "ko", jpn: "ja", lit: "lt", ron: "ro", urd: "ur", ukr: "uk", rus: "ru"};
+/* each language's own name and two-letter code: sent by the server (copilot/langs.py), one source for both */
+const ISO1 = {}, LANG_NAMES = {};
 
 /* ───────── dot-matrix lettering (5x7), drawn as SVG dots ───────── */
 const FONT = {
@@ -631,10 +638,12 @@ function drawLevels() {
 }
 drawLevels();
 
-const LANG_NAMES = {eng: "English", cat: "Català", esp: "Castellano", fra: "Français",
-  arb: "العربية", zho: "中文", deu: "Deutsch", tur: "Türkçe", vie: "Tiếng Việt",
-  ind: "Bahasa Indonesia", swh: "Kiswahili", kor: "한국어", jpn: "日本語", lit: "Lietuvių",
-  ron: "Română", urd: "اردو", ukr: "Українська", rus: "Русский", por: "Português", ita: "Italiano"};
+/* a piece of text in the student's language: its direction (Arabic runs right to left) and its language */
+function inLang(node, lang) {
+  node.setAttribute("dir", "auto");
+  if (ISO1[lang]) node.setAttribute("lang", ISO1[lang]);
+  return node;
+}
 const STAGES = {1: "Dues llengües", 2: "Català amb ajuda", 3: "Només català"};
 
 /* ───────── the yard: where the Kangaroo stands, and how it jumps ───────── */
@@ -773,15 +782,25 @@ function render(view) {
   const focused = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
   const hadFocusInProblem = !!(focused && $("problem").contains(focused));
   if (!langsFilled) {
-    const select = $("in-lang");
-    select.append(el("option", {value: ""}, "No, només en català"));
-    for (const lang of view.languages)
-      if (lang !== view.classroom_lang && lang !== "eng")
-        select.append(el("option", {value: lang}, LANG_NAMES[lang] || lang));
-    if (view.languages.includes("eng") && view.classroom_lang !== "eng")
-      select.append(el("option", {value: "eng"}, LANG_NAMES.eng));
+    for (const code in view.lang_names || {}) {
+      LANG_NAMES[code] = view.lang_names[code].name;
+      if (view.lang_names[code].iso) ISO1[code] = view.lang_names[code].iso;
+    }
+    // the same choices when starting and in the header; a language whose problems aren't
+    // in the bank says so: only the Kangaroo speaks it
+    for (const [select, catalan] of [[$("in-lang"), "Ja parlo català"], [$("sw-lang"), LANG_NAMES[view.classroom_lang] || "Català"]]) {
+      select.append(el("option", {value: view.classroom_lang}, catalan));
+      for (const lang of view.languages) {
+        if (lang === view.classroom_lang) continue;
+        const inBank = (view.bank_languages || view.languages).includes(lang);
+        select.append(el("option", {value: lang, lang: ISO1[lang] || ""},
+          (LANG_NAMES[lang] || lang) + (inBank ? "" : " · problemes només en català")));
+      }
+    }
     langsFilled = true;
   }
+  $("lang-box").classList.toggle("hidden", !student);
+  if (student) { $("sw-lang").value = student.lang_origen || view.classroom_lang; $("sw-lang").disabled = !!view.busy; }
 
   // header
   $("level").classList.toggle("hidden", !student);
@@ -819,9 +838,12 @@ function render(view) {
       texts.append(box);
     }
     if (own) {
-      const box = el("div", {class: "text" + (problem.cat ? " second" : ""), dir: "auto"});
-      if (ISO1[problem.origen_lang]) box.setAttribute("lang", ISO1[problem.origen_lang]);
-      box.append(el("small", {}, LANG_NAMES[problem.origen_lang] || problem.origen_lang));
+      const box = inLang(el("div", {class: "text" + (problem.cat ? " second" : "")}), problem.origen_lang);
+      const name = el("small", {}, LANG_NAMES[problem.origen_lang] || problem.origen_lang);
+      // anything that isn't M3Kang's own text was translated by a machine, and nobody reviewed it
+      if (problem.origen_source && problem.origen_source !== "official" && !problem.origen_image)
+        name.append(el("span", {class: "mt", lang: "ca", title: "Traduït per una màquina (" + problem.origen_source + "), sense revisar"}, "traducció automàtica"));
+      box.append(name);
       if (problem.origen_image) box.append(el("img", {src: "/img/" + problem.origen_image, decoding: "async",
         alt: "Enunciat original en " + (LANG_NAMES[problem.origen_lang] || problem.origen_lang)}));
       else box.append(document.createTextNode(problem.origen));
@@ -831,7 +853,12 @@ function render(view) {
       if (!(letter in problem.options)) continue;
       const button = el("button", {class: "opt", type: "button", "data-letter": letter});
       button.style.setProperty("--i", options.children.length + 1);
-      button.append(el("span", {class: "bub"}, letter), el("span", {class: "t"}, problem.options[letter]));
+      const value = el("span", {class: "t"}, problem.options[letter]);
+      // the letter never changes; the student's language goes under the Catalan option
+      const own = problem.options_origen && problem.options_origen[letter];
+      if (problem.shown === "origen") inLang(value, problem.origen_lang);
+      else if (own && own !== problem.options[letter]) value.append(inLang(el("span", {class: "own"}, own), problem.origen_lang));
+      button.append(el("span", {class: "bub"}, letter), value);
       const wrong = problem.wrong.includes(letter), right = problem.label === letter;
       if (wrong) button.classList.add("wrong");
       if (right) button.classList.add("right");
@@ -858,6 +885,8 @@ function render(view) {
 
   // always visible while working on an outside problem (CLAUDE.md)
   $("p-warning").textContent = problem && problem.warning ? problem.warning : "";
+  if (problem && problem.warning && problem.warning_origen)
+    $("p-warning").append(inLang(el("small", {}, problem.warning_origen.text), problem.warning_origen.lang));
   $("p-warning").classList.toggle("hidden", !(problem && problem.warning));
 
   // short answers (numbers, single words) sit side by side instead of one per line
@@ -868,6 +897,8 @@ function render(view) {
   labelled($("btn-help"), "lamp", problem && problem.helps >= 3 ? "Ensenya'm la solució" :
     problem && problem.helps > 0 ? "Una altra pista" : "Demana una pista");
   $("btn-reveal").classList.toggle("hidden", !(problem && problem.can_reveal));
+  // the language's own name on the button: a student who can't read the Catalan label yet still finds it
+  if (student && student.lang_origen) $("btn-reveal").textContent = "Veure en la meva llengua · " + (LANG_NAMES[student.lang_origen] || student.lang_origen);
   const canNext = ["ready", "done"].includes(view.phase) && !view.busy;
   $("btn-next").classList.toggle("hidden", !canNext);
   labelled($("btn-next"), "next", view.phase === "ready" ? "Primer problema" : "Problema següent", true);
@@ -883,10 +914,8 @@ function render(view) {
   chat.replaceChildren();
   view.messages.forEach((message, i) => {
     const bubble = el("div", {class: "msg " + message.who + " " + (message.kind || "") + (i >= seenMessages ? " new" : "")}, message.text);
-    if (message.origen) {   // the same hint in the student's language (language bridge)
-      bubble.append(el("small", {lang: message.origen.lang},
-                       (LANG_NAMES[message.origen.lang] || message.origen.lang) + ": " + message.origen.text));
-    }
+    if (message.origen)    // the same words in the student's language (language bridge)
+      bubble.append(inLang(el("small", {}, message.origen.text), message.origen.lang));
     const kind = problem && marks.get(problem.id + ":" + i);
     if (kind) bubble.append(resultGlyph(kind));
     chat.append(bubble);
@@ -1024,6 +1053,11 @@ async function teacher() {
     }
     body.append(box);
   }
+  if (data.languages && data.languages.length) {
+    body.append(el("h4", {class: "lab"}, "Pont d'idioma"));
+    for (const row of data.languages)
+      body.append(el("div", {class: "hintnote"}, (LANG_NAMES[row.lang] || row.lang) + ": " + (STAGES[row.etapa] || "")));
+  }
   body.append(el("h4", {class: "lab"}, "Pistes escrites per l'alumne: " + data.hints.length));
   for (const hint of data.hints.slice(-5))
     body.append(el("div", {class: "hintnote"}, "«" + hint.text + "»" + (hint.convinced ? " ✓" : "")));
@@ -1047,6 +1081,7 @@ $("btn-next").onclick = () => act("/api/next");
 $("btn-leave").onclick = () => { $("in-hint").value = ""; countHint(); act("/api/leave-teaching"); };
 $("btn-help").onclick = () => act("/api/help");
 $("btn-reveal").onclick = () => act("/api/reveal");
+$("sw-lang").onchange = () => act("/api/language", {lang: $("sw-lang").value});
 $("btn-back").onclick = () => act("/api/next");
 $("btn-retry").onclick = () => refresh();
 $("in-ext").oninput = () => { $("btn-ext").disabled = !$("in-ext").value.trim(); };

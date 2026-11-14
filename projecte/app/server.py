@@ -49,6 +49,7 @@ def make_handler(tutor, images_dir):
         "/api/hint": lambda b: tutor.hint(str(b.get("text", ""))[:1000]),
         "/api/leave-teaching": lambda b: tutor.leave_teaching(),
         "/api/reveal": lambda b: tutor.reveal(),
+        "/api/language": lambda b: tutor.set_language(str(b.get("lang", ""))[:8]),
         "/api/external": lambda b: tutor.external(str(b.get("text", ""))[:4000]),
     }
 
