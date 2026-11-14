@@ -280,9 +280,10 @@ Aquesta és la llista completa, agrupada per àrees. Inclou tot el pla del proje
 - [x] `eval.py`: guardar la màquina (`machine`), `--debias batch`, `--expression`, i les columnes `stage`, `shortened` i `expr*`
 - [x] Guardrails de `predict.py`: línies trencades, índex absent, problemes massa llargs escurçats, temps planificat abans de cada crida, `PREDICT_DEBIAS=batch`
 - [ ] `baseline-org` i `baseline`, i l'anàlisi d'errors del baseline per tipus de problema
-- [ ] Etapa 1: anàlisi de problemes gairebé idèntics entre train i validació, llindar, i validació sense germans
+- [x] Etapa 1: anàlisi de problemes gairebé idèntics. **Descartada**: 10 germans de 281, 5 encerts (`DECISIONS.md`)
 - [ ] Etapa 2: solucionadors en Python per als tipus més freqüents
-- [ ] Etapa 3: expressió escrita pel model i calculada per Python (codi fet a `copilot/mathexpr.py`, desactivat per defecte; falta comprovar la gramàtica a la placa i mesurar-la)
+- [ ] Etapa 3: expressió escrita pel model i calculada per Python (codi fet a `copilot/mathexpr.py`; gramàtica i temps comprovats a la placa; falta mesurar l'encert)
+- [ ] Que el RAG s'activi des de `config.env`: la comanda oficial no porta `--rag`
 - [ ] Etapa 4: RAG amb les solucions de l'agent
 - [ ] Etapa 5: biaix, calibració per lot i rotacions
 - [ ] Etapa 6: millor OCR, i la imatge per als problemes sense opcions
@@ -295,7 +296,7 @@ Aquesta és la llista completa, agrupada per àrees. Inclou tot el pla del proje
 
 **Dades i pistes**
 
-- [ ] `prepare_m3kang.py` amb les llengües del pla i les imatges
+- [x] `prepare_m3kang.py` amb `eng` i `cat` (segona volta d'OCR en marxa; sense imatges)
 - [ ] `prep/agent/` i els cinc lots, validats amb `check_agent_output.py`, i 20 textos de cada lot revisats per una persona
 - [ ] La columna `source`, `import_hints.py`, i el graó 3 llegint el banc
 - [ ] La línia base del Cangur per a tots els problemes elegibles
@@ -312,9 +313,9 @@ Aquesta és la llista completa, agrupada per àrees. Inclou tot el pla del proje
 
 **Tutor**
 
-- [ ] Problemes externs amb el mateix recorregut que els del banc: el harness calcula la resposta, i a partir d'aquí hi ha la correcció, el Cangur, les pistes generades i la solució
-- [ ] L'avís dels problemes externs sempre visible, amb el text exacte (substitueix el `DISCLAIMER` de `copilot/tutor.py`)
-- [ ] Els intents amb problemes externs marcats a `tutor.db`, per poder-los separar a les mesures
+- [x] Problemes externs amb el mateix recorregut que els del banc: el harness calcula la resposta, i a partir d'aquí hi ha la correcció, el Cangur, les pistes generades i la solució
+- [x] L'avís dels problemes externs sempre visible, amb el text exacte (substitueix el `DISCLAIMER` de `copilot/tutor.py`)
+- [x] Els intents amb problemes externs marcats a `tutor.db`, per poder-los separar a les mesures
 - [ ] Problemes externs provats amb els problemes inventats: encert del harness, i el recorregut sencer
 - [ ] El pont d'idioma complet: tres etapes, amb la imatge original en la llengua d'origen
 - [ ] El doble Elo: `sim/students.py --db data/tutor.db`

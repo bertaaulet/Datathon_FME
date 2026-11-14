@@ -40,7 +40,9 @@ CREATE TABLE IF NOT EXISTS attempts (
     lang TEXT,              -- the language the answer counts for: 'cat' or 'origen'
     shown TEXT,             -- what was on screen: 'cat', 'both' or 'origen'
     answer TEXT, correct INTEGER, revealed INTEGER, helps INTEGER,
-    seconds REAL, ts REAL
+    seconds REAL, ts REAL,
+    external INTEGER DEFAULT 0  -- 1: a problem from outside the bank, checked against the
+                                -- harness's answer; never moves a rating or a bank count
 );
 CREATE TABLE IF NOT EXISTS hints (
     n INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,6 +74,7 @@ MIGRATIONS = [
     ("hints", "dups", "INTEGER DEFAULT 0"),
     ("hints", "vec", "BLOB"),
     ("hints", "rejected", "TEXT"),
+    ("attempts", "external", "INTEGER DEFAULT 0"),
 ]
 
 # The order of the hints another student may see: what helped people most, then the
@@ -110,6 +113,7 @@ class Store:
                 self.db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
         self.db.execute("UPDATE hints SET source = 'student' WHERE source IS NULL")
         self.db.execute("UPDATE hints SET dups = 0 WHERE dups IS NULL")
+        self.db.execute("UPDATE attempts SET external = 0 WHERE external IS NULL")
 
     def run(self, sql, args=()):
         with self.lock:
@@ -184,16 +188,19 @@ class Store:
                   student["elo_cat"], student["elo_origen"], student["etapa"], student["streak"]))
 
     def add_attempt(self, student_id, problem_id, lang, shown, answer, correct, revealed,
-                    helps, seconds):
+                    helps, seconds, external=False):
         self.run("INSERT INTO attempts (student, problem_id, lang, shown, answer, correct, "
-                 "revealed, helps, seconds, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                 "revealed, helps, seconds, ts, external) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                  (student_id, problem_id, lang, shown, answer, int(correct), int(revealed),
-                  helps, seconds, time.time()))
+                  helps, seconds, time.time(), int(bool(external))))
 
-    def attempts(self, student_id=1):
+    def attempts(self, student_id=1, external=False):
+        """The student's attempts, oldest first. Bank problems only, unless external=True
+        (then only the outside ones): the two never mix in ratings or counts."""
         return self.rows("SELECT a.*, p.topic, p.level FROM attempts a "
                          "LEFT JOIN problems p ON p.id = a.problem_id "
-                         "WHERE a.student = ? ORDER BY a.n", (student_id,))
+                         "WHERE a.student = ? AND COALESCE(a.external, 0) = ? ORDER BY a.n",
+                         (student_id, int(bool(external))))
 
     # --- hints -------------------------------------------------------------
 

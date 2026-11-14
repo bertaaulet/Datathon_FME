@@ -14,7 +14,7 @@ The language model that fits on the board (Qwen3.5 0.8B) answers Kangaroo proble
 2. **If they're wrong**, they get help one rung at a time: a similar, easier problem; the topic and a method; a hint left by another student; and the solution only if they ask for it.
 3. **If they're right**, they teach the Kangaroo, a weak classmate played by the model. The Kangaroo always starts with a wrong answer. The student writes a hint that mustn't give the answer away, and the board measures whether the hint moved the Kangaroo towards the right option. A bar on the LED matrix goes up or down.
 4. **Hints that work are kept** on the board, and become the third rung of help for the next student.
-5. **The next problem** is chosen with Elo ratings, so it's hard enough to learn from and easy enough to keep going.
+5. **The next problem** is chosen with Elo ratings (see Ratings below), so it's hard enough to learn from and easy enough to keep going.
 
 The model never writes text for the student. It only reports how likely it finds each letter, in one token. Everything the Kangaroo "says" is a sentence written by the team.
 
@@ -25,9 +25,35 @@ PISA and Kangaroo problems are long texts. A student who doesn't yet read the cl
 - **Three stages.** The problem in the student's language next to Catalan; then Catalan with a button to see it in their language (each use is counted); then Catalan only. The student moves up after four right answers in a row without the button.
 - **Language or maths?** The student has two ratings, one per language. The difference estimates how much the language costs them. It's shown to the teacher only after 30 answers per language, as a rough range, and nobody is labelled: the student chooses the language, and the data stay on the board.
 
+### Ratings
+
+Students and problems share one Elo scale. The chance that a student gets a problem right is
+
+```text
+P = 0.2 + 0.8 / (1 + 10 ^ ((R_problem − R_student) / 400))
+```
+
+where 0.2 is a blind guess among five options. After each answer the student's rating moves by `K · (result − P)`.
+
+- **Problems have a fixed rating**, set once by `prep/build_tutor_db.py`: `1000 + 150 · level + 100 · third of the paper` (Kangaroo papers go from 3-point to 5-point questions). Students' answers never move it, so every student is measured on the same scale and one student can't shift the bank. The flip side: if this first guess is off, the student's rating inherits the error, so it has to be checked against the data.
+- **A student starts** at `1000 + 150 · level`, from the year they say they're in. `K` starts at 160 and shrinks to 40 (`K = max(40, 160 / (1 + answers / 8))`): fast to find the level, then steady. With simulated students starting 300 points off, a constant `K = 32` is still about 160 points off after 20 answers; this schedule, about 65.
+- **Only the first answer counts**, and asking for the solution counts as wrong. Help rungs and teaching the Kangaroo don't change the rating.
+- **Only bank problems move a rating.** Their answer is M3Kang's label. Outside problems (below) are stored apart and never move it.
+- **Two ratings per student** for the language bridge: `elo_cat` and `elo_origen`. Each answer moves only the one for the language it was read in (Catalan, or the student's language when it was on screen or the button was used).
+- **The next problem** is the unseen bank problem whose `P` is closest to 0.7; after a wrong answer, one of the same topic if there's one close enough.
+
 ### Problems from outside the bank
 
-A student can type their own problem. Nobody knows its answer, so the tutor doesn't check it. It shows the topic, an estimated level and similar problems from the bank to practise with. Only if the student asks does the Kangaroo give its guess, with a warning that it can't be confirmed.
+A student can type their own problem, with its options `A) … E)`. It goes through the same path as a bank problem, with one difference: nobody knows its answer for sure.
+
+1. If it's a near copy of a bank problem (embedding similarity ≥ 0.97), it *is* that problem, with M3Kang's answer.
+2. Otherwise the tutor places it (topic from keywords, a level estimated from the 5 most similar bank problems) and the harness, the same `solve()` that `predict.py` runs, works out an answer in the background. That answer plays the label: the student's answer is checked against it, the help ladder and the Kangaroo use it, and the solution step shows it. The answer is never shown before the student solves the problem or asks for the solution.
+3. This warning stays on screen the whole time: *"No podem assegurar les respostes per a problemes externs. Confirma la solució en fonts oficials o amb el teu professor."*
+4. The leak filter is stricter: a hint may name no option at all (no letter, position or option value), because the harness's answer may be wrong.
+5. The attempt is stored with `external = 1`. It moves no rating, doesn't count towards the language stages, the teacher's per-topic summary or the bank's hint statistics, and the teacher sees it as a separate count. Hints written for it aren't kept for other students.
+6. Without five readable options there's nothing to check against: the tutor only shows the topic, the estimated level and similar problems to practise.
+
+How far to trust the check is the harness's accuracy (see Results). And since the harness's answer usually is the model's own favourite, the Kangaroo often already agrees with it, and there's nothing to teach.
 
 ### `predict.py`
 
@@ -44,7 +70,7 @@ The official entry point answers one letter per problem, as the challenge requir
 | SQLite (`data/tutor.db`) | Linux on the board | The student, attempts, hints, ratings, problem texts |
 | App Lab app (`applab/math-matrix`) | Linux + microcontroller | Draws the tutor's picture on the 8x13 LED matrix |
 
-How M3Kang is used: as the answer key, as a difficulty map (level and position in the paper give each problem a first rating), as a library of similar problems (embeddings), as the same problem in several languages, and as the base of a bank of hints written by students.
+How M3Kang is used: as the answer key, as a difficulty map (level and position in the paper give each problem a fixed rating), as a library of similar problems (embeddings), as the same problem in several languages, and as the base of a bank of hints written by students.
 
 ```text
 predict.py            official entry point (same command line as the base repository)

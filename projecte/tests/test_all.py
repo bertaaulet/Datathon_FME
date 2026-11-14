@@ -28,7 +28,7 @@ import fake_llama  # noqa: E402
 from copilot import calib, elo, hintsim, led, leak, llm, pipeline, topics  # noqa: E402
 from copilot.config import CONFIG  # noqa: E402
 from copilot.store import Store  # noqa: E402
-from copilot.tutor import Tutor, bar_value, kangaroo  # noqa: E402
+from copilot.tutor import NEUTRAL_HINT, Tutor, bar_value, kangaroo  # noqa: E402
 
 TRAIN, VAL = demo_data.make(90)
 SAMPLE = {"id": "s1", "level": 0,
@@ -344,6 +344,17 @@ class Leaks(unittest.TestCase):
                      "A la primera bossa hi ha 4 pomes, i a les altres també."]:
             self.assertIsNone(self.check(hint), hint)
 
+    def test_strict_filter_names_no_option(self):
+        # Outside problems: the harness's answer may be wrong, so no option at all may be named
+        strict = lambda hint: leak.check_strict(hint, SAMPLE["options"], self.TEXT)  # noqa: E731
+        for letter in "BCDE":
+            self.assertEqual(strict(f"Jo crec que és la {letter}, segur"), "lletra", letter)
+        for letter, value in SAMPLE["options"].items():
+            self.assertIsNotNone(strict(f"Al final en queden {value}, compta-ho"), letter)
+        self.assertEqual(strict("Mira la segona opció"), "posicio")
+        self.assertIsNone(strict("Primer calcula quantes pomes hi ha en total i després resta."))
+        self.assertEqual(strict("Resta"), "curta")
+
     def test_value_already_in_the_statement_is_allowed(self):
         options = {"A": "2", "B": "3", "C": "4", "D": "5", "E": "6"}
         self.assertIsNone(self.check("Fixa't que cada bossa té 4 pomes.", "C", options))
@@ -376,9 +387,8 @@ class Ratings(unittest.TestCase):
         self.assertGreater(elo.expected(0, 3000), 0.2 - 1e-9)   # never below guessing
 
     def test_update_and_pick(self):
-        student, problem = elo.update(1000, 1000, True)
-        self.assertGreater(student, 1000)
-        self.assertLess(problem, 1000)
+        self.assertGreater(elo.update(1000, 1000, True), 1000)
+        self.assertLess(elo.update(1000, 1000, False), 1000)
         candidates = [("a", 600, "x"), ("b", 870, "y"), ("c", 1500, "x")]
         self.assertEqual(elo.pick(candidates, 1000)[0], "b")
         self.assertEqual(elo.pick(candidates + [("d", 880, "x")], 1000, topic="x")[0], "d")
@@ -457,7 +467,10 @@ class TutorFlow(WithServers):
         self.store = Store(self.path)
         self.addCleanup(self.store.close)
         self.tutor = Tutor(self.store, ask=self.ask, background=False,
-                           images_dir=self.folder.name, embedder=fake_embedder)
+                           images_dir=self.folder.name, embedder=fake_embedder, solver=self.solve)
+
+    def solve(self, problem):
+        return pipeline.solve(problem, llm_url=self.url)
 
     def wrong_letter(self):
         label = self.tutor.current["label"]
@@ -477,9 +490,13 @@ class TutorFlow(WithServers):
         self.assertEqual(view["phase"], "solving")
         self.assertIsNone(view["problem"]["label"])            # the answer is never sent early
         before = self.tutor.student["elo_cat"]
+        problem_id = view["problem"]["id"]
+        problem_before = self.tutor.store.problem(problem_id)["elo"]
         view = self.tutor.answer(self.wrong_letter())
         self.assertEqual(view["phase"], "help")
         self.assertLess(self.tutor.student["elo_cat"], before)
+        # problem ratings are fixed: a student's answer never moves them
+        self.assertEqual(self.tutor.store.problem(problem_id)["elo"], problem_before)
         self.assertIsNone(view["problem"]["label"])
         kinds = []
         for _ in range(4):
@@ -523,6 +540,28 @@ class TutorFlow(WithServers):
         self.assertGreater(view["problem"]["bar"], bar_value(current["ref"]["margin"]))
         if hint["convinced"]:
             self.assertEqual(view["phase"], "done")
+
+    def test_precomputed_kangaroo_does_not_call_the_model(self):
+        # Wrong-leaning probabilities for every problem, as prep/kangaroo_baseline.py stores them
+        self.store.run("UPDATE problems SET k_probs = ?",
+                       (json.dumps({"A": 0.4, "B": 0.3, "C": 0.1, "D": 0.1, "E": 0.1}),))
+        self.tutor.start("Test", "", 1)
+        calls = len(self.model.calls)
+        self.tutor.next()
+        current = self.tutor.current
+        self.assertEqual(len(self.model.calls), calls)               # no reference call
+        self.assertTrue(current["ref_done"])
+        self.assertIsNotNone(current["ref"])
+        view = self.tutor.answer(current["label"])
+        self.assertFalse(view["busy"])                               # nothing to wait for
+        self.assertEqual(len(self.model.calls), calls)
+
+    def test_kangaroo_is_asked_when_nothing_was_precomputed(self):
+        self.tutor.start("Test", "", 1)
+        calls = len(self.model.calls)
+        self.tutor.next()
+        self.assertEqual(len(self.model.calls), calls + 1)           # one reference call
+        self.assertTrue(self.tutor.current["ref_done"])
 
     def test_nonsense_hint_does_not_convince(self):
         self.tutor.start("Test", "", 1)
@@ -699,16 +738,79 @@ class TutorFlow(WithServers):
         self.tutor.next()
         self.assertNotIn("origen", self.method_message(self.ask_for_method()))
 
-    def test_outside_problem_never_leads_with_an_answer(self):
+    SPIDERS = "How many legs do 7 spiders have? A) 42 B) 49 C) 56 D) 63 E) 70"
+
+    def test_outside_problem_follows_the_bank_path(self):
         self.tutor.start("Test", "", 1)
-        view = self.tutor.external("How many legs do 7 spiders have? A) 42 B) 49 C) 56 D) 63 E) 70")
+        before = dict(self.tutor.student)
+        view = self.tutor.external(self.SPIDERS)
+        problem = view["problem"]
+        self.assertEqual(view["phase"], "solving")
+        self.assertTrue(problem["external"])
+        self.assertIn("No podem assegurar", problem["warning"])    # always on screen
+        self.assertIsNone(problem["label"])                        # never leads with an answer
+        self.assertIn(self.tutor.current["label"], tuple("ABCDE")) # the harness's answer
+        view = self.tutor.answer(self.wrong_letter())
+        self.assertEqual(view["phase"], "help")
+        self.assertIn("No podem assegurar", view["problem"]["warning"])
+        # stored apart, and no rating moves
+        self.assertEqual(self.store.attempts(), [])
+        external = self.store.attempts(external=True)
+        self.assertEqual(len(external), 1)
+        self.assertEqual(external[0]["correct"], 0)
+        for key in ("elo_cat", "elo_origen", "etapa", "streak"):
+            self.assertEqual(self.tutor.student[key], before[key])
+        self.assertEqual(self.tutor.teacher()["external_attempts"], 1)
+        self.assertEqual(self.tutor.teacher()["attempts"], 0)
+        for _ in range(4):                                         # the same ladder, to the end
+            view = self.tutor.help()
+        self.assertEqual(view["phase"], "done")
+        self.assertEqual(view["problem"]["label"], self.tutor.current["label"])
+        self.assertEqual(view["messages"][-1]["kind"], "avis")     # the solution comes with it
+        self.assertEqual(len(self.store.attempts(external=True)), 1)
+        self.assertEqual(self.tutor.next()["phase"], "solving")    # back to the bank
+
+    def test_outside_problem_right_answer_and_teaching(self):
+        # The harness's answer is usually the model's own favourite, so there's often
+        # nothing to teach. Here the harness says the model's least likely letter.
+        def least_likely(problem):
+            probs = self.ask(problem, hint=NEUTRAL_HINT)["probs"]
+            return {"answer": min("ABCDE", key=lambda l: probs[l]), "status": "ok", "calls": 1}
+        self.tutor.solver = least_likely
+        self.tutor.start("Test", "", 1)
+        self.tutor.external(self.SPIDERS)
+        hints_before = len(self.store.hints())
+        view = self.tutor.answer(self.tutor.current["label"])
+        self.assertEqual(view["phase"], "teach")
+        self.assertEqual(self.store.attempts(external=True)[0]["correct"], 1)
+        # strict filter: no option may be named, whichever is right
+        view = self.tutor.hint(f"Crec que és la {self.wrong_letter()}, mira-ho bé")
+        self.assertEqual(view["messages"][-1]["kind"], "fuita")
+        view = self.tutor.hint("Compta quantes potes té una aranya i multiplica")
+        self.assertNotEqual(view["messages"][-1]["kind"], "fuita")
+        self.assertEqual(self.tutor.current["tries"], 1)           # it reached the Kangaroo
+        self.assertEqual(len(self.store.hints()), hints_before)   # never stored for others
+        self.assertEqual(self.tutor.leave_teaching()["phase"], "solving")
+        self.assertEqual(self.store.teach_exits(), [])
+
+    def test_outside_problem_without_options_is_only_placed(self):
+        self.tutor.start("Test", "", 1)
+        view = self.tutor.external("How many legs do 7 spiders have?")
         self.assertEqual(view["phase"], "external")
-        self.assertIsNone(view["outside"]["guess"])
-        self.assertFalse(any("diria" in m["text"] for m in view["messages"]))
-        view = self.tutor.external_guess()
-        self.assertIn(view["outside"]["guess"], tuple("ABCDE"))
-        self.assertEqual(view["messages"][-1]["kind"], "avis")     # the warning comes with it
-        self.assertEqual(self.tutor.next()["phase"], "solving")
+        self.assertIsNone(view["problem"])
+        self.assertIsNone(self.tutor.answer("A")["problem"])
+        self.assertEqual(self.store.attempts(external=True), [])
+
+    def test_outside_problem_model_down(self):
+        def fallback(problem):
+            return {"answer": "D", "status": "error: x", "calls": 0}   # what solve() gives then
+        tutor = Tutor(self.store, ask=self.ask, background=False, embedder=None, solver=fallback)
+        tutor.start("Test", "", 1)
+        view = tutor.external(self.SPIDERS)
+        self.assertEqual(view["phase"], "done")                   # nothing graded against a guess
+        self.assertIsNone(tutor.current["label"])
+        self.assertEqual(tutor.answer("D")["phase"], "done")
+        self.assertEqual(self.store.attempts(external=True), [])
 
     def test_model_down(self):
         def dead(problem, **kwargs):
@@ -1188,6 +1290,100 @@ class HintSource(unittest.TestCase):
         self.assertEqual(len(hints), 2)
         self.assertEqual({h["source"] for h in hints}, {"agent"})
         self.assertEqual(store.best_hint("t1")["source"], "agent")   # the fallback for rung 3
+
+
+class OcrPass2(unittest.TestCase):
+    """laptop/ocr_pass2.py: the pure parts, without images or OCR."""
+
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, os.path.join(ROOT, "laptop"))
+        import ocr_pass2
+        cls.o = ocr_pass2
+
+    @staticmethod
+    def box(x0, y0, x1, y1, text):
+        return ([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], text, 0.9)
+
+    def test_fraction_joined(self):
+        b = self.box
+        boxes = [b(0, 15, 20, 35, "A)"), b(30, 0, 45, 20, "1"), b(30, 28, 45, 48, "2"),
+                 b(100, 15, 120, 35, "B)"), b(130, 15, 145, 35, "3"),
+                 b(200, 15, 220, 35, "C)"), b(230, 15, 245, 35, "4"),
+                 b(300, 15, 320, 35, "D)"), b(330, 15, 345, 35, "5"),
+                 b(400, 15, 420, 35, "E)"), b(430, 15, 445, 35, "6")]
+        opts = self.o.parse_options(self.o.merge_fractions(boxes))
+        self.assertEqual(opts, {"A": "1/2", "B": "3", "C": "4", "D": "5", "E": "6"})
+
+    def test_two_rows_of_options_not_joined(self):
+        b = self.box
+        # A) 12 above D) 15: each number has its marker on its own line.
+        boxes = [b(0, 0, 20, 20, "A)"), b(30, 0, 50, 20, "12"),
+                 b(0, 26, 20, 46, "D)"), b(30, 26, 50, 46, "15")]
+        texts = sorted(t for _, t, _ in self.o.merge_fractions(boxes))
+        self.assertEqual(texts, ["12", "15", "A)", "D)"])
+
+    def test_norm_value(self):
+        n = self.o.norm_value
+        self.assertEqual(n("2,5"), n("2.5"))
+        self.assertEqual(n("6 x5 +6 × 2"), n("6×5+6×2"))
+        self.assertEqual(n("−3"), n("-3"))
+        self.assertNotEqual(n("1 17"), n("17"))
+
+    def rows(self, eng, cat, text_only=True):
+        return {("p", "eng"): {"id": "p", "language": "eng", "text_only": text_only, "options": eng},
+                ("p", "cat"): {"id": "p", "language": "cat", "text_only": text_only, "options": cat}}
+
+    def test_targets(self):
+        good = dict(zip("ABCDE", "12345"))
+        other = dict(zip("ABCDE", "12346"))
+        t = self.o.classify_targets
+        self.assertEqual(set(t(self.rows(good, good)).values()), {"recheck"})
+        self.assertEqual(set(t(self.rows(good, other)).values()), {"disagree"})
+        self.assertEqual(t(self.rows({}, good)), {("p", "eng"): "other_has"})
+        self.assertEqual(t(self.rows({}, {}, text_only=False)), {})
+        self.assertEqual(len(t(self.rows({}, {}, text_only=True))), 2)
+
+    def test_recheck_needs_both_languages(self):
+        old = {"A": "4", "B": "5", "C": "16", "D": "1 17", "E": "21"}
+        fixed = {"A": "4", "B": "5", "C": "16", "D": "17", "E": "21"}
+        rows = self.rows(old, old)
+        targets = self.o.classify_targets(rows)
+        both = self.o.decide(rows, targets, {("p", "eng"): (fixed, "ocr_crop"), ("p", "cat"): (fixed, "ocr_crop")})
+        self.assertEqual(both[("p", "eng")]["options"]["D"], "17")
+        one = self.o.decide(rows, targets, {("p", "eng"): (fixed, "ocr_crop"), ("p", "cat"): (old, "ocr_crop")})
+        self.assertEqual(one[("p", "eng")]["options"]["D"], "1 17")
+        self.assertEqual(one[("p", "eng")]["options_source"], "ocr")
+
+    def test_skip_recheck_keeps_matching_problems(self):
+        old = {"A": "4", "B": "5", "C": "16", "D": "1 17", "E": "21"}
+        fixed = {"A": "4", "B": "5", "C": "16", "D": "17", "E": "21"}
+        rows = self.rows(old, old)
+        targets = self.o.drop_recheck(self.o.classify_targets(rows))
+        self.assertEqual(targets, {})
+        out = self.o.decide(rows, targets, {("p", "eng"): (fixed, "ocr_crop"), ("p", "cat"): (fixed, "ocr_crop")})
+        self.assertEqual(out[("p", "eng")]["options"]["D"], "1 17")
+        # Disagreeing problems are still targets.
+        other = dict(old, E="22")
+        self.assertEqual(set(self.o.drop_recheck(self.o.classify_targets(self.rows(old, other))).values()), {"disagree"})
+
+    def test_empty_filled_or_copied(self):
+        good = dict(zip("ABCDE", "12345"))
+        rows = self.rows({}, good)
+        targets = self.o.classify_targets(rows)
+        out = self.o.decide(rows, targets, {("p", "eng"): ({}, "none")})
+        self.assertEqual(out[("p", "eng")]["options"], good)
+        self.assertEqual(out[("p", "eng")]["options_source"], "copied_cat")
+        self.assertEqual(out[("p", "eng")]["options_check"], "single")
+        out = self.o.decide(rows, targets, {("p", "eng"): (dict(good, E="9"), "ocr_crop")})
+        self.assertEqual(out[("p", "eng")]["options_check"], "disagree")
+        self.assertTrue(out[("p", "eng")]["options_suspect"])
+
+    def test_duplicates_suspect(self):
+        dup = dict(zip("ABCDE", ["1", "2", "2", "4", "5"]))
+        rows = self.rows(dup, dup)
+        out = self.o.decide(rows, self.o.classify_targets(rows), {})
+        self.assertTrue(out[("p", "cat")]["options_suspect"])
 
 
 if __name__ == "__main__":

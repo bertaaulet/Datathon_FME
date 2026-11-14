@@ -138,6 +138,7 @@ button.opt:active:not(:disabled) .bub { scale: .94; }
 .opt.right .t { font-weight: 600; }
 .opt:disabled { cursor: default; }
 .options:empty, .texts:empty { display: none; }
+#p-warning { margin: 0 0 16px; font-size: 15.5px; }
 .keys { font-size: 13px; color: var(--soft); margin-top: 10px; }
 details.own { margin-top: 26px; border-top: 1px solid var(--line); padding-top: 14px; }
 details.own summary { cursor: pointer; font-size: 14.5px; color: var(--soft); padding: 12px 0; min-height: 44px; }
@@ -367,6 +368,7 @@ form.hint textarea { min-height: 78px; }
       <span class="tag" id="p-level"></span><span id="p-topic"></span>
       <div class="rungs hidden" id="p-rungs" title="Pistes demanades"></div>
     </div>
+    <div class="msg avis hidden" id="p-warning" role="note"></div>
     <div class="texts" id="p-texts"></div>
     <div class="options" id="p-options" role="group" aria-label="Opcions de resposta"></div>
     <div class="keys hidden" id="p-keys">Drecera de teclat: amb el focus en una opció, prem A–E per respondre.</div>
@@ -417,8 +419,7 @@ form.hint textarea { min-height: 78px; }
       </form>
       <div id="outside" class="hidden">
         <div class="row" id="similar"></div>
-        <div class="row"><button class="btn" id="btn-guess">I tu, Cangur, què diries?</button>
-          <button class="btn primary" id="btn-back">Tornem als problemes</button></div>
+        <div class="row"><button class="btn primary" id="btn-back">Tornem als problemes</button></div>
       </div>
     </section>
 
@@ -803,7 +804,7 @@ function render(view) {
   if (problem) {
     if (problem.id !== lastProblem) { lastProblem = problem.id; maxTries = 3; enter(); }
     maxTries = Math.max(maxTries, problem.tries_left);
-    $("p-level").textContent = "Problema de nivell " + problem.level;
+    $("p-level").textContent = (problem.external ? "Problema teu · nivell " : "Problema de nivell ") + problem.level;
     $("p-topic").textContent = "· " + problem.topic;
     const rungs = $("p-rungs"); rungs.replaceChildren();
     rungs.setAttribute("role", "img"); rungs.setAttribute("aria-label", "Pistes demanades: " + problem.helps + " de " + HELP_RUNGS);
@@ -833,7 +834,7 @@ function render(view) {
       const wrong = problem.wrong.includes(letter), right = problem.label === letter;
       if (wrong) button.classList.add("wrong");
       if (right) button.classList.add("right");
-      button.disabled = !open || wrong;
+      button.disabled = !open || view.busy || wrong;     // an outside problem waits for the harness's answer
       if (wrong) button.setAttribute("aria-label", letter + ": " + problem.options[letter] + " (equivocada)");
       if (right) button.setAttribute("aria-label", letter + ": " + problem.options[letter] + " (correcta)");
       button.onclick = () => act("/api/answer", {letter});
@@ -853,6 +854,10 @@ function render(view) {
     $("p-level").textContent = view.phase === "ready" ? "Tot a punt" : "";
     $("p-topic").textContent = "";
   }
+
+  // always visible while working on an outside problem (CLAUDE.md)
+  $("p-warning").textContent = problem && problem.warning ? problem.warning : "";
+  $("p-warning").classList.toggle("hidden", !(problem && problem.warning));
 
   // short answers (numbers, single words) sit side by side instead of one per line
   const answers = [...options.querySelectorAll(".t")].map(t => t.textContent.trim());
@@ -919,7 +924,6 @@ function render(view) {
       button.onclick = () => act("/api/practice", {id: item.id});
       similar.append(button);
     });
-    $("btn-guess").disabled = view.busy || !!view.outside.guess;
   }
 
   updateRoo(view);
@@ -990,6 +994,7 @@ async function teacher() {
   catch (error) { body.replaceChildren(el("p", {}, "No s'ha pogut carregar la vista del docent. Tanca-la i torna-la a obrir.")); return; }
   body.replaceChildren();
   const stat = el("div", {class: "stat"}); stat.append(el("b", {}, String(data.attempts)), el("span", {}, "problemes fets"));
+  if (data.external_attempts) stat.append(el("span", {class: "loading"}, "(i " + data.external_attempts + " d'externs, que no compten per al nivell)"));
   body.append(stat);
   if (data.by_topic.length) {
     body.append(el("h4", {class: "lab"}, "Encerts per tema"));
@@ -1041,7 +1046,6 @@ $("btn-next").onclick = () => act("/api/next");
 $("btn-leave").onclick = () => { $("in-hint").value = ""; countHint(); act("/api/leave-teaching"); };
 $("btn-help").onclick = () => act("/api/help");
 $("btn-reveal").onclick = () => act("/api/reveal");
-$("btn-guess").onclick = () => act("/api/guess");
 $("btn-back").onclick = () => act("/api/next");
 $("btn-retry").onclick = () => refresh();
 $("in-ext").oninput = () => { $("btn-ext").disabled = !$("in-ext").value.trim(); };

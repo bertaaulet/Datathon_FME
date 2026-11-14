@@ -207,7 +207,7 @@ Si el valor correcte ja surt a l'enunciat, la comprovació del valor es desactiv
 ### 6.5 Nivell i tria del problema (Elo)
 
 - Probabilitat d'encert: `P = 0,2 + 0,8 / (1 + 10^((R_problema − R_alumne)/400))`.
-- Actualització: `R ← R + K·(resultat − P)` per a l'alumne, i el contrari (més lent) per al problema. `K` comença a 160 i baixa fins a 40. *Canviat després de simular-ho: amb K = 32 fix, un alumne que comença 300 punts lluny encara s'equivoca de ~170 punts després de 20 respostes; amb K decreixent, de ~65.*
+- Actualització: `R ← R + K·(resultat − P)` per a l'alumne. **La puntuació dels problemes no canvia mai** (decisió del 14 nov, `docs/DECISIONS.md`). `K` comença a 160 i baixa fins a 40. *Canviat després de simular-ho: amb K = 32 fix, un alumne que comença 300 punts lluny encara s'equivoca de ~160 punts després de 20 respostes; amb K decreixent, de ~65.*
 - Següent problema: l'elegible no vist amb `P` més propera a 0,7. Si l'alumne ha fallat, del mateix tema.
 - Elo inicial: `1000 + 150·nivell + 100·tram`. *Verificar amb les dades que el número de pregunta reflecteix dificultat.*
 
