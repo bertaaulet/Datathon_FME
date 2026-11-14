@@ -804,7 +804,8 @@ function render(view) {
   if (problem) {
     if (problem.id !== lastProblem) { lastProblem = problem.id; maxTries = 3; enter(); }
     maxTries = Math.max(maxTries, problem.tries_left);
-    $("p-level").textContent = (problem.external ? "Problema teu · nivell " : "Problema de nivell ") + problem.level;
+    const known = problem.level !== null && problem.level !== undefined && problem.level !== "?";   // an outside problem may have no level yet
+    $("p-level").textContent = problem.external ? "Problema teu" + (known ? " · nivell " + problem.level : "") : "Problema de nivell " + problem.level;
     $("p-topic").textContent = "· " + problem.topic;
     const rungs = $("p-rungs"); rungs.replaceChildren();
     rungs.setAttribute("role", "img"); rungs.setAttribute("aria-label", "Pistes demanades: " + problem.helps + " de " + HELP_RUNGS);
