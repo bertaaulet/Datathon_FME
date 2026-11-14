@@ -19,7 +19,7 @@ Codi de la v1, harness de `predict.py` i arreglos del tutor a `main` (76 proves 
 | A · `predict.py` | Berta | Revisar com funcionen la similitud, la generació i l'avaluació de pistes | Harness a `main`: calibració, guardrails, biaix per lot, expressió (desactivada fins mesurar). Etapa 1 descartada (`DECISIONS.md`). Esperant els experiments |
 | B · Dades, agent i pistes | | Generar el banc de pistes amb l'agent | Dades `eng`/`cat` fetes. Infraestructura de pistes a `main` (lots, validació, importació, rànquing, pistes de mètode en 6 llengües) |
 | C · Placa i experiència del Teach | Irene | Millorar la visualització i l'experiència del tutor | Placa a punt; arreglos del tutor (problemes 3, 8, 9, 10) a `main` |
-| D · Dashboard Tukey | | Dashboard del side challenge | Comença ara. Només hi ha dades de prova fins que acabin els experiments |
+| D · Puntuacions i pont d'idioma | | Revisar l'Elo (doble Elo, K, tria del problema) i el pont d'idioma; verificar les xifres de PISA | Comença ara. El dashboard Tukey es farà més endavant |
 | Sense responsable | | README, `LICENSE`, Project Hub, pitch, vídeo de reserva de la demo | ⬜ |
 
 ## Placa
@@ -46,7 +46,7 @@ Codi de la v1, harness de `predict.py` i arreglos del tutor a `main` (76 proves 
 
 ## Per decidir com a equip
 - Què entra per diumenge i què s'aparca (pistes generades pel model, ajust fi, imatge, problemes externs complets…).
-- Qui porta README, `LICENSE`, Project Hub, pitch i vídeo.
+- Qui porta README, `LICENSE`, Project Hub, pitch i vídeo, i quan es fa el dashboard Tukey.
 - L'ordre d'ús de la placa fins a la presentació.
 - Quina validació és la definitiva si la segona volta d'OCR canvia `val.jsonl`.
 - Les tres propostes de Claude a `DECISIONS.md` (port 8090, temes per paraules clau, K de l'Elo), el llindar de D4, l'idioma del README.
