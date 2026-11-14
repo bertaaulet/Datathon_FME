@@ -21,6 +21,9 @@ Cada problema porta què passa, la causa (comprovada o no), l'arreglo, de qui é
 | 9 | El tutor passa a l'anglès en silenci si falta el català | Mitjana | Tutor | — | 🟨 fet a `irene/tutor-fixes`, provat a la placa |
 | 10 | No es pot sortir de la fase "ensenyar el Cangur" | Mitjana | Tutor | — | 🟨 fet a `irene/tutor-fixes`, provat a la placa |
 | 11 | El tutor torna a preguntar al model encara que el Cangur estigui precalculat | Mitjana | Tutor | — | ⬜ proposta |
+| 12 | Un problema extern sense opcions no mostra l'avís | Baixa | Tutor | — | ⬜ proposta |
+| 13 | La matriu no ensenya el ✓ si la referència ja ha acabat | Baixa | Tutor | — | ⬜ proposta |
+| 14 | Desplegaments a la placa que es trepitgen | Mitjana | Tothom (C) | — | ⬜ proposta |
 
 ## Ordre de treball
 
@@ -133,3 +136,25 @@ Els problemes 3, 9 i 10 toquen els mateixos fitxers (`app/index.html` i `copilot
 - **Arreglo proposat:** si el problema té `k_probs`, no cridar `_reference()`, i posar `ref_done = True` de seguida. Només es crida el model quan no hi ha resposta precalculada. És un canvi petit a `next()`, amb una prova.
 - **Com es comprova:** amb el `tutor.db` real, un problema nou no fa cap crida al model, i la fase `teach` s'obre a l'instant.
 - **Pendent:** l'OK de qui porti el tutor, perquè canvia el comportament.
+
+## 12. Un problema extern sense opcions no mostra l'avís
+
+- **Què passa:** amb un problema extern sense les cinc opcions, el tutor diu el tema i (amb `index.db`) problemes semblants, però l'avís "No podem assegurar les respostes per a problemes externs…" no surt enlloc. Provat a la placa (2026-11-14) amb un problema inventat.
+- **Causa (comprovada al codi):** l'avís va a `problem.warning` i a un missatge del xat que només es crea a `_open_external()`. Sense opcions no hi ha `current`, i `view()["outside"]` no porta l'avís.
+- **Per què importa poc:** en aquest cas el tutor no dona cap resposta. Però `CLAUDE.md` diu que l'avís ha de ser **sempre** visible als problemes externs.
+- **Arreglo proposat:** afegir `"warning": EXTERNAL_WARNING` a `view()["outside"]` i mostrar-lo a `app/index.html` a sobre del text, igual que a `problem`. O decidir com a equip que no cal quan no hi ha resposta, i escriure-ho a `DECISIONS.md`.
+- **Com es comprova:** amb un problema sense opcions, l'avís surt a sobre del problema.
+
+## 13. La matriu no ensenya el ✓ si la referència ja ha acabat
+
+- **Què passa:** quan l'alumne encerta i la crida de referència del Cangur ja ha acabat, la matriu passa directament a la barra. El ✓ no es veu. Passa sempre que l'alumne triga a respondre més que `solve()` + referència (~15 s en un extern), que és el cas normal al navegador.
+- **Causa (comprovada al codi):** `answer()` fa `_show(led.tick())` (`copilot/tutor.py:315`) i, a la mateixa crida, `_open_teach()` fa `_show(led.bar(…))`. L'app de la matriu només llegeix l'últim fotograma de `/api/led`.
+- **Arreglo proposat:** quan cal obrir la fase d'ensenyar de seguida, mostrar la barra amb un petit retard (~1,5 s, amb un `threading.Timer` que comprovi que `current` no ha canviat), perquè el ✓ es vegi. Afecta també els problemes del banc quan la referència ja és feta.
+- **Com es comprova:** a la placa, encertar un problema amb la referència acabada i veure el ✓ abans de la barra.
+
+## 14. Desplegaments a la placa que es trepitgen
+
+- **Què passa:** durant les proves dels externs (2026-11-14), una altra sessió va copiar a la placa la seva versió de `copilot/` i `app/` per sobre de `main`, i va matar el tutor (`SIGKILL`). systemd el va tornar a engegar amb el codi equivocat, sense que ningú se n'adonés. A més, aturar el tutor amb `kill` (`SIGTERM`) el deixa **parat**: `Restart=on-failure` no el torna a engegar perquè surt net, i engegar-lo demana `sudo`.
+- **Causa:** una sola placa, diverses persones i sessions de Claude copiant-hi fitxers amb `adb push`, i cap manera de saber què hi ha desplegat.
+- **Arreglo proposat:** (1) abans de desplegar, escriure a `~/Datathon_FME/DESPLEGAT` qui, quina branca i quin commit, i mirar-ho abans de tocar res; (2) desplegar sempre des d'un commit, no des de canvis sense desar; (3) per reiniciar el tutor, només `sudo systemctl restart math-tutor`, mai `kill`.
+- **Com es comprova:** `cat ~/Datathon_FME/DESPLEGAT` diu el commit que hi ha, i coincideix amb `md5sum` dels fitxers.
