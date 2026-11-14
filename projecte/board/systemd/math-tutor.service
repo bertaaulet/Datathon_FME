@@ -1,0 +1,16 @@
+[Unit]
+Description=Ensenya el Cangur: tutor web app (port @TUTOR_PORT@)
+After=network.target math-llm.service math-embed.service
+Wants=math-llm.service math-embed.service
+
+[Service]
+Type=simple
+User=@USER@
+WorkingDirectory=@REPO_DIR@
+ExecStart=/usr/bin/python3 @REPO_DIR@/app/server.py --host @TUTOR_HOST@ --port @TUTOR_PORT@
+Restart=on-failure
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
