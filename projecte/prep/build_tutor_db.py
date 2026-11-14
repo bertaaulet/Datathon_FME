@@ -121,7 +121,9 @@ def main():
                "label = ?, text_only = ?, eligible = ? WHERE id = ?",
                [(q["level"], q["year"], q["number"], q["tram"], q["topic"], q["label"],
                  q["text_only"], q["eligible"], q["id"]) for q in problems])
-    store.many("INSERT OR REPLACE INTO texts VALUES (?, ?, ?, ?)",
+    # Official M3Kang rows: they replace a machine translation of the same problem and language
+    store.many("INSERT OR REPLACE INTO texts (id, lang, text, options, source) "
+               "VALUES (?, ?, ?, ?, 'official')",
                [(row["id"], row["language"], row["text"],
                  json.dumps(row.get("options") or {}, ensure_ascii=False)) for row in rows])
 

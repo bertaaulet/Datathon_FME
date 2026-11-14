@@ -1452,5 +1452,163 @@ class OcrPass2(unittest.TestCase):
         self.assertTrue(out[("p", "cat")]["options_suspect"])
 
 
+# --- the language bridge: importing machine translations (invented problems only) ---
+
+import import_translations  # noqa: E402
+
+BRIDGE_OPTIONS = {"A": "8", "B": "9 pomes", "C": "10", "D": "12", "E": "14"}
+BRIDGE_CAT = "1. L'Anna té 3 bosses amb 4 pomes a cada bossa. Es menja 2 pomes. Quantes en queden?"
+BRIDGE_ENG = "1. Anna has 3 bags with 4 apples in each bag. She eats 2 apples. How many are left?"
+BRIDGE_ESP = "1. Anna tiene 3 bolsas con 4 manzanas en cada bolsa. Se come 2 manzanas. ¿Cuántas quedan?"
+
+
+def bridge_store(path, ids=("b1", "b2", "b3")):
+    store = Store(path)
+    for problem_id in ids:
+        store.run("INSERT INTO problems (id, level, topic, label, text_only, eligible, elo) "
+                  "VALUES (?, 0, 'aritmetica', 'C', 1, 1, 1000)", (problem_id,))
+        for lang, text in (("cat", BRIDGE_CAT), ("eng", BRIDGE_ENG)):
+            store.run("INSERT INTO texts (id, lang, text, options) VALUES (?, ?, ?, ?)",
+                      (problem_id, lang, text, json.dumps(BRIDGE_OPTIONS)))
+    return store
+
+
+def translated(problem_id="b1", language="es", text=BRIDGE_ESP, **fields):
+    options = dict(BRIDGE_OPTIONS, B="9 manzanas")
+    return {"id": problem_id, "language": language, "text": text, "options": options, **fields}
+
+
+class Translations(unittest.TestCase):
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.path = os.path.join(folder.name, "tutor.db")
+        self.store = bridge_store(self.path)
+        self.addCleanup(self.store.close)
+
+    def run_import(self, rows, **kwargs):
+        return import_translations.import_translations(self.store, rows, **kwargs)
+
+    def test_codes_of_two_and_three_letters(self):
+        report = self.run_import([
+            translated("b1", "es", translation_suspect=False, language_original="eng"),
+            translated("b2", "esp", translation_source="haiku"),
+            translated("b3", "ZH", text="1. 安娜有3个袋子，每袋4个苹果。她吃了2个。还剩几个？"),
+            translated("b1", "deu"), translated("b2", "xx")])
+        self.assertEqual(report["imported"], {"esp:haiku": 1, "esp:opus-mt": 1, "zho:machine": 1})
+        self.assertEqual(report["skipped"], {"language_not_allowed": 2})     # deu needs --allow
+        self.assertEqual(self.store.languages(), ["cat", "eng", "esp", "zho"])
+        self.assertEqual(self.store.text("b1", "esp")["source"], "opus-mt")
+        self.assertEqual(self.store.text("b2", "esp")["source"], "haiku")
+        self.assertEqual(self.store.text("b1", "cat")["source"], "official")
+        self.assertEqual(report["missing"]["esp"], {"eligible": 3, "with_text": 2, "without_text": 1})
+        self.assertEqual(report["missing"]["fra"]["with_text"], 0)
+        report = self.run_import([translated("b1", "deu")], allowed=("deu",))
+        self.assertEqual(report["imported"], {"deu:machine": 1})
+
+    def test_options_numbers_copied_words_translated(self):
+        row = translated()
+        row["options"]["A"] = "8 "                       # a numeric option comes back untouched
+        self.run_import([row])
+        self.assertEqual(self.store.text("b1", "esp")["options"],
+                         dict(BRIDGE_OPTIONS, B="9 manzanas"))
+
+    def test_which_translation_is_kept(self):
+        from_eng = translated(text=BRIDGE_ESP + " (eng)", language_original="eng",
+                              text_original=BRIDGE_ENG, translation_suspect=False)
+        from_cat = translated(text=BRIDGE_ESP + " (cat)", language_original="cat",
+                              text_original=BRIDGE_CAT, translation_suspect=False)
+        self.run_import([from_eng, from_cat])
+        self.assertIn("(cat)", self.store.text("b1", "esp")["text"])     # esp: from Catalan
+        self.run_import([dict(from_eng, language="zh"), dict(from_cat, language="zh")],
+                        allowed=("zho",))
+        self.assertIn("(eng)", self.store.text("b1", "zho")["text"])     # zho: from English
+        # a suspect row loses to a clean one, and is only used when there is nothing else
+        self.run_import([dict(from_cat, translation_suspect=True, text=BRIDGE_ESP + " (dubtosa)"),
+                         from_eng])
+        self.assertIn("(eng)", self.store.text("b1", "esp")["text"])
+        report = self.run_import([dict(from_cat, id="b2", translation_suspect=True)])
+        self.assertEqual(report["imported"], {"esp:opus-mt": 1})
+
+    def test_translations_that_change_the_maths_are_refused(self):
+        bad_option = translated("b2")
+        bad_option["options"]["C"] = "11"
+        fewer = translated("b3")
+        del fewer["options"]["E"]
+        report = self.run_import([
+            translated("b1", text=BRIDGE_ESP.replace("4 manzanas", "5 manzanas")),
+            bad_option, fewer,
+            translated("b1", "fr", text="1. 3 4 2"),                # far too short
+            translated("b2", "fr", text="   "),
+            translated("nope"),
+            translated("b3", "cat")])                               # never over an official text
+        self.assertEqual(report["rejected"], {"esp:numbers": 1, "esp:option_value": 1,
+                                              "esp:option_count": 1, "fra:length": 1, "fra:empty": 1})
+        self.assertEqual(report["skipped"], {"unknown_problem": 1, "language_not_allowed": 1})
+        self.assertEqual(report["imported"], {})
+        self.assertEqual(self.store.languages(), ["cat", "eng"])
+        self.assertEqual(self.store.text("b3", "cat")["text"], BRIDGE_CAT)
+
+    def test_import_twice_and_dry_run(self):
+        rows = [translated("b1"), translated("b2", "fr", text=BRIDGE_ESP)]
+        report = self.run_import(rows, dry_run=True)
+        self.assertEqual(sum(report["imported"].values()), 2)
+        self.assertEqual(self.store.languages(), ["cat", "eng"])           # nothing written
+        self.run_import(rows)
+        first = self.store.rows("SELECT * FROM texts ORDER BY id, lang")
+        again = self.run_import(rows)
+        self.assertEqual(again["imported"], {"esp:machine": 1, "fra:machine": 1})
+        self.assertEqual(self.store.rows("SELECT * FROM texts ORDER BY id, lang"), first)
+        self.assertEqual(again["missing"]["esp"]["with_text"], 1)
+
+    def test_script_reports_counts_only(self):
+        source = os.path.join(os.path.dirname(self.path), "es.jsonl")
+        with open(source, "w", encoding="utf-8") as f:
+            f.write(json.dumps(translated("b1"), ensure_ascii=False) + "\n")
+        report = os.path.join(os.path.dirname(self.path), "report.json")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(import_translations.main([source, "--db", self.path, "--report", report]), 0)
+        with open(report, encoding="utf-8") as f:
+            written = f.read()
+        for text in (out.getvalue(), written):
+            self.assertNotIn("manzanas", text)                           # no problem text
+        self.assertEqual(json.loads(written)["imported"], {"esp:machine": 1})
+        with self.assertRaises(SystemExit):
+            import_translations.main([source + ".missing", "--db", self.path])
+
+    def test_old_database_is_migrated(self):
+        import sqlite3
+        path = self.path + ".old"
+        old = sqlite3.connect(path)
+        old.executescript("""
+            CREATE TABLE texts (id TEXT, lang TEXT, text TEXT, options TEXT, PRIMARY KEY (id, lang));
+            CREATE TABLE student (id INTEGER PRIMARY KEY, name TEXT, lang_origen TEXT, level INTEGER,
+                elo_cat REAL, elo_origen REAL, etapa INTEGER, streak INTEGER);
+            CREATE TABLE attempts (n INTEGER PRIMARY KEY AUTOINCREMENT, student INTEGER,
+                problem_id TEXT, lang TEXT, shown TEXT, answer TEXT, correct INTEGER,
+                revealed INTEGER, helps INTEGER, seconds REAL, ts REAL);
+            INSERT INTO texts VALUES ('b1', 'cat', 'text', '{}');
+            INSERT INTO student VALUES (1, 'Test', 'esp', 1, 1100, 1180, 2, 3);
+            INSERT INTO attempts (student, problem_id, lang, shown, answer, correct, revealed, helps)
+                VALUES (1, 'b1', 'origen', 'both', 'C', 1, 0, 0), (1, 'b2', 'cat', 'cat', 'C', 1, 0, 0);
+        """)
+        old.commit()
+        old.close()
+        for _ in range(2):                      # opening it twice changes nothing more
+            store = Store(path)
+            self.assertEqual(store.text("b1", "cat")["source"], "official")
+            self.assertEqual([a["origin_lang"] for a in store.attempts()], ["esp", "esp"])
+            self.assertEqual(store.student_langs(), [{"student": 1, "lang": "esp", "elo": 1180,
+                                                      "etapa": 2, "streak": 3}])
+            student = store.student()
+            store.save_student(student)             # an insert by position would break here
+            store.add_attempt(1, "b3", "cat", "cat", "A", False, False, 0, 1.0)
+            store.run("DELETE FROM attempts WHERE problem_id = 'b3'")
+            store.add_hint("b1", 1, "une piste", None, False, lang="fra")
+            self.assertEqual(store.hints()[-1]["lang"], "fra")
+            store.close()
+
+
 if __name__ == "__main__":
     unittest.main()
