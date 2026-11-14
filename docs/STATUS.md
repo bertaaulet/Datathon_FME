@@ -20,7 +20,7 @@ Tot el codi de la v1 és a `projecte/`, però **no hi ha cap resultat real**: no
 ## Qui fa què
 | Línia | Persona | Primera tasca | Estat |
 | --- | --- | --- | --- |
-| A · Millorar `predict.py` (harness) | Berta | Fitxers de calibració al repo, nivell tret de l'`id`, llama.cpp al portàtil | 🟡 Fet a `berta/predict-calib`: excepcions al `.gitignore` (també `ablations.csv`), nivell de l'`id`, `eval.py` amb columna `machine` i `--debias batch` (38 proves OK). Falta: llama.cpp al portàtil (WSL) i esperar `data/` de B |
+| A · Millorar `predict.py` (harness) | Berta | Fitxers de calibració al repo, nivell tret de l'`id`, llama.cpp al portàtil | 🟡 Fusionat: calibració al repo, nivell de l'`id`, `machine` i `--debias batch` a `eval.py`. A `berta/harness`: guardrails (entrada trencada, índex absent, problemes massa llargs escurçats, temps planificat abans de cada crida) i `PREDICT_DEBIAS=batch` a `predict.py` (44 proves OK). Següent: etapa de l'expressió. Esperant `data/` de B i les respostes dels organitzadors (on s'executa el test, idiomes) |
 | B · Dades, agent i pistes | | `prepare_m3kang.py --languages eng,cat` i passar `data/` a la resta (fora de Git) | ⬜ |
 | C · Placa Arduino | Irene | Passos 0–8 de `projecte/docs/SETUP.md` i `prep/check_model.py` | ✅ passos 0–8, D1 i comparació placa-portàtil. Següent: tutor i matriu LED |
 | Sense assignar | | Tutor (problemes externs, integrar pistes generades), dashboard, README, Project Hub, pitch | ⬜ |

@@ -22,12 +22,13 @@ import time
 from collections import Counter, defaultdict
 
 from copilot import topics
-from copilot.calib import batch_bias, problem_level
+from copilot.calib import end_of_run_bias, problem_level
 from copilot.config import CONFIG
 from copilot.pipeline import TIME_LIMIT, rescore, solve
 
 DETAIL_FIELDS = ["id", "language", "level", "has_options", "label", "answer", "correct", "seconds",
-                 "status", "prompt_tokens", "retrieved", "topic", "calls", "raw_answer"]
+                 "status", "prompt_tokens", "retrieved", "topic", "calls", "raw_answer", "stage",
+                 "shortened"]
 LOG_FIELDS = ["time", "name", "commit", "machine", "input", "languages", "n", "rag_k", "accuracy",
               "mean_s", "worst_s", "over_limit", "settings", "details"]
 
@@ -58,7 +59,8 @@ def machine_name():
 def detail_row(row):
     return [row["id"], row["language"], row.get("level", ""), row["has_options"], row["label"],
             row["answer"], int(row["correct"]), row["seconds"], row["status"], row["prompt_tokens"],
-            row["retrieved"], row["topic"], row["calls"], row["raw_answer"]]
+            row["retrieved"], row["topic"], row["calls"], row["raw_answer"], row.get("stage", ""),
+            int(bool(row.get("shortened")))]
 
 
 def table(title, groups):
@@ -91,10 +93,10 @@ def main():
     # without editing config.env. The official run uses config.env as it is.
     if args.rotations is not None:
         CONFIG["PREDICT_ROTATIONS"] = str(args.rotations)
-    batch = args.debias == "batch"
     if args.debias is not None:
-        # batch: solve with no correction, then measure the bias on the batch and rescore
-        CONFIG["PREDICT_DEBIAS"] = "off" if batch else args.debias
+        CONFIG["PREDICT_DEBIAS"] = args.debias
+    # batch: solve with no correction, then measure the bias on the batch and rescore
+    batch = CONFIG.get("PREDICT_DEBIAS", "auto").lower() == "batch"
     if args.no_options is not None:
         CONFIG["PREDICT_NO_OPTIONS"] = args.no_options
     settings = (f"rotations={CONFIG.get('PREDICT_ROTATIONS', 0)} "
@@ -149,7 +151,7 @@ def main():
                   f"running accuracy {running:.1f}%", flush=True)
 
     if batch:
-        bias = batch_bias(rows)
+        bias, source = end_of_run_bias(rows)
         raw = sum(r["correct"] for r in rows)
         for r in rows:
             rescore(r, bias)
@@ -159,11 +161,11 @@ def main():
             writer.writerow(DETAIL_FIELDS)
             writer.writerows(detail_row(r) for r in rows)
         if bias:
-            settings += " batch_bias=" + "/".join(f"{bias[l]:.3f}" for l in "ABCDE")
-            print(f"\nBatch letter bias from {bias['n']} passes: "
+            settings += f" bias_from={source} bias=" + "/".join(f"{bias[l]:.3f}" for l in "ABCDE")
+            print(f"\nLetter bias from {source} ({bias.get('n', '?')}): "
                   + "  ".join(f"{l}:{bias[l]:.3f}" for l in "ABCDE"))
         else:
-            print("\nBatch letter bias: no problem with five options, nothing to correct")
+            print("\nLetter bias: none in the batch or in data/letter_bias.json, nothing to correct")
         print(f"Right before the batch correction: {raw}/{len(rows)}")
 
     hits = [r["correct"] for r in rows]

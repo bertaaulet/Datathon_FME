@@ -32,9 +32,14 @@ def _read(path):
 
 
 def letter_bias():
-    """The model's letter bias, or None when it's off or not measured yet."""
-    if CONFIG.get("PREDICT_DEBIAS", "auto").lower() == "off":
+    """The bias to apply while solving, or None: off, batch (applied at the end) or not measured."""
+    if CONFIG.get("PREDICT_DEBIAS", "auto").lower() in ("off", "batch"):
         return None
+    return file_bias()
+
+
+def file_bias():
+    """data/letter_bias.json, or None."""
     bias = _read(BIAS_PATH)
     if not isinstance(bias, dict) or not all(letter in bias for letter in "ABCDE"):
         return None
@@ -79,6 +84,18 @@ def batch_bias(results):
     bias = {letter: total / count for letter, total in totals.items()}
     bias["n"] = count
     return bias
+
+
+def end_of_run_bias(results):
+    """For PREDICT_DEBIAS=batch: the batch's own bias, or the file's when the batch is too small.
+
+    Returns (bias or None, where it came from).
+    """
+    bias = batch_bias(results)
+    if bias and bias["n"] >= int(CONFIG.get("PREDICT_BATCH_MIN", 20) or 0):
+        return bias, "batch"
+    bias = file_bias()
+    return (bias, "file") if bias else (None, "none")
 
 
 def prior_letter(problem):
