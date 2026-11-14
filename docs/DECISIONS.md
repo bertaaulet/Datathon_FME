@@ -20,3 +20,4 @@ Append-only. Format: data · decisió · per què · qui.
 - 2026-11-14 · El model de la placa genera pistes d'una frase amb exemples del banc (en context + RAG), sempre filtrades, amb pista de mètode de reserva (decisió D4) · el tutor no queda limitat als problemes del banc · Berta
 - 2026-11-14 · Els problemes externs segueixen el mateix recorregut que els del banc, amb la resposta del harness i l'avís "No podem assegurar les respostes per a problemes externs. Confirma la solució en fonts oficials o amb el teu professor." Substitueix la decisió anterior sobre problemes externs · el programa ha de funcionar igual per a qualsevol problema · Berta
 - 2026-11-14 · Tres línies de treball en paral·lel: A `predict.py`, B dades/agent/pistes, C placa · Berta
+- 2026-11-14 · Es poden generar pistes i altres lots amb un model gran fora de la placa (agent) · confirmat; ja no cal esperar els mentors · Marc
