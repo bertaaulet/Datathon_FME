@@ -1,6 +1,6 @@
 # Estat actual
 
-_Última actualització: 2026-11-14 21:05 — Berta (amb Claude)_
+_Última actualització: 2026-11-14 22:40 — Berta (amb Claude)_
 
 ## Fase
 Codi de la v1, harness de `predict.py` i arreglos del tutor a `main` (76 proves OK). La placa està a punt i el harness s'hi ha provat (temps i gramàtica). **Encara no hi ha cap encert mesurat amb M3Kang**: s'està mesurant ara. La presentació és **diumenge**. El pla és a [`PLA.md`](PLA.md), i els problemes trobats a la placa a [`PROBLEMES.md`](PROBLEMES.md).
@@ -22,7 +22,8 @@ Les tasques s'assignen en veu alta a l'equip; aquí només hi ha què queda i de
 | A · Millorar `predict.py` (harness) | Berta | Fitxers de calibració al repo, nivell tret de l'`id`, llama.cpp al portàtil | 🟡 A `main` (PR #1 i #3): calibració al repo, nivell de l'`id`, `eval.py` amb `machine`, guardrails, `PREDICT_DEBIAS=batch` i l'etapa de l'expressió (`PREDICT_EXPRESSION`, desactivada fins mesurar-la). 71 proves OK. **Esperant:** la Irene comprova a la placa la gramàtica de l'expressió i els temps; amb les dades, `priors`, `baseline-org`, `baseline`, `letter_bias` a la placa i les comparacions de biaix i expressió |
 | B · Dades, agent i pistes | | `prepare_m3kang.py --languages eng,cat` i passar `data/` a la resta (fora de Git) | ⬜ |
 | C · Placa Arduino | Irene | Passos 0–8 de `projecte/docs/SETUP.md` i `prep/check_model.py` | ✅ passos 0–8, D1, comparació placa-portàtil, matriu LED, `tutor.db` real, servei del tutor, reinici de prova, mesures definitives i experiments d'A a la placa |
-| Sense assignar | | Tutor (problemes externs, integrar pistes generades), dashboard, README, Project Hub, pitch | ⬜ |
+| Tutor: Elo i problemes externs | Berta | Elo dels problemes fix; problemes externs pel mateix recorregut amb el harness, l'avís i els intents marcats a part | 🟡 PR #12 (`berta/elo-problemes-fixos`), 90 proves OK amb el simulador. Falta provar-ho a la placa amb un problema inventat (temps de `solve()` + crida de referència) |
+| Sense assignar | | Tutor (integrar pistes generades), dashboard, README (resultats), Project Hub, pitch | ⬜ |
 
 ## Placa
 - Passos 0–8 de `projecte/docs/SETUP.md`: ✅ llama.cpp `2cbe0ec` compilat, serveis `math-llm` (8081) i `math-embed` (8082) actius i arrencant amb la placa. Lectura 10,8 tok/s, escriptura 5,8 tok/s. `predict.py` amb `sample_problems.jsonl`: 5/5 `ok`, com a màxim 6,8 s, però **respon A a tots cinc** (0/5 encerts): falta `letter_bias.json` (`PROBLEMES.md` 1).

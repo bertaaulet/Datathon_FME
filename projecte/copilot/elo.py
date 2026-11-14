@@ -5,18 +5,19 @@ time in five. The chance of a right answer is:
 
     P = 0.2 + 0.8 / (1 + 10 ** ((R_problem - R_student) / 400))
 
-After each answer, the student's rating moves by K * (result - P), and the
-problem's rating moves the other way, more slowly.
+After each answer, the student's rating moves by K * (result - P). Problem
+ratings never move: they are set once from the level and the position in the
+paper (initial_problem), so every student is measured against the same scale
+and one student's answers can't shift the bank (docs/DECISIONS.md).
 
 K starts large and shrinks: a new student's rating should move fast, a settled
 one shouldn't jump on every answer. The schedule was chosen with simulated
 students (sim/students.py): with a constant K of 32, a student who starts 300
-points off is still about 170 points off after 20 answers; with this schedule,
-about 70.
+points off is still about 160 points off after 20 answers; with this schedule,
+about 65 (median over 200 simulated students per starting point).
 """
 GUESS = 0.2
 K_START, K_END, K_HALF = 160.0, 40.0, 8.0
-K_PROBLEM = 8.0
 TARGET = 0.7  # hard enough to learn from, easy enough to keep going
 
 
@@ -30,12 +31,12 @@ def k_student(answers):
 
 
 def update(r_student, r_problem, correct, answers=0):
-    """Return the new (student, problem) ratings after one answer.
+    """Return the student's new rating after one answer. The problem's rating doesn't change.
 
     answers is how many answers this rating has already seen.
     """
     surprise = (1.0 if correct else 0.0) - expected(r_student, r_problem)
-    return r_student + k_student(answers) * surprise, r_problem - K_PROBLEM * surprise
+    return r_student + k_student(answers) * surprise
 
 
 def initial_problem(level, tram):

@@ -313,9 +313,9 @@ Aquesta és la llista completa, agrupada per àrees. Inclou tot el pla del proje
 
 **Tutor**
 
-- [ ] Problemes externs amb el mateix recorregut que els del banc: el harness calcula la resposta, i a partir d'aquí hi ha la correcció, el Cangur, les pistes generades i la solució
-- [ ] L'avís dels problemes externs sempre visible, amb el text exacte (substitueix el `DISCLAIMER` de `copilot/tutor.py`)
-- [ ] Els intents amb problemes externs marcats a `tutor.db`, per poder-los separar a les mesures
+- [x] Problemes externs amb el mateix recorregut que els del banc: el harness calcula la resposta, i a partir d'aquí hi ha la correcció, el Cangur, les pistes generades i la solució
+- [x] L'avís dels problemes externs sempre visible, amb el text exacte (substitueix el `DISCLAIMER` de `copilot/tutor.py`)
+- [x] Els intents amb problemes externs marcats a `tutor.db`, per poder-los separar a les mesures
 - [ ] Problemes externs provats amb els problemes inventats: encert del harness, i el recorregut sencer
 - [ ] El pont d'idioma complet: tres etapes, amb la imatge original en la llengua d'origen
 - [ ] El doble Elo: `sim/students.py --db data/tutor.db`

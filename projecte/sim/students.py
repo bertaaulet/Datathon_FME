@@ -60,8 +60,8 @@ def run_student(problems, ability, start, steps, r, penalty=0.0):
         true_ability = ability if in_own_language or penalty == 0 else ability - penalty
         correct = r.random() < elo.expected(true_ability, chosen[1])
         uses_own = in_own_language or penalty == 0
-        rating, _problem = elo.update(rating, chosen[1], correct,
-                                      seen_own if uses_own else seen_classroom)
+        rating = elo.update(rating, chosen[1], correct,
+                            seen_own if uses_own else seen_classroom)
         if uses_own:
             own, seen_own = rating, seen_own + 1
         else:

@@ -50,7 +50,6 @@ def make_handler(tutor, images_dir):
         "/api/leave-teaching": lambda b: tutor.leave_teaching(),
         "/api/reveal": lambda b: tutor.reveal(),
         "/api/external": lambda b: tutor.external(str(b.get("text", ""))[:4000]),
-        "/api/guess": lambda b: tutor.external_guess(),
     }
 
     class Handler(BaseHTTPRequestHandler):

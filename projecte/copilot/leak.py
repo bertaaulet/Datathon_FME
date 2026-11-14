@@ -150,6 +150,20 @@ def check(hint, label, options=None, statements=()):
     return None
 
 
+def check_strict(hint, options=None, statements=()):
+    """For a problem from outside the bank, whose answer nobody can be sure of.
+
+    The answer used there comes from the harness and may be wrong, so a hint may name
+    no option at all: no letter, no position and no option's value. Returns None or a reason.
+    """
+    letters = [letter for letter in LETTERS if letter in (options or {})] or list(LETTERS)
+    for letter in letters:
+        reason = check(hint, letter, options, statements)
+        if reason in ("lletra", "posicio", "valor"):
+            return reason
+    return check(hint, None, options, statements)
+
+
 def evaluate(cases):
     """Score the filter on [{"hint", "label", "options", "text", "leak": true/false}, ...]."""
     caught = missed = clean_ok = clean_rejected = 0

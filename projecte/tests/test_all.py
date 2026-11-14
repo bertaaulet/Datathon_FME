@@ -28,7 +28,7 @@ import fake_llama  # noqa: E402
 from copilot import calib, elo, hintsim, led, leak, llm, pipeline, topics  # noqa: E402
 from copilot.config import CONFIG  # noqa: E402
 from copilot.store import Store  # noqa: E402
-from copilot.tutor import Tutor, bar_value, kangaroo  # noqa: E402
+from copilot.tutor import NEUTRAL_HINT, Tutor, bar_value, kangaroo  # noqa: E402
 
 TRAIN, VAL = demo_data.make(90)
 SAMPLE = {"id": "s1", "level": 0,
@@ -344,6 +344,17 @@ class Leaks(unittest.TestCase):
                      "A la primera bossa hi ha 4 pomes, i a les altres també."]:
             self.assertIsNone(self.check(hint), hint)
 
+    def test_strict_filter_names_no_option(self):
+        # Outside problems: the harness's answer may be wrong, so no option at all may be named
+        strict = lambda hint: leak.check_strict(hint, SAMPLE["options"], self.TEXT)  # noqa: E731
+        for letter in "BCDE":
+            self.assertEqual(strict(f"Jo crec que és la {letter}, segur"), "lletra", letter)
+        for letter, value in SAMPLE["options"].items():
+            self.assertIsNotNone(strict(f"Al final en queden {value}, compta-ho"), letter)
+        self.assertEqual(strict("Mira la segona opció"), "posicio")
+        self.assertIsNone(strict("Primer calcula quantes pomes hi ha en total i després resta."))
+        self.assertEqual(strict("Resta"), "curta")
+
     def test_value_already_in_the_statement_is_allowed(self):
         options = {"A": "2", "B": "3", "C": "4", "D": "5", "E": "6"}
         self.assertIsNone(self.check("Fixa't que cada bossa té 4 pomes.", "C", options))
@@ -376,9 +387,8 @@ class Ratings(unittest.TestCase):
         self.assertGreater(elo.expected(0, 3000), 0.2 - 1e-9)   # never below guessing
 
     def test_update_and_pick(self):
-        student, problem = elo.update(1000, 1000, True)
-        self.assertGreater(student, 1000)
-        self.assertLess(problem, 1000)
+        self.assertGreater(elo.update(1000, 1000, True), 1000)
+        self.assertLess(elo.update(1000, 1000, False), 1000)
         candidates = [("a", 600, "x"), ("b", 870, "y"), ("c", 1500, "x")]
         self.assertEqual(elo.pick(candidates, 1000)[0], "b")
         self.assertEqual(elo.pick(candidates + [("d", 880, "x")], 1000, topic="x")[0], "d")
@@ -457,7 +467,10 @@ class TutorFlow(WithServers):
         self.store = Store(self.path)
         self.addCleanup(self.store.close)
         self.tutor = Tutor(self.store, ask=self.ask, background=False,
-                           images_dir=self.folder.name, embedder=fake_embedder)
+                           images_dir=self.folder.name, embedder=fake_embedder, solver=self.solve)
+
+    def solve(self, problem):
+        return pipeline.solve(problem, llm_url=self.url)
 
     def wrong_letter(self):
         label = self.tutor.current["label"]
@@ -477,9 +490,13 @@ class TutorFlow(WithServers):
         self.assertEqual(view["phase"], "solving")
         self.assertIsNone(view["problem"]["label"])            # the answer is never sent early
         before = self.tutor.student["elo_cat"]
+        problem_id = view["problem"]["id"]
+        problem_before = self.tutor.store.problem(problem_id)["elo"]
         view = self.tutor.answer(self.wrong_letter())
         self.assertEqual(view["phase"], "help")
         self.assertLess(self.tutor.student["elo_cat"], before)
+        # problem ratings are fixed: a student's answer never moves them
+        self.assertEqual(self.tutor.store.problem(problem_id)["elo"], problem_before)
         self.assertIsNone(view["problem"]["label"])
         kinds = []
         for _ in range(4):
@@ -721,16 +738,79 @@ class TutorFlow(WithServers):
         self.tutor.next()
         self.assertNotIn("origen", self.method_message(self.ask_for_method()))
 
-    def test_outside_problem_never_leads_with_an_answer(self):
+    SPIDERS = "How many legs do 7 spiders have? A) 42 B) 49 C) 56 D) 63 E) 70"
+
+    def test_outside_problem_follows_the_bank_path(self):
         self.tutor.start("Test", "", 1)
-        view = self.tutor.external("How many legs do 7 spiders have? A) 42 B) 49 C) 56 D) 63 E) 70")
+        before = dict(self.tutor.student)
+        view = self.tutor.external(self.SPIDERS)
+        problem = view["problem"]
+        self.assertEqual(view["phase"], "solving")
+        self.assertTrue(problem["external"])
+        self.assertIn("No podem assegurar", problem["warning"])    # always on screen
+        self.assertIsNone(problem["label"])                        # never leads with an answer
+        self.assertIn(self.tutor.current["label"], tuple("ABCDE")) # the harness's answer
+        view = self.tutor.answer(self.wrong_letter())
+        self.assertEqual(view["phase"], "help")
+        self.assertIn("No podem assegurar", view["problem"]["warning"])
+        # stored apart, and no rating moves
+        self.assertEqual(self.store.attempts(), [])
+        external = self.store.attempts(external=True)
+        self.assertEqual(len(external), 1)
+        self.assertEqual(external[0]["correct"], 0)
+        for key in ("elo_cat", "elo_origen", "etapa", "streak"):
+            self.assertEqual(self.tutor.student[key], before[key])
+        self.assertEqual(self.tutor.teacher()["external_attempts"], 1)
+        self.assertEqual(self.tutor.teacher()["attempts"], 0)
+        for _ in range(4):                                         # the same ladder, to the end
+            view = self.tutor.help()
+        self.assertEqual(view["phase"], "done")
+        self.assertEqual(view["problem"]["label"], self.tutor.current["label"])
+        self.assertEqual(view["messages"][-1]["kind"], "avis")     # the solution comes with it
+        self.assertEqual(len(self.store.attempts(external=True)), 1)
+        self.assertEqual(self.tutor.next()["phase"], "solving")    # back to the bank
+
+    def test_outside_problem_right_answer_and_teaching(self):
+        # The harness's answer is usually the model's own favourite, so there's often
+        # nothing to teach. Here the harness says the model's least likely letter.
+        def least_likely(problem):
+            probs = self.ask(problem, hint=NEUTRAL_HINT)["probs"]
+            return {"answer": min("ABCDE", key=lambda l: probs[l]), "status": "ok", "calls": 1}
+        self.tutor.solver = least_likely
+        self.tutor.start("Test", "", 1)
+        self.tutor.external(self.SPIDERS)
+        hints_before = len(self.store.hints())
+        view = self.tutor.answer(self.tutor.current["label"])
+        self.assertEqual(view["phase"], "teach")
+        self.assertEqual(self.store.attempts(external=True)[0]["correct"], 1)
+        # strict filter: no option may be named, whichever is right
+        view = self.tutor.hint(f"Crec que és la {self.wrong_letter()}, mira-ho bé")
+        self.assertEqual(view["messages"][-1]["kind"], "fuita")
+        view = self.tutor.hint("Compta quantes potes té una aranya i multiplica")
+        self.assertNotEqual(view["messages"][-1]["kind"], "fuita")
+        self.assertEqual(self.tutor.current["tries"], 1)           # it reached the Kangaroo
+        self.assertEqual(len(self.store.hints()), hints_before)   # never stored for others
+        self.assertEqual(self.tutor.leave_teaching()["phase"], "solving")
+        self.assertEqual(self.store.teach_exits(), [])
+
+    def test_outside_problem_without_options_is_only_placed(self):
+        self.tutor.start("Test", "", 1)
+        view = self.tutor.external("How many legs do 7 spiders have?")
         self.assertEqual(view["phase"], "external")
-        self.assertIsNone(view["outside"]["guess"])
-        self.assertFalse(any("diria" in m["text"] for m in view["messages"]))
-        view = self.tutor.external_guess()
-        self.assertIn(view["outside"]["guess"], tuple("ABCDE"))
-        self.assertEqual(view["messages"][-1]["kind"], "avis")     # the warning comes with it
-        self.assertEqual(self.tutor.next()["phase"], "solving")
+        self.assertIsNone(view["problem"])
+        self.assertIsNone(self.tutor.answer("A")["problem"])
+        self.assertEqual(self.store.attempts(external=True), [])
+
+    def test_outside_problem_model_down(self):
+        def fallback(problem):
+            return {"answer": "D", "status": "error: x", "calls": 0}   # what solve() gives then
+        tutor = Tutor(self.store, ask=self.ask, background=False, embedder=None, solver=fallback)
+        tutor.start("Test", "", 1)
+        view = tutor.external(self.SPIDERS)
+        self.assertEqual(view["phase"], "done")                   # nothing graded against a guess
+        self.assertIsNone(tutor.current["label"])
+        self.assertEqual(tutor.answer("D")["phase"], "done")
+        self.assertEqual(self.store.attempts(external=True), [])
 
     def test_model_down(self):
         def dead(problem, **kwargs):
