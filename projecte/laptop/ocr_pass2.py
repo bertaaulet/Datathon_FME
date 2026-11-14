@@ -28,7 +28,12 @@ After the review, --apply copies it over, keeping a backup.
 Usage (from projecte/):
     python3 laptop/ocr_pass2.py --parquet <high_quality-00000-of-00004.parquet>
     python3 laptop/ocr_pass2.py --parquet ... --review-images   # PNGs for the review sample
+    python3 laptop/ocr_pass2.py --parquet ... --skip-recheck    # leave matching problems alone
     python3 laptop/ocr_pass2.py --apply
+
+--skip-recheck: the manual review of the first run found that re-reading
+problems that already matched broke about as many options as it fixed, so
+those problems keep their first-pass options.
 """
 import argparse
 import csv
@@ -162,6 +167,11 @@ def classify_targets(rows):
     return targets
 
 
+def drop_recheck(targets):
+    """Targets without the "recheck" group (problems whose languages already match)."""
+    return {k: why for k, why in targets.items() if why != "recheck"}
+
+
 def decide(rows, targets, new):
     """Merge the pass-2 readings into the rows.
 
@@ -290,6 +300,7 @@ def run_workers(args):
     base = [sys.executable, os.path.abspath(__file__), "--data", args.data, "--out", args.out, "--ocr-only",
             "--ocr-threads", str(args.ocr_threads or 4)]
     base += ["--parquet", args.parquet] if args.parquet else ["--images", args.images]
+    base += ["--skip-recheck"] if args.skip_recheck else []
     procs = [subprocess.Popen(base + ["--shard", f"{i}/{args.workers}"]) for i in range(args.workers)]
     codes = [p.wait() for p in procs]
     if any(codes):
@@ -369,6 +380,8 @@ def main():
     p.add_argument("--review", type=int, default=40, help="rows in review.csv")
     p.add_argument("--review-images", action="store_true", help="save PNGs of the review rows")
     p.add_argument("--apply", action="store_true", help="copy data/_pass2 over data/, with a backup")
+    p.add_argument("--skip-recheck", action="store_true",
+                   help="do not touch problems whose two languages already match")
     args = p.parse_args()
 
     if args.apply:
@@ -385,6 +398,8 @@ def main():
     os.makedirs(args.out, exist_ok=True)
     rows, split_of = load_rows(args.data)
     targets = classify_targets(rows)
+    if args.skip_recheck:
+        targets = drop_recheck(targets)
     keys = sorted(targets)
     if args.limit:
         keys = keys[:args.limit]
