@@ -1,0 +1,60 @@
+Hola, bon dia a tothom, el meu nom és Marc Pous, treballoeig impuls i arduíno, que som part de Qualcom,
+i el primer que volia dir era que moltes gràcies per ser aquí, moltes gràcies per poder dedicar aquest cap de setmana en aquesta datatòn a la facultat de matemàtiques.
+Jo soc un estudiant de l'UPC, per tant, molt honorat i molt agraït de poder formar part d'aquesta datatòn,
+malgrat que no podré ser-hi físicament, per això us he gravat aquest vídeo,
+però altres companys de Qualcom Barcelona i Qualcom Irlanda seran aquí, si no han presentat ja abans que posicin aquest vídeo.
+Bé, en aquest vídeo us volia explicar breument en què consistirà el challenge, el repte que hem dissenyat des de Qualcom,
+i ens agradaria fer alguna cosa molt interessant, molt innovadora i que podeu aplicar la creativitat,
+perquè ja sabeu que un dels problemes que ens enfrontem avui socialment és que les notes de matemàtiques, segons indiquen els informes PISA,
+estan caient en picat a Catalunya, i això es veu a moltes raons, però una de les raons és que els professors no tenen suficients recursos,
+cada vegada hi ha més estudiants a les aules, i creiem que la intel·ligència artificial pot ajudar els estudiants i els mestres.
+Però no creiem que els hagi d'ajudar, per exemple, a fer els deures o fer els projectes o treball que hagin de fer per aprendre els conceptes matemàtics,
+sinó creiem que la intel·ligència artificial ha arribat també per ajudar a mentoritzar i a aprendre conceptes matemàtics que potser no poden assolir els estudiants a la classe.
+És per això que el repte que us proposem és que utilitzeu un Arduino 1.0Q, un dispositiu hardware que ha dissenyat Arduino amb un chip de Qualcomm,
+és un hardware que se'n diu Dualbrain, perquè manté el microcontroller d'Arduino, en el cas que conegueu Arduino,
+que espero que molts de vosaltres el conegueu, doncs manté el microcontroller d'Arduino històric, on vosaltres heu fet els vostres esquetxes,
+connectat amb un CPU, o amb un microprocessador QRB2210, que porta un Linux Debian i que pot executar intel·ligència artificial.
+No és el dispositiu més ràpid ni més potent per executar intel·ligència artificial que hi ha a dia d'avui al mercat,
+però és un dispositiu que us permetrà fer una de les coses que a més ens interessa avui, que és poder executar Edge AI.
+Això vol dir executar intel·ligència artificial sobre la vostra taula, sense que les vostres paticions hagin d'anar servidors que estan a l'altra punta del món,
+o hagin d'estar donant informació a tercers, que no necessària.
+El que ens agradaria en aquest repte és que creieu un copilot, un mentor, un entrenador de matemàtiques,
+dintre l'Arduino 1.0-Q, que de manera offline permeti a un estudiant de matemàtiques poder aprendre o reunar nous problemes matemàtics.
+Per fer això, a part de deixar-vos un Arduino 1.0-Q a tots els equips que vulgueu participar a aquest challenge,
+que després us podreu quedar per poder seguir hackejant a casa vostra,
+el que ens agradaria també és que disposiciu del nou model que l'equip de qualcom Barcelona ha desenvolupat,
+que és el model M3-CAN, que disposa de problemes de les proves cangur des del 2007 fins al 2024,
+si no sé què heu jugat, més de 1.000 problemes etiquetats de les proves cangur per tal de que pugueu ajudar a entrenar
+un petit model d'intelligencia artificial generativa que s'executarà localment en aquest Arduino 1.0-Q a vosaltres si us posareu, d'acord?
+Què ens agradaria que fes al vostre projecte? Bàsicament una d'aquestes dues coses,
+que ajudi... que busqueu un problema innovador, un problema que hagi ovis que existeix a les aules o que existeix a la facultat,
+o que un problema que teniu vosaltres a l'hora de estudiar matemàtiques i d'assignatures similars
+per entendre coneixements i que us pugui ajudar a millorar els vostres fonaments matemàtics,
+i millorar la vostra curiositat i coneixement a través de pràctiques, anàlisis dels arrops que feu, etc.
+o que us ajudi a reunar el perquè us equivoqueu o no. Per això disposeu de tots aquests problemes a les proves cangur
+i de tot un sistema que us hem preparat perquè pugueu deployar xarxes neuronals i intel·ligència artificial generativa al Arduino 1.0-Q
+i pugueu implementar el vostre projecte amb aquesta tecnologia.
+Si feu aquest repte, el que podreu aprendre és com funcionen els LLM's, d'acord? Els Large Language Models,
+com funcionen els embeddings, els racks, totes aquestes tecnologies que avui utilitzeu probablement amb models frontera,
+com funcionen petits models que s'executen localment en dispositius que ja teniu a casa probablement
+o que en un futur molt proper tindreu a casa. Si no se veu programar, no hauria de ser un problema.
+Us hem deixat documentats en un repositori de GitHub tota la informació que necessiteu per poder deployar l'ESMOL Language Model
+a l'Arduino 1.0-Q, com d'aploiar racks, embeddings i altres tecnologies, per poder començar a partir de la vostra idea
+a implementar-la a partir de la tecnologia que s'executarà localment en aquest Arduino 1.0-Q.
+Per altra banda, també us hem preparat uns esquils, perquè si voleu utilitzar agents d'intelligencia artificial per fer aquest repte,
+puguin ja entendre que és un Arduino 1.0-Q, com simplement els SLM's i totes aquestes tecnologies,
+directament a l'1.0-Q, perquè ja comenceu a partir de que una vegada està tot instal·lat a executar la vostra idea
+amb agents d'IKI o no, i pugueu dur a terme els vostres projectes i presentar-los en èxit al diumenge.
+Crec que és un projecte molt interessant, estarem fent tecnologia a l'Edge, que és el futur que ve ara molt aviat,
+i amb moltes ganes d'haure els vostres projectes, per cert, per presentar el vostre projecte,
+si us plau, feu un repositori de GitHub, publiqueu els vostres projectes al Arduino Project Hub,
+perquè tot i que jo avui no hi sóc aquí, m'agradaria el dir lluns quan arribi a la feina,
+podeu veure els vostres projectes, i sobretot per mi, una de les coses que és més important,
+com a futurs enginyers i enginyeres que s'haureu, és que qualsevol altra persona del món pugui beneficiar-se de la vostra projecte,
+que pugui llegir el pas a pas al vostre projecte i que el pugui aploiar en el seu dispositiu,
+ja sigui un Arduino 1-O-Q o qualsevol altre dispositiu que tingui a l'abast, d'acord?
+Per tant, és important que hi hagi una bona documentació, que sigui pública, que tingui una llicència oberta,
+perquè tothom se'n benefici del que passi a aquest atetot.
+Bé, amb tot això us deixo, si us apunteu, tenim 50 Arduino 1-O-Qs,
+i tindreu un altre vídeo meu i tot el repositori amb la informació de com tenia exit en aquest challenge.
+Moltes sort, i moltes gràcies. Que vagi bé, la de Tatón!
