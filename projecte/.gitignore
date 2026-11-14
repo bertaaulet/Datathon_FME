@@ -2,10 +2,15 @@
 data/*
 !data/sample_problems.jsonl
 !data/README.md
+# Aggregate numbers only (no problem text, no per-problem labels): see docs/DECISIONS.md
+!data/letter_bias.json
+!data/priors.json
 
 # Results are created on each board
 results/*
 !results/.gitkeep
+# The ablation log only has aggregate numbers. eval-*.csv has a label per problem: never commit it
+!results/ablations.csv
 
 # Models live in ~/models, but just in case
 *.gguf

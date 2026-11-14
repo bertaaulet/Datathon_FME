@@ -11,7 +11,7 @@ Cada problema porta què passa, la causa (comprovada o no), l'arreglo, de qui é
 | # | Problema | Gravetat | De qui | Depèn de | Estat |
 |---|---|---|---|---|---|
 | 1 | `predict.py` només respon D o A | Alta | A (+ C) | Dades de B | ⬜ |
-| 2 | La caché no serveix per a les pistes | Alta | A i B | — | ⬜ decidir |
+| 2 | La caché no serveix per a les pistes | Alta | A i B | — | 🟡 A: decidit; B: pendent |
 | 3 | Les pistes es tallen a 200 caràcters sense avisar | Mitjana | Tutor | — | 🟨 fet a `irene/tutor-fixes`, provat a la placa |
 | 4 | El Cangur gairebé mai es convenç | Mitjana | B i tutor | Dades de B | ⬜ |
 | 5 | La matriu LED necessita el tutor a `0.0.0.0` i no arrenca sola | Mitjana | C | `tutor.db` real | 🟨 app per defecte configurada; falta el servei del tutor i el reinici |
@@ -42,6 +42,7 @@ Els problemes 3, 9 i 10 toquen els mateixos fitxers (`app/index.html` i `copilot
 
 - **Què passa:** si el prompt canvia en qualsevol punt, encara que sigui després del problema, només es reaprofiten els primers 33 tokens. Una crida amb pista torna a llegir tot el problema: uns 8 s a la placa.
 - **Causa (probable, no confirmada):** Qwen3.5 és un model híbrid, i llama.cpp no pot tallar la seva caché en qualsevol punt. No és un error del nostre codi.
+- **A (`predict.py`), decidit:** cada crida es planifica com una lectura sencera, amb el `prompt_n` que retorna el servidor. Hi caben unes 5 crides per problema (lletra, expressió, rotacions).
 - **Proposta:** acceptar-ho i dissenyar al voltant. Prompts curts i el mínim de crides per pista. Comprovar amb les mesures del problema 7 si la generació de pistes amb 1 i 2 veïns cap dins del temps.
 - **Decisió:** A i B. Afecta el pressupost de temps del Cangur i de la generació de pistes.
 
