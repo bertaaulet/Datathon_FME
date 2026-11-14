@@ -17,14 +17,16 @@ Memòria compartida de l'equip (4 persones). Es carrega a cada sessió de Claude
 - Pressupost: temps ≈ tokens_prompt/11 + tokens_generats/6 ≤ 57 s. RAM lliure ≈ 2,5 GB.
 - **Llicència M3Kang: només recerca.** Mai pujar `train.jsonl`, `val.jsonl`, `data/images/`, `index.db` ni text de problemes (tampoc a l'historial).
 - Placa: apagar sempre amb `sudo poweroff`.
-- Tutor: el model **no escriu text per a l'alumne** (només dona probabilitats de lletres; les frases del Cangur són plantilles) i **no es dona la resposta** abans que l'alumne resolgui o demani la solució. Un problema extern mai es respon d'entrada.
-- Tampoc pujar res derivat de M3Kang: `tutor.db`, fitxers de pistes, textos traduïts.
+- Tutor: el model només escriu **pistes d'una frase**, que sempre passen pel filtre de fuites (si es rebutgen, surt una pista de mètode). Les frases del Cangur són plantilles. **No es dona la resposta** abans que l'alumne resolgui o demani la solució.
+- Problemes externs: **mateix recorregut** que els del banc, amb la resposta del harness i l'avís sempre visible: "No podem assegurar les respostes per a problemes externs. Confirma la solució en fonts oficials o amb el teu professor."
+- Mai pujar res que contingui **text de M3Kang ni les etiquetes per problema**: `tutor.db`, sortides de l'agent, pistes generades, `results/eval-*.csv`. Sí es poden pujar xifres agregades (`letter_bias.json`, `priors.json`, `ablations.csv`).
 - **Mai reportar un número mesurat contra el servidor simulat** (`tests/fake_llama.py`) ni amb els problemes inventats.
 
 ## On és cada cosa
 - `docs/STATUS.md` — estat actual, qui fa què, bloquejos. **Llegir a l'inici de cada sessió.**
 - `docs/DECISIONS.md` — registre de decisions (append-only).
 - `pla_projecte.md` — el pla del projecte "Ensenya el Cangur" (Teach + predict + pont d'idioma + dashboard).
+- `docs/PLA.md` — **pla d'execució actual**: harness de `predict.py`, pistes (agent + model), què va al portàtil i què a la placa, pendents, riscos. Mana sobre `pla_projecte.md` on es contradiuen.
 - `projecte/` — **tot el codi** (còpia del repo base, commit `d6e3f1b`, més el nostre). Les comandes s'executen des d'aquí.
   - `projecte/README.md` — què fa i els passos per replicar-ho. `projecte/docs/SETUP.md` — la guia dels organitzadors.
   - `projecte/results/ablations.csv` — font única de veritat dels experiments (la genera `eval.py`).

@@ -1,9 +1,9 @@
 # Estat actual
 
-_Última actualització: 2026-11-14 — Elsa (amb Claude)_
+_Última actualització: 2026-11-14 16:50 — Berta (amb Claude)_
 
 ## Fase
-Idea triada i **tot el pla escrit** a `projecte/` (vegeu `pla_projecte.md` i `projecte/README.md`). Falta provar-ho a la placa: fins ara només s'ha executat contra un servidor de model simulat i problemes inventats. **No hi ha cap resultat real.**
+Tot el codi de la v1 és a `projecte/`, però **no hi ha cap resultat real**: només s'ha provat contra un model simulat. El pla d'execució és a [`docs/PLA.md`](PLA.md) (harness de `predict.py`, pistes amb agent i model, problemes externs amb el mateix recorregut, què va al portàtil i què a la placa). Comencem a treballar en paral·lel en tres línies.
 
 | Part | Escrit | Provat amb el simulador | Provat a la placa |
 | --- | --- | --- | --- |
@@ -14,28 +14,21 @@ Idea triada i **tot el pla escrit** a `projecte/` (vegeu `pla_projecte.md` i `pr
 | Alumnes simulats (`sim/`) | Sí | Sí (no cal el model) | — |
 | Dashboard Tukey (`dashboard/`) | Sí | Sí, amb dades de prova | — |
 | App de la matriu LED (`applab/`) | Sí | No | No |
+| Harness de `predict.py` (etapes 1–4, 6–7) | No | — | — |
+| Banc de l'agent i pistes generades pel model | No | — | — |
 
 ## Qui fa què
-| Persona | Tasca actual | Estat |
-| --- | --- | --- |
-| Berta | Organització del repo i memòria compartida | En curs |
-| Elsa | Pla del projecte i implementació inicial de tot el codi | Fet; pendent de proves a la placa |
-| <membre 3> | | |
-| <membre 4> | | |
+| Línia | Persona | Primera tasca | Estat |
+| --- | --- | --- | --- |
+| A · Millorar `predict.py` (harness) | | Fitxers de calibració al repo, nivell tret de l'`id`, llama.cpp al portàtil | ⬜ |
+| B · Dades, agent i pistes | | `prepare_m3kang.py --languages eng,cat` i passar `data/` a la resta (fora de Git) | ⬜ |
+| C · Placa Arduino | | Passos 0–8 de `projecte/docs/SETUP.md` i `prep/check_model.py` | ⬜ |
+| Sense assignar | | Tutor (problemes externs, integrar pistes generades), dashboard, README, Project Hub, pitch | ⬜ |
 
 ## Placa
-- Passos 1–8 de `projecte/docs/SETUP.md`: ⬜ pendent de confirmar
-- IP / accés: 
-
-## Pròxims passos (en ordre, a la placa, des de `projecte/`)
-1. `python3 prep/check_model.py` — comprova que el servidor dona probabilitats per lletra i que la memòria cau funciona.
-2. `python3 eval.py --limit 50 --name baseline` — el nostre baseline.
-3. `python3 prep/letter_bias.py` i tornar a mesurar (`--name debias`, després `--rotations 2`).
-4. `python3 prep/build_tutor_db.py --show-topics 50` i revisar els temes a mà.
-5. `python3 prep/kangaroo_baseline.py` — de nit.
-6. Experiment de pistes (`prep/hint_experiment.py`): decideix si la barra de confiança del Cangur es manté.
-7. `python3 app/server.py --host 0.0.0.0` i provar l'app de la matriu LED.
-8. `python3 sim/students.py` i `python3 dashboard/build.py`.
+- Passos 0–8 de `projecte/docs/SETUP.md`: ⬜
+- `check_model.py` (decisió D1): ⬜
+- IP / accés:
 
 ## Millor resultat fins ara
 | Experiment | Encert | n | Latència mitjana |
@@ -43,13 +36,11 @@ Idea triada i **tot el pla escrit** a `projecte/` (vegeu `pla_projecte.md` i `pr
 | baseline (organitzadors) | 22,5% | 40 | 8,7 s |
 
 ## Bloquejos / dubtes oberts
-- **Preguntes per als organitzadors**: el test ocult porta opcions en text? En quins idiomes? S'executa a la nostra placa? Es pot generar un banc de pistes al portàtil amb un model gran? Com i quan es lliura el dashboard, i ha de ser públic?
-- **`projecte/README.md` és en anglès** (pensant en el Project Hub), però la convenció de l'equip diu documentació en català. Cal decidir.
-- **Llicència MIT** posada com a proposta a `projecte/LICENSE`, amb un nom d'equip provisional. Cal confirmar-la.
-- Les pistes de mètode per tema (`projecte/copilot/topics.py`) les ha escrit Claude: cal revisar-les.
-- L'app de la matriu LED pot no arribar al tutor per `127.0.0.1` si App Lab l'executa en un contenidor (vegeu el comentari a `applab/math-matrix/python/main.py`).
-- Aquest primer commit del codi s'ha fet directament a `main`, no en una branca `nom/tema`.
+- **Preguntes per als organitzadors** (llista a `docs/PLA.md`): on s'executa el test ocult, si porta opcions i `level`, si es poden publicar xifres agregades i un model ajustat amb M3Kang, si es poden preparar pistes amb un model gran, i com i quan es lliura el dashboard.
+- **Per decidir com a equip:** validació (15% a l'atzar o `--val-years 2023,2024`), llengües, les tres propostes de Claude a `DECISIONS.md`, el llindar de D4, l'idioma del README i el nom a la `LICENSE`.
+- L'app de la matriu LED pot no arribar al tutor per `127.0.0.1` si App Lab l'executa en un contenidor.
 
 ## Resolt
 - Importar el repo base: còpia sense historial a `projecte/` (commit `d6e3f1b` dels organitzadors).
 - Idea final: Teach ("Ensenya el Cangur") amb `predict.py` millorat com a part del projecte.
+- Pla d'execució escrit a `docs/PLA.md`.
