@@ -272,8 +272,7 @@ class Tutor:
         own = current["counts_for"] == "origen" or current["revealed"]
         key = "elo_origen" if own else "elo_cat"
         seen = sum(a["lang"] == ("origen" if own else "cat") for a in self.store.attempts())
-        student[key], problem_elo = elo.update(student[key], current["row"]["elo"], correct, seen)
-        self.store.run("UPDATE problems SET elo = ? WHERE id = ?", (problem_elo, current["id"]))
+        student[key] = elo.update(student[key], current["row"]["elo"], correct, seen)
         self.store.add_attempt(1, current["id"], "origen" if own else "cat", current["shown"],
                                letter, correct, current["revealed"], current["helps"],
                                round(time.time() - current["started"], 1))

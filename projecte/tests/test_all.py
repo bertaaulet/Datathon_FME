@@ -376,9 +376,8 @@ class Ratings(unittest.TestCase):
         self.assertGreater(elo.expected(0, 3000), 0.2 - 1e-9)   # never below guessing
 
     def test_update_and_pick(self):
-        student, problem = elo.update(1000, 1000, True)
-        self.assertGreater(student, 1000)
-        self.assertLess(problem, 1000)
+        self.assertGreater(elo.update(1000, 1000, True), 1000)
+        self.assertLess(elo.update(1000, 1000, False), 1000)
         candidates = [("a", 600, "x"), ("b", 870, "y"), ("c", 1500, "x")]
         self.assertEqual(elo.pick(candidates, 1000)[0], "b")
         self.assertEqual(elo.pick(candidates + [("d", 880, "x")], 1000, topic="x")[0], "d")
@@ -477,9 +476,13 @@ class TutorFlow(WithServers):
         self.assertEqual(view["phase"], "solving")
         self.assertIsNone(view["problem"]["label"])            # the answer is never sent early
         before = self.tutor.student["elo_cat"]
+        problem_id = view["problem"]["id"]
+        problem_before = self.tutor.store.problem(problem_id)["elo"]
         view = self.tutor.answer(self.wrong_letter())
         self.assertEqual(view["phase"], "help")
         self.assertLess(self.tutor.student["elo_cat"], before)
+        # problem ratings are fixed: a student's answer never moves them
+        self.assertEqual(self.tutor.store.problem(problem_id)["elo"], problem_before)
         self.assertIsNone(view["problem"]["label"])
         kinds = []
         for _ in range(4):
