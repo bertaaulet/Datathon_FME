@@ -21,6 +21,8 @@ def main():
     p.add_argument("--db", default="data/index.db")
     p.add_argument("--languages", default="", help="e.g. eng,cat (default: all in the file)")
     p.add_argument("--only-with-options", action="store_true")
+    p.add_argument("--skip-suspect", action="store_true",
+                   help="leave out rows whose options OCR flagged as suspect (options_suspect)")
     args = p.parse_args()
 
     languages = set(filter(None, args.languages.split(",")))
@@ -28,7 +30,8 @@ def main():
         problems = [json.loads(line) for line in f if line.strip()]
     problems = [x for x in problems
                 if (not languages or x["language"] in languages)
-                and (x.get("options") or not args.only_with_options)]
+                and (x.get("options") or not args.only_with_options)
+                and not (args.skip_suspect and x.get("options_suspect"))]
     if os.path.exists(args.db):
         os.remove(args.db)
 
