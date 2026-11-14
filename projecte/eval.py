@@ -79,6 +79,9 @@ def main():
     p.add_argument("--input", default="data/val.jsonl")
     p.add_argument("--limit", type=int, default=50, help="0 means every problem")
     p.add_argument("--languages", default="", help="e.g. eng,cat")
+    p.add_argument("--only-with-options", action="store_true",
+                   help="only problems with all five options: the ones where settings can differ. "
+                        "For deciding, never for the number you publish")
     p.add_argument("--rag", type=int, default=None, metavar="K",
                    help="similar training problems as examples (default: PREDICT_RAG_K)")
     p.add_argument("--rag-format", choices=["answer", "letter"], default=None,
@@ -133,6 +136,8 @@ def main():
     languages = set(filter(None, args.languages.split(",")))
     if languages:
         problems = [x for x in problems if x["language"] in languages]
+    if args.only_with_options:
+        problems = [x for x in problems if len(x.get("options") or {}) == 5]
     random.Random(42).shuffle(problems)  # the same sample every run, so runs compare
     if args.limit:
         problems = problems[:args.limit]
@@ -235,7 +240,9 @@ def main():
         writer = csv.writer(f)
         if new:
             writer.writerow(LOG_FIELDS)
-        writer.writerow([stamp, name, git_commit(), machine_name(), args.input, args.languages or "all",
+        writer.writerow([stamp, name, git_commit(), machine_name(),
+                         args.input + (" (with options)" if args.only_with_options else ""),
+                         args.languages or "all",
                          len(rows), args.rag, f"{accuracy:.1f}", f"{statistics.mean(seconds):.1f}",
                          f"{max(seconds):.1f}", over, settings, detail_path])
     print(f"\nDetails: {detail_path}\nAblation log: {log}")
