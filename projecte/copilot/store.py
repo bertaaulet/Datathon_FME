@@ -49,10 +49,33 @@ CREATE TABLE IF NOT EXISTS hints (
     convinced INTEGER,
     shown INTEGER DEFAULT 0, solved_after INTEGER DEFAULT 0,
     ts REAL,
-    source TEXT DEFAULT 'student'   -- who wrote it: 'student', 'seed' or 'agent'
+    source TEXT DEFAULT 'student',  -- who wrote it: 'student', 'seed' or 'agent'
+    relevance REAL,         -- cosine similarity to the problem's references (NULL: not measured)
+    dups INTEGER DEFAULT 0, -- how many later hints were near copies of this one
+    vec BLOB                -- the hint's embedding, float32 (NULL: not embedded)
 );
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+-- Embeddings of the texts a student's hint is compared with, made on the laptop
+-- (prep/embed_refs.py): kind 'method' (ref: topic key) or 'solution' (ref: problem id).
+CREATE TABLE IF NOT EXISTS ref_vectors (
+    kind TEXT, ref TEXT, n INTEGER, text TEXT, vec BLOB,
+    PRIMARY KEY (kind, ref, n)
+);
 """
+
+# Columns added after the first version: (table, column, declaration). Older databases
+# get them when they are opened, keeping their rows.
+MIGRATIONS = [
+    ("hints", "source", "TEXT DEFAULT 'student'"),
+    ("hints", "relevance", "REAL"),
+    ("hints", "dups", "INTEGER DEFAULT 0"),
+    ("hints", "vec", "BLOB"),
+]
+
+# The order of the hints another student may see: what helped people most, then the
+# closest to the problem's references, then how far it moved the Kangaroo, then the oldest.
+HINT_ORDER = ("ORDER BY (solved_after + 1.0) / (shown + 2.0) DESC, COALESCE(relevance, -1) DESC, "
+              "COALESCE(delta, 0) DESC, n")
 
 # Who wrote a hint: a student teaching the Kangaroo, a hint shipped with the
 # database, or the agent's hint bank (prep/import_hints.py).
@@ -79,10 +102,12 @@ class Store:
 
     def _migrate(self):
         """Bring a database made by an older version up to date, keeping its rows."""
-        columns = {row[1] for row in self.db.execute("PRAGMA table_info(hints)")}
-        if "source" not in columns:
-            self.db.execute("ALTER TABLE hints ADD COLUMN source TEXT DEFAULT 'student'")
-            self.db.execute("UPDATE hints SET source = 'student' WHERE source IS NULL")
+        for table, column, declaration in MIGRATIONS:
+            columns = {row[1] for row in self.db.execute(f"PRAGMA table_info({table})")}
+            if column not in columns:
+                self.db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
+        self.db.execute("UPDATE hints SET source = 'student' WHERE source IS NULL")
+        self.db.execute("UPDATE hints SET dups = 0 WHERE dups IS NULL")
 
     def run(self, sql, args=()):
         with self.lock:
@@ -170,13 +195,45 @@ class Store:
 
     # --- hints -------------------------------------------------------------
 
-    def add_hint(self, problem_id, student_id, text, delta, convinced, source="student"):
+    def add_hint(self, problem_id, student_id, text, delta, convinced, source="student",
+                 relevance=None, vec=None):
         if source not in HINT_SOURCES:
             raise ValueError(f"unknown hint source {source!r}, expected one of {HINT_SOURCES}")
         return self.run("INSERT INTO hints (problem_id, student, text, delta, convinced, ts, "
-                        "source) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        "source, relevance, vec) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (problem_id, student_id, text, delta, int(bool(convinced)), time.time(),
-                         source)).lastrowid
+                         source, relevance, vec)).lastrowid
+
+    def hint_duplicate(self, n, convinced=False):
+        """A near copy of hint n arrived: count it, and keep the better verdict of the two."""
+        self.run("UPDATE hints SET dups = dups + 1, convinced = MAX(convinced, ?) WHERE n = ?",
+                 (int(bool(convinced)), n))
+
+    def hint_vectors(self, problem_id, source=None):
+        """[(n, source, vec blob)] for the embedded hints of a problem."""
+        sql = "SELECT n, source, vec FROM hints WHERE problem_id = ? AND vec IS NOT NULL"
+        args = [problem_id]
+        if source:
+            sql += " AND source = ?"
+            args.append(source)
+        with self.lock:
+            return [tuple(row) for row in self.db.execute(sql + " ORDER BY n", args)]
+
+    def set_hint_vector(self, n, vec):
+        self.run("UPDATE hints SET vec = ? WHERE n = ?", (vec, n))
+
+    def set_ref_vectors(self, kind, ref, items):
+        """Replace the reference vectors of one topic or problem: items = [(text, vec blob)]."""
+        with self.lock:
+            self.db.execute("DELETE FROM ref_vectors WHERE kind = ? AND ref = ?", (kind, ref))
+            self.db.executemany("INSERT INTO ref_vectors VALUES (?, ?, ?, ?, ?)",
+                                [(kind, ref, i, text, vec) for i, (text, vec) in enumerate(items)])
+            self.db.commit()
+
+    def ref_vectors(self, kind, ref):
+        with self.lock:
+            return [row[0] for row in self.db.execute(
+                "SELECT vec FROM ref_vectors WHERE kind = ? AND ref = ? ORDER BY n", (kind, ref))]
 
     def has_hint(self, problem_id, text, source=None):
         sql, args = "SELECT 1 FROM hints WHERE problem_id = ? AND text = ?", [problem_id, text]
@@ -185,12 +242,38 @@ class Store:
             args.append(source)
         return self.one(sql + " LIMIT 1", args) is not None
 
-    def best_hint(self, problem_id):
-        """The hint to show another student: the one that helped people most, then the model."""
-        return self.one(
-            "SELECT * FROM hints WHERE problem_id = ? AND (convinced = 1 OR delta IS NULL) "
-            "ORDER BY (solved_after + 1.0) / (shown + 2.0) DESC, COALESCE(delta, 0) DESC, n "
-            "LIMIT 1", (problem_id,))
+    def best_hint(self, problem_id, min_relevance=None):
+        """The hint to show another student, or None.
+
+        A student's hint that convinced the Kangaroo comes first (a student's hint is only
+        stored after it passed the leak filter), ranked by the human signal: how often
+        people solved the problem after seeing it. The agent's bank is only the fallback
+        when there is no such hint. min_relevance, when set, leaves out the student hints
+        that were measured and are too far from the problem's references.
+        """
+        relevant, args = "", [problem_id]
+        if min_relevance is not None:
+            relevant, args = " AND (relevance IS NULL OR relevance >= ?)", [problem_id, min_relevance]
+        found = self.one("SELECT * FROM hints WHERE problem_id = ? AND source != 'agent' AND "
+                         "(convinced = 1 OR (source = 'seed' AND delta IS NULL))"
+                         f"{relevant} {HINT_ORDER} LIMIT 1", args)
+        return found or self.one("SELECT * FROM hints WHERE problem_id = ? AND source = 'agent' "
+                                 f"{HINT_ORDER} LIMIT 1", (problem_id,))
+
+    def best_neighbour_hint(self, neighbour_ids, min_relevance=None):
+        """The best hint of a similar problem: a student's first, then the agent's.
+
+        Neighbours are tried in their stored order (most similar first). The result
+        carries "from_problem", so the tutor can say where it comes from.
+        """
+        fallback = None
+        for other in neighbour_ids:
+            found = self.best_hint(other, min_relevance)
+            if found and found["source"] != "agent":
+                return dict(found, from_problem=other)
+            if found and fallback is None:
+                fallback = dict(found, from_problem=other)
+        return fallback
 
     def hint_shown(self, n):
         self.run("UPDATE hints SET shown = shown + 1 WHERE n = ?", (n,))
