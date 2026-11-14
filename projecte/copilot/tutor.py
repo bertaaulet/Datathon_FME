@@ -221,14 +221,21 @@ class Tutor:
                 "ref": None, "ref_done": False, "teach_wait": False, "tries": 0, "bar": None,
                 "taught": False, "solved": False,
             }
-            if row.get("k_probs"):  # measured ahead of time: the Kangaroo can answer at once
+            precomputed = bool(row.get("k_probs"))
+            if precomputed:  # measured ahead of time (prep/kangaroo_baseline.py): answer at once
                 self.current["ref"] = kangaroo(row["k_probs"], row["label"])
+                self.current["ref_done"] = True
             self.phase, self.outside, self.busy = "solving", None, False
             self.messages = []
             self._say("cangur", "Mira aquest problema! Jo també l'estic pensant… 🤔")
             self._show(led.text("?"))
             current = self.current
-        self._spawn(self._reference, current)
+        # Only ask the model when nothing was measured ahead of time. Reading the problem
+        # again "to fill the server's cache" saves nothing: with this hybrid model the cache
+        # is only reused for an identical prompt (D1), and the call would hold model_lock
+        # for ~10 s, so the student's first hint would wait behind it.
+        if not precomputed:
+            self._spawn(self._reference, current)
         return self.view()
 
     def _reference(self, current):

@@ -37,7 +37,9 @@ import os
 import random
 import re
 import shutil
+import subprocess
 import sys
+import zlib
 import time
 from collections import Counter, defaultdict
 
@@ -264,6 +266,36 @@ def read_images(parquet, keys, folder=None):
             for i in range(sub.num_rows)}
 
 
+def load_cache(folder):
+    cache = {}
+    for name in sorted(os.listdir(folder)) if os.path.isdir(folder) else []:
+        if name.startswith(".ocr_cache") and name.endswith(".jsonl"):
+            with open(os.path.join(folder, name), encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        row = json.loads(line)
+                    except ValueError:  # a line cut short when a run was stopped
+                        continue
+                    cache[row["key"]] = (row["options"], row["method"])
+    return cache
+
+
+def in_shard(key, shard):
+    i, n = (int(x) for x in shard.split("/"))
+    return zlib.crc32(f"{key[0]}|{key[1]}".encode()) % n == i
+
+
+def run_workers(args):
+    """Start args.workers copies of this script, each on its share of the images, and wait."""
+    base = [sys.executable, os.path.abspath(__file__), "--data", args.data, "--out", args.out, "--ocr-only",
+            "--ocr-threads", str(args.ocr_threads or 4)]
+    base += ["--parquet", args.parquet] if args.parquet else ["--images", args.images]
+    procs = [subprocess.Popen(base + ["--shard", f"{i}/{args.workers}"]) for i in range(args.workers)]
+    codes = [p.wait() for p in procs]
+    if any(codes):
+        sys.exit(f"A worker failed ({codes}). Run the same command again: it continues where it stopped.")
+
+
 def run_ocr(args, keys, images, quick=()):
     """quick: keys re-read with the bottom strip only (the recheck group)."""
     import cv2
@@ -272,13 +304,10 @@ def run_ocr(args, keys, images, quick=()):
     threads = {"intra_op_num_threads": args.ocr_threads, "inter_op_num_threads": 1}
     ocr = RapidOCR(**threads) if args.ocr_threads else RapidOCR()
 
-    cache_path = os.path.join(args.out, ".ocr_cache.jsonl")
-    cache = {}
-    if os.path.exists(cache_path):
-        with open(cache_path, encoding="utf-8") as f:
-            for line in f:
-                row = json.loads(line)
-                cache[row["key"]] = (row["options"], row["method"])
+    # One cache file per worker, so parallel workers never write to the same file.
+    name = f".ocr_cache_{args.shard.replace('/', 'of')}.jsonl" if args.shard else ".ocr_cache.jsonl"
+    cache_path = os.path.join(args.out, name)
+    cache = load_cache(args.out)
     cache_file = open(cache_path, "a", encoding="utf-8", buffering=1)
 
     def read(img):
@@ -330,6 +359,9 @@ def main():
     p.add_argument("--parquet", help="local high_quality-00000-of-00004.parquet (Hugging Face cache)")
     p.add_argument("--images", help="folder of <id>_<lang>.png to use instead of the parquet")
     p.add_argument("--extract-only", action="store_true", help="write the target images to --images and stop")
+    p.add_argument("--workers", type=int, default=1, help="OCR processes in parallel (4 on a 16-core laptop)")
+    p.add_argument("--shard", help=argparse.SUPPRESS)
+    p.add_argument("--ocr-only", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--data", default="data")
     p.add_argument("--out", default=os.path.join("data", "_pass2"))
     p.add_argument("--ocr-threads", type=int, default=0)
@@ -359,6 +391,10 @@ def main():
         targets = {k: targets[k] for k in keys}
     print(f"Targets: {len(keys)} rows {dict(Counter(targets.values()))}", flush=True)
 
+    if args.workers > 1:
+        run_workers(args)
+    if args.shard:
+        keys = [k for k in keys if in_shard(k, args.shard)]
     if args.extract_only:
         os.makedirs(args.images, exist_ok=True)
         for k, data in read_images(args.parquet, keys).items():
@@ -369,6 +405,8 @@ def main():
     images = read_images(args.parquet, keys, args.images if args.parquet is None else None)
     quick = {k for k in keys if targets[k] == "recheck"}
     new = run_ocr(args, keys, images, quick)
+    if args.ocr_only:
+        return
 
     out = decide(rows, targets, {k: new[k] for k in keys if k in new})
     for split in SPLITS:
