@@ -1,0 +1,179 @@
+"""The tutor's SQLite file: problems, their texts, the student, attempts and hints.
+
+Everything about the student stays in this file, on the board. It also holds
+M3Kang text, so it must never be committed: .gitignore excludes *.db.
+"""
+import json
+import os
+import sqlite3
+import threading
+import time
+
+from .config import CONFIG, ROOT
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS problems (
+    id TEXT PRIMARY KEY,
+    level INTEGER, year INTEGER, number INTEGER, tram INTEGER,
+    topic TEXT, label TEXT, text_only INTEGER,
+    eligible INTEGER,       -- 1: text-only, with five readable options
+    elo REAL,
+    k_answer TEXT,          -- the Kangaroo's wrong answer, measured ahead of time
+    k_margin REAL,          -- log P(correct) - log P(best wrong option), before any hint
+    k_probs TEXT,           -- the five probabilities, as JSON
+    neighbours TEXT         -- ids of the most similar problems, as JSON
+);
+CREATE TABLE IF NOT EXISTS texts (
+    id TEXT, lang TEXT, text TEXT, options TEXT,
+    PRIMARY KEY (id, lang)
+);
+CREATE TABLE IF NOT EXISTS student (
+    id INTEGER PRIMARY KEY,
+    name TEXT, lang_origen TEXT, level INTEGER,
+    elo_cat REAL, elo_origen REAL,
+    etapa INTEGER,          -- 1: both languages, 2: classroom language + button, 3: classroom only
+    streak INTEGER
+);
+CREATE TABLE IF NOT EXISTS attempts (
+    n INTEGER PRIMARY KEY AUTOINCREMENT,
+    student INTEGER, problem_id TEXT,
+    lang TEXT,              -- the language the answer counts for: 'cat' or 'origen'
+    shown TEXT,             -- what was on screen: 'cat', 'both' or 'origen'
+    answer TEXT, correct INTEGER, revealed INTEGER, helps INTEGER,
+    seconds REAL, ts REAL
+);
+CREATE TABLE IF NOT EXISTS hints (
+    n INTEGER PRIMARY KEY AUTOINCREMENT,
+    problem_id TEXT, student INTEGER, text TEXT,
+    delta REAL,             -- how far the hint moved the Kangaroo's margin (NULL: not measured)
+    convinced INTEGER,
+    shown INTEGER DEFAULT 0, solved_after INTEGER DEFAULT 0,
+    ts REAL
+);
+CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+"""
+
+
+def default_path():
+    path = CONFIG.get("TUTOR_DB", "data/tutor.db")
+    return path if os.path.isabs(path) else os.path.join(ROOT, path)
+
+
+class Store:
+    """One connection shared by the web server's threads, behind a lock."""
+
+    def __init__(self, path=None):
+        self.path = path or default_path()
+        self.db = sqlite3.connect(self.path, check_same_thread=False)
+        self.db.row_factory = sqlite3.Row
+        self.lock = threading.RLock()
+        with self.lock:
+            self.db.executescript(SCHEMA)
+            self.db.commit()
+
+    def run(self, sql, args=()):
+        with self.lock:
+            cursor = self.db.execute(sql, args)
+            self.db.commit()
+            return cursor
+
+    def rows(self, sql, args=()):
+        with self.lock:
+            return [dict(row) for row in self.db.execute(sql, args).fetchall()]
+
+    def one(self, sql, args=()):
+        found = self.rows(sql, args)
+        return found[0] if found else None
+
+    def many(self, sql, rows):
+        with self.lock:
+            self.db.executemany(sql, rows)
+            self.db.commit()
+
+    def close(self):
+        with self.lock:
+            self.db.close()
+
+    # --- settings measured ahead of time -----------------------------------
+
+    def meta(self, key, default=None):
+        row = self.one("SELECT value FROM meta WHERE key = ?", (key,))
+        return row["value"] if row else default
+
+    def set_meta(self, key, value):
+        self.run("INSERT OR REPLACE INTO meta VALUES (?, ?)", (key, str(value)))
+
+    # --- problems ----------------------------------------------------------
+
+    def problem(self, problem_id):
+        row = self.one("SELECT * FROM problems WHERE id = ?", (problem_id,))
+        if row:
+            row["neighbours"] = json.loads(row["neighbours"] or "[]")
+            row["k_probs"] = json.loads(row["k_probs"]) if row["k_probs"] else None
+        return row
+
+    def text(self, problem_id, lang):
+        """The problem in one language: {"text", "options"}, or None."""
+        row = self.one("SELECT text, options FROM texts WHERE id = ? AND lang = ?",
+                       (problem_id, lang))
+        if not row:
+            return None
+        return {"text": row["text"], "options": json.loads(row["options"] or "{}"), "lang": lang}
+
+    def languages(self):
+        return [row["lang"] for row in self.rows("SELECT DISTINCT lang FROM texts ORDER BY lang")]
+
+    def candidates(self, student_id, lang=None):
+        """Eligible problems the student hasn't seen: [(id, elo, topic), ...]."""
+        sql = ("SELECT p.id, p.elo, p.topic FROM problems p WHERE p.eligible = 1 "
+               "AND p.id NOT IN (SELECT problem_id FROM attempts WHERE student = ?)")
+        args = [student_id]
+        if lang:
+            sql += " AND p.id IN (SELECT id FROM texts WHERE lang = ?)"
+            args.append(lang)
+        return [(row["id"], row["elo"], row["topic"]) for row in self.rows(sql, args)]
+
+    # --- the student -------------------------------------------------------
+
+    def student(self, student_id=1):
+        return self.one("SELECT * FROM student WHERE id = ?", (student_id,))
+
+    def save_student(self, student):
+        self.run("INSERT OR REPLACE INTO student VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                 (student["id"], student["name"], student["lang_origen"], student["level"],
+                  student["elo_cat"], student["elo_origen"], student["etapa"], student["streak"]))
+
+    def add_attempt(self, student_id, problem_id, lang, shown, answer, correct, revealed,
+                    helps, seconds):
+        self.run("INSERT INTO attempts (student, problem_id, lang, shown, answer, correct, "
+                 "revealed, helps, seconds, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                 (student_id, problem_id, lang, shown, answer, int(correct), int(revealed),
+                  helps, seconds, time.time()))
+
+    def attempts(self, student_id=1):
+        return self.rows("SELECT a.*, p.topic, p.level FROM attempts a "
+                         "LEFT JOIN problems p ON p.id = a.problem_id "
+                         "WHERE a.student = ? ORDER BY a.n", (student_id,))
+
+    # --- hints -------------------------------------------------------------
+
+    def add_hint(self, problem_id, student_id, text, delta, convinced):
+        self.run("INSERT INTO hints (problem_id, student, text, delta, convinced, ts) "
+                 "VALUES (?, ?, ?, ?, ?, ?)",
+                 (problem_id, student_id, text, delta, int(bool(convinced)), time.time()))
+
+    def best_hint(self, problem_id):
+        """The hint to show another student: the one that helped people most, then the model."""
+        return self.one(
+            "SELECT * FROM hints WHERE problem_id = ? AND (convinced = 1 OR delta IS NULL) "
+            "ORDER BY (solved_after + 1.0) / (shown + 2.0) DESC, COALESCE(delta, 0) DESC, n "
+            "LIMIT 1", (problem_id,))
+
+    def hint_shown(self, n):
+        self.run("UPDATE hints SET shown = shown + 1 WHERE n = ?", (n,))
+
+    def hint_solved(self, n):
+        self.run("UPDATE hints SET solved_after = solved_after + 1 WHERE n = ?", (n,))
+
+    def hints(self):
+        return self.rows("SELECT * FROM hints ORDER BY n")

@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ensenya el Cangur</title>
+<style>
+  :root {
+    --bg: #f6f4ee; --card: #ffffff; --ink: #1f2a37; --soft: #5b6675; --line: #dcd7ca;
+    --accent: #c2571a; --accent-ink: #ffffff; --good: #1f7a4d; --bad: #b3261e;
+    --me: #e7eef9; --roo: #fdeedd; --note: #f1efe7; --warn: #fff4c2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15191f; --card: #1e242c; --ink: #e8ebef; --soft: #9aa5b3; --line: #343c47;
+      --accent: #f08a4b; --accent-ink: #1a1205; --good: #6fcf97; --bad: #f28b82;
+      --me: #253349; --roo: #3a2a1c; --note: #262d36; --warn: #4a4018;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 18px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+           padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--card); }
+  header h1 { font-size: 20px; margin: 0; flex: 1; min-width: 180px; }
+  .chip { font-size: 14px; color: var(--soft); border: 1px solid var(--line);
+          border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px;
+         display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; }
+  @media (max-width: 800px) { main { grid-template-columns: minmax(0, 1fr); } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .meta { font-size: 14px; color: var(--soft); margin-bottom: 8px; }
+  .texts { display: grid; gap: 12px; }
+  .texts.both { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  @media (max-width: 600px) { .texts.both { grid-template-columns: minmax(0, 1fr); } }
+  .text { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .text small { display: block; color: var(--soft); font-size: 13px; margin-bottom: 2px; }
+  .text img { max-width: 100%; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
+  .options { display: grid; gap: 8px; margin-top: 14px; }
+  button { font: inherit; color: inherit; cursor: pointer; border-radius: 10px;
+           border: 1px solid var(--line); background: var(--card); padding: 8px 14px; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  .option { display: flex; gap: 10px; text-align: left; align-items: baseline; }
+  .option b { min-width: 1.4em; }
+  .option.wrong { border-color: var(--bad); color: var(--bad); text-decoration: line-through; }
+  .option.right { border-color: var(--good); color: var(--good); font-weight: 600; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  #chat { display: flex; flex-direction: column; gap: 8px; min-height: 180px; max-height: 52vh;
+          overflow-y: auto; padding-right: 4px; }
+  .msg { padding: 8px 12px; border-radius: 12px; max-width: 92%; white-space: pre-wrap;
+         overflow-wrap: anywhere; }
+  .msg.cangur { background: var(--roo); align-self: flex-start; }
+  .msg.cangur::before { content: "🦘 "; }
+  .msg.alumne { background: var(--me); align-self: flex-end; }
+  .msg.sistema { background: var(--note); align-self: stretch; max-width: 100%; font-size: 16px; }
+  .msg.be { color: var(--good); font-weight: 600; }
+  .msg.malament, .msg.fuita { color: var(--bad); }
+  .msg.avis { background: var(--warn); }
+  .msg.exemple { border-left: 4px solid var(--accent); }
+  .thinking { color: var(--soft); font-style: italic; }
+  form.hint { display: flex; gap: 8px; margin-top: 12px; }
+  textarea, input, select { font: inherit; color: inherit; background: var(--card);
+           border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; width: 100%; }
+  textarea { resize: vertical; min-height: 64px; }
+  label { display: block; font-size: 15px; color: var(--soft); margin: 10px 0 4px; }
+  .side { display: flex; flex-direction: column; gap: 16px; }
+  .bar { height: 18px; border-radius: 9px; background: var(--note); border: 1px solid var(--line);
+         position: relative; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .4s; }
+  .bar::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px;
+                background: var(--ink); opacity: .45; }
+  .barlabel { display: flex; justify-content: space-between; font-size: 13px; color: var(--soft); }
+  #led { display: grid; grid-template-columns: repeat(13, 1fr); gap: 3px; background: #111;
+         padding: 8px; border-radius: 8px; max-width: 260px; }
+  #led span { aspect-ratio: 1; border-radius: 50%; background: #2a2a2a; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  td, th { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .hidden { display: none !important; }
+  details summary { cursor: pointer; color: var(--soft); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🦘 Ensenya el Cangur</h1>
+  <span class="chip" id="chip-level"></span>
+  <span class="chip" id="chip-stage"></span>
+  <button id="btn-teacher">Docent</button>
+</header>
+
+<main>
+  <section class="card" id="welcome">
+    <h2 style="margin-top:0">Hola!</h2>
+    <p>Resoldràs problemes de matemàtiques i ajudaràs el Cangur, que s'equivoca força.
+       Tot el que facis es queda en aquesta placa.</p>
+    <label for="in-name">Com et dius? (opcional)</label>
+    <input id="in-name" maxlength="40" autocomplete="off">
+    <label for="in-level">Quin curs fas?</label>
+    <select id="in-level">
+      <option value="0">5è de primària</option><option value="1">6è de primària</option>
+      <option value="2">1r d'ESO</option><option value="3">2n d'ESO</option>
+      <option value="4">3r d'ESO</option><option value="5">4t d'ESO</option>
+      <option value="6">1r de batxillerat</option><option value="7">2n de batxillerat</option>
+    </select>
+    <label for="in-lang">Vols veure els problemes també en una altra llengua?</label>
+    <select id="in-lang"></select>
+    <div class="row"><button class="primary" id="btn-start">Comencem</button></div>
+  </section>
+
+  <section class="card hidden" id="problem">
+    <div class="meta" id="p-meta"></div>
+    <div class="texts" id="p-texts"></div>
+    <div class="options" id="p-options"></div>
+    <div class="row">
+      <button id="btn-help">Demana una pista</button>
+      <button id="btn-reveal" class="hidden">Veure en la meva llengua</button>
+      <button id="btn-next" class="primary hidden">Problema següent</button>
+    </div>
+    <details style="margin-top:16px">
+      <summary>Tinc un problema meu</summary>
+      <label for="in-ext">Escriu l'enunciat i les opcions (A) … B) … fins a E)).</label>
+      <textarea id="in-ext"></textarea>
+      <div class="row"><button id="btn-ext">Envia'l al Cangur</button></div>
+    </details>
+  </section>
+
+  <div class="side">
+    <section class="card">
+      <div id="chat" aria-live="polite"></div>
+      <form class="hint hidden" id="hint-form">
+        <textarea id="in-hint" maxlength="200" placeholder="Escriu una pista per al Cangur, sense dir-li la resposta"></textarea>
+        <button class="primary" id="btn-hint">Envia</button>
+      </form>
+      <div id="outside" class="hidden">
+        <div class="row" id="similar"></div>
+        <div class="row"><button id="btn-guess">I tu, Cangur, què diries?</button>
+          <button id="btn-back" class="primary">Tornem als problemes</button></div>
+      </div>
+    </section>
+    <section class="card" id="confidence">
+      <div class="barlabel"><span>El Cangur prefereix una resposta equivocada</span><span>la correcta</span></div>
+      <div class="bar"><i id="bar-fill"></i></div>
+      <div class="meta" style="margin:10px 0 6px">Matriu LED de la placa</div>
+      <div id="led"></div>
+    </section>
+    <section class="card hidden" id="teacher">
+      <h3 style="margin-top:0">Vista del docent</h3>
+      <div id="teacher-body"></div>
+    </section>
+  </div>
+</main>
+
+<script>
+const LANG_NAMES = {eng: "English", cat: "Català", esp: "Castellano", fra: "Français",
+  arb: "العربية", zho: "中文", deu: "Deutsch", tur: "Türkçe", vie: "Tiếng Việt",
+  ind: "Bahasa Indonesia", swh: "Kiswahili", kor: "한국어", jpn: "日本語", lit: "Lietuvių",
+  ron: "Română", urd: "اردو", ukr: "Українська", rus: "Русский", por: "Português", ita: "Italiano"};
+const STAGES = {1: "Dues llengües", 2: "Català amb ajuda", 3: "Català"};
+const $ = id => document.getElementById(id);
+let state = null, timer = null, langsFilled = false;
+
+function el(tag, attrs, text) {
+  const node = document.createElement(tag);
+  for (const key in (attrs || {})) node.setAttribute(key, attrs[key]);
+  if (text !== undefined) node.textContent = text;   // textContent: nothing typed is run as HTML
+  return node;
+}
+async function call(path, body) {
+  const response = await fetch(path, body === undefined ? {} :
+    {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  return response.json();
+}
+async function act(path, body) { render(await call(path, body || {})); }
+
+function render(view) {
+  state = view;
+  const student = view.student, problem = view.problem;
+  if (!langsFilled) {
+    const select = $("in-lang");
+    select.append(el("option", {value: ""}, "No, només en català"));
+    for (const lang of view.languages)
+      if (lang !== view.classroom_lang && lang !== "eng")
+        select.append(el("option", {value: lang}, LANG_NAMES[lang] || lang));
+    if (view.languages.includes("eng") && view.classroom_lang !== "eng")
+      select.append(el("option", {value: "eng"}, LANG_NAMES.eng));
+    langsFilled = true;
+  }
+  $("welcome").classList.toggle("hidden", view.phase !== "welcome");
+  $("problem").classList.toggle("hidden", view.phase === "welcome");
+  $("chip-level").textContent = student ? "Nivell " + student.level : "";
+  $("chip-level").classList.toggle("hidden", !student);
+  $("chip-stage").textContent = student && student.etapa ? STAGES[student.etapa] : "";
+  $("chip-stage").classList.toggle("hidden", !(student && student.etapa));
+
+  const texts = $("p-texts"), options = $("p-options");
+  texts.replaceChildren(); options.replaceChildren();
+  const open = ["solving", "help"].includes(view.phase);
+  if (problem) {
+    $("p-meta").textContent = "Nivell " + problem.level + " · " + problem.topic;
+    const own = problem.origen || problem.origen_image;
+    texts.className = "texts" + (problem.cat && own ? " both" : "");
+    if (problem.cat) {
+      const box = el("div", {class: "text", lang: "ca"});
+      if (own) box.append(el("small", {}, LANG_NAMES[view.classroom_lang] || view.classroom_lang));
+      box.append(document.createTextNode(problem.cat));
+      texts.append(box);
+    }
+    if (own) {
+      const box = el("div", {class: "text", dir: "auto"});
+      box.append(el("small", {}, LANG_NAMES[problem.origen_lang] || problem.origen_lang));
+      if (problem.origen_image) box.append(el("img", {src: "/img/" + problem.origen_image, alt: ""}));
+      else box.append(document.createTextNode(problem.origen));
+      texts.append(box);
+    }
+    for (const letter of "ABCDE") {
+      if (!(letter in problem.options)) continue;
+      const button = el("button", {class: "option"});
+      button.append(el("b", {}, letter + ")"), el("span", {}, problem.options[letter]));
+      if (problem.wrong.includes(letter)) button.classList.add("wrong");
+      if (problem.label === letter) button.classList.add("right");
+      button.disabled = !open || problem.wrong.includes(letter);
+      button.onclick = () => act("/api/answer", {letter});
+      options.append(button);
+    }
+  } else if (view.outside) {
+    $("p-meta").textContent = "Problema teu · " + view.outside.topic;
+    texts.className = "texts";
+    texts.append(el("div", {class: "text"}, view.outside.text));
+    for (const letter in view.outside.options) {
+      const row = el("div", {class: "option"});
+      row.append(el("b", {}, letter + ")"), el("span", {}, view.outside.options[letter]));
+      options.append(row);
+    }
+  } else {
+    $("p-meta").textContent = "";
+  }
+  $("btn-help").classList.toggle("hidden", !open);
+  $("btn-help").textContent = problem && problem.helps >= 3 ? "Ensenya'm la solució" :
+    problem && problem.helps > 0 ? "Una altra pista" : "Demana una pista";
+  $("btn-reveal").classList.toggle("hidden", !(problem && problem.can_reveal));
+  const canNext = ["ready", "done"].includes(view.phase) && !view.busy;
+  $("btn-next").classList.toggle("hidden", !canNext);
+  $("btn-next").textContent = view.phase === "ready" ? "Primer problema" : "Problema següent";
+
+  const chat = $("chat");
+  chat.replaceChildren();
+  for (const message of view.messages)
+    chat.append(el("div", {class: "msg " + message.who + " " + (message.kind || "")}, message.text));
+  if (view.busy) chat.append(el("div", {class: "msg cangur thinking"}, "El Cangur hi està pensant…"));
+  chat.scrollTop = chat.scrollHeight;
+
+  const teaching = view.phase === "teach" && !view.busy && problem && problem.tries_left > 0;
+  $("hint-form").classList.toggle("hidden", !teaching);
+  $("outside").classList.toggle("hidden", view.phase !== "external");
+  if (view.outside) {
+    const similar = $("similar");
+    similar.replaceChildren();
+    view.outside.similar.slice(0, 3).forEach((item, i) => {
+      const button = el("button", {}, "Practica un de semblant (" + (i + 1) + ")");
+      button.onclick = () => act("/api/practice", {id: item.id});
+      similar.append(button);
+    });
+    $("btn-guess").disabled = view.busy || !!view.outside.guess;
+  }
+  $("bar-fill").style.width = problem && problem.bar !== null ? Math.round(100 * problem.bar) + "%" : "0";
+
+  clearTimeout(timer);
+  if (view.busy) timer = setTimeout(refresh, 1000);
+}
+async function refresh() { render(await call("/api/state")); }
+
+async function led() {
+  try {
+    const view = await call("/api/led"), box = $("led");
+    if (box.dataset.version !== String(view.version)) {
+      box.dataset.version = view.version;
+      box.replaceChildren();
+      for (const row of view.frame) for (const value of row) {
+        const dot = el("span");
+        if (value) dot.style.background = "rgba(255,70,50," + (0.25 + 0.75 * value / 7) + ")";
+        box.append(dot);
+      }
+    }
+  } catch (error) { /* the server is restarting */ }
+  setTimeout(led, 700);
+}
+
+async function teacher() {
+  const data = await call("/api/teacher"), body = $("teacher-body");
+  body.replaceChildren();
+  body.append(el("p", {}, "Problemes fets: " + data.attempts));
+  if (data.by_topic.length) {
+    const table = el("table"), head = el("tr");
+    head.append(el("th", {}, "Tema"), el("th", {class: "n"}, "Encerts"));
+    table.append(head);
+    for (const row of data.by_topic) {
+      const tr = el("tr");
+      tr.append(el("td", {}, row.topic), el("td", {class: "n"}, row.correct + " de " + row.n));
+      table.append(tr);
+    }
+    body.append(table);
+  }
+  if (data.gap) {
+    const gap = data.gap;
+    body.append(el("p", {}, gap.ready ?
+      "Llengua o matemàtiques? En la seva llengua rendeix a " + gap.elo_origen + " punts, en català a " +
+      gap.elo_cat + " (diferència: " + gap.gap + "). Amb pocs problemes, aquesta xifra és orientativa." :
+      "Diferència entre llengües: encara no es pot dir. Calen " + gap.needed +
+      " problemes per llengua (fets: " + gap.n_origen + " en la seva llengua, " + gap.n_cat + " en català)."));
+  }
+  body.append(el("p", {}, "Pistes escrites per l'alumne: " + data.hints.length));
+  for (const hint of data.hints.slice(-5))
+    body.append(el("div", {class: "msg sistema"}, "«" + hint.text + "»" + (hint.convinced ? " ✓" : "")));
+}
+
+$("btn-start").onclick = () => act("/api/start", {name: $("in-name").value,
+  level: Number($("in-level").value), lang: $("in-lang").value});
+$("btn-next").onclick = () => act("/api/next");
+$("btn-help").onclick = () => act("/api/help");
+$("btn-reveal").onclick = () => act("/api/reveal");
+$("btn-guess").onclick = () => act("/api/guess");
+$("btn-back").onclick = () => act("/api/next");
+$("btn-ext").onclick = () => { const text = $("in-ext").value.trim();
+  if (text) { act("/api/external", {text}); $("in-ext").value = ""; } };
+$("hint-form").onsubmit = event => { event.preventDefault();
+  const text = $("in-hint").value.trim();
+  if (text) { act("/api/hint", {text}); $("in-hint").value = ""; } };
+$("in-hint").onkeydown = event => { if (event.key === "Enter" && !event.shiftKey) {
+  event.preventDefault(); $("hint-form").requestSubmit(); } };
+$("btn-teacher").onclick = () => { const hidden = $("teacher").classList.toggle("hidden");
+  if (!hidden) teacher(); };
+
+refresh(); led();
+</script>
+</body>
+</html>

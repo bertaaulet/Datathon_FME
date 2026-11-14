@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ensenya el Cangur · Dashboard de decisions</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f4f3ee; --surface: #fcfcfb; --line: #dedcd3; --grid: #e9e7df;
+    --text: #0b0b0b; --text-2: #52514e; --text-3: #7b7a74;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --ref: #52514e;
+    --band: rgba(42, 120, 214, .16); --warn-bg: #fff1bf; --note-bg: #eef3fb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --page: #121211; --surface: #1a1a19; --line: #34332f; --grid: #2a2926;
+      --text: #f0efec; --text-2: #c3c2b7; --text-3: #94938b;
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --ref: #c3c2b7;
+      --band: rgba(57, 135, 229, .22); --warn-bg: #4a4018; --note-bg: #1f2a3a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--text);
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 20px 16px 60px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  .sub { color: var(--text-2); margin: 0 0 16px; }
+  .banner { background: var(--warn-bg); border-radius: 10px; padding: 10px 14px; margin-bottom: 16px;
+            font-weight: 600; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px;
+           margin-bottom: 16px; }
+  .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .tile b { display: block; font-size: 26px; font-variant-numeric: tabular-nums; }
+  .tile span { color: var(--text-2); font-size: 14px; }
+  section { background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+            padding: 18px; margin-bottom: 16px; }
+  section h2 { font-size: 19px; margin: 0 0 2px; }
+  .q { color: var(--text-2); margin: 0 0 12px; }
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: 18px; }
+  .chart { max-width: 560px; }
+  .chart h3 { font-size: 14px; font-weight: 600; margin: 0 0 4px; color: var(--text-2); }
+  svg { width: 100%; height: auto; display: block; overflow: visible; }
+  svg text { fill: var(--text-2); font: 12px system-ui, -apple-system, "Segoe UI", sans-serif; }
+  svg text.strong { fill: var(--text); }
+  .reads { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px;
+           margin-top: 14px; }
+  .read { border-radius: 10px; padding: 10px 12px; background: var(--page); }
+  .read.decision { background: var(--note-bg); }
+  .read h4 { margin: 0 0 4px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em;
+             color: var(--text-2); }
+  .read p { margin: 0 0 6px; }
+  .read p:last-child { margin-bottom: 0; }
+  .team { border-top: 1px dashed var(--line); padding-top: 6px; }
+  .empty { color: var(--text-3); padding: 14px; border: 1px dashed var(--line); border-radius: 10px; }
+  code { background: var(--page); padding: 1px 5px; border-radius: 4px; font-size: 14px; }
+  .legend { display: flex; gap: 14px; font-size: 13px; color: var(--text-2); margin: 2px 0 6px; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; }
+  details { margin-top: 10px; }
+  summary { cursor: pointer; color: var(--text-2); font-size: 14px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; margin-top: 6px; }
+  th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .scroll { overflow-x: auto; }
+  select { font: inherit; color: inherit; background: var(--surface); border: 1px solid var(--line);
+           border-radius: 8px; padding: 4px 8px; }
+  .controls { margin-bottom: 10px; color: var(--text-2); font-size: 14px; }
+  #tip { position: fixed; pointer-events: none; background: var(--text); color: var(--surface);
+         padding: 6px 9px; border-radius: 8px; font-size: 13px; max-width: 280px; display: none; z-index: 5; }
+  .hit { cursor: default; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Ensenya el Cangur · decisions de disseny</h1>
+  <p class="sub" id="sub"></p>
+  <div id="banner"></div>
+  <div class="tiles" id="tiles"></div>
+  <div id="panels"></div>
+</div>
+<div id="tip"></div>
+<script>
+const DATA = /*DATA*/null;
+const NS = "http://www.w3.org/2000/svg";
+const fmt = (v, d = 1) => Number(v).toLocaleString("ca", {maximumFractionDigits: d, minimumFractionDigits: 0});
+const tip = document.getElementById("tip");
+
+function h(tag, attrs, ...kids) {
+  const node = document.createElement(tag);
+  for (const k in (attrs || {})) node.setAttribute(k, attrs[k]);
+  for (const kid of kids) node.append(kid);   // strings become text nodes: nothing is run as HTML
+  return node;
+}
+function s(tag, attrs, text) {
+  const node = document.createElementNS(NS, tag);
+  for (const k in (attrs || {})) node.setAttribute(k, attrs[k]);
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+function hover(node, text) {
+  node.classList.add("hit");
+  node.addEventListener("mousemove", e => { tip.textContent = text; tip.style.display = "block";
+    tip.style.left = Math.min(e.clientX + 14, innerWidth - 300) + "px"; tip.style.top = e.clientY + 14 + "px"; });
+  node.addEventListener("mouseleave", () => { tip.style.display = "none"; });
+}
+function axis(svg, x, ticks, top, bottom, unit) {
+  for (const t of ticks) {
+    svg.append(s("line", {x1: x(t), x2: x(t), y1: top, y2: bottom, stroke: "var(--grid)"}));
+    svg.append(s("text", {x: x(t), y: bottom + 14, "text-anchor": "middle"}, fmt(t) + (unit || "")));
+  }
+}
+function niceTicks(lo, hi, n = 5) {
+  const step0 = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(step0 || 1)));
+  const step = [1, 2, 5, 10].map(m => m * mag).find(m => m >= step0) || mag;
+  const out = [];
+  for (let t = Math.ceil(lo / step) * step; t <= hi + 1e-9; t += step) out.push(Math.round(t * 1e6) / 1e6 + 0);
+  return out;
+}
+
+// A dot with its 95% interval per row: the honest way to show a share of a few problems.
+function forest(rows, opt = {}) {
+  const W = 520, L = opt.left || 170, R = 96, rowH = 26, top = (opt.refs || []).length ? 30 : 8;
+  const H = top + rows.length * rowH + 22, lo = opt.lo ?? 0, hi = opt.hi ?? 100;
+  const x = v => L + (Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo) * (W - L - R);
+  const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, role: "img"});
+  axis(svg, x, opt.ticks || [0, 20, 40, 60, 80, 100], top, top + rows.length * rowH, opt.unit ?? "%");
+  for (const ref of (opt.refs || [])) {
+    svg.append(s("line", {x1: x(ref.x), x2: x(ref.x), y1: top - 2, y2: top + rows.length * rowH,
+                          stroke: "var(--ref)", "stroke-dasharray": "4 3", "stroke-width": 1.5}));
+  }
+  (opt.refs || []).forEach((ref, i) => svg.append(   // labels above the plot, on two lines so they never collide
+    s("text", {x: x(ref.x), y: 10 + (i % 2) * 12, "text-anchor": "middle", class: "strong"}, ref.label)));
+  rows.forEach((row, i) => {
+    const y = top + i * rowH + rowH / 2;
+    svg.append(s("text", {x: L - 8, y: y + 4, "text-anchor": "end", class: "strong"},
+                 String(row.label).length > 26 ? String(row.label).slice(0, 25) + "…" : row.label));
+    const g = s("g");
+    g.append(s("rect", {x: L, y: y - rowH / 2, width: W - L - R, height: rowH, fill: "transparent"}));
+    if (row.lo !== undefined)
+      g.append(s("line", {x1: x(row.lo), x2: x(row.hi), y1: y, y2: y, stroke: "var(--s1)",
+                          "stroke-width": 2, "stroke-linecap": "round", opacity: row.dim ? .45 : 1}));
+    g.append(s("circle", {cx: x(row.value), cy: y, r: 5, fill: "var(--s1)", stroke: "var(--surface)",
+                          "stroke-width": 2, opacity: row.dim ? .45 : 1}));
+    if (row.truth !== undefined)
+      g.append(s("path", {d: `M${x(row.truth)} ${y - 9}v18`, stroke: "var(--s2)", "stroke-width": 3}));
+    hover(g, row.tip);
+    svg.append(g);
+    svg.append(s("text", {x: W - R + 8, y: y + 4}, row.right));
+  });
+  return svg;
+}
+
+// Tukey's box plot: box = middle half, line = median, whiskers = 1.5 IQR, dots = beyond.
+function boxes(rows, opt = {}) {
+  const W = 520, L = opt.left || 170, R = 20, rowH = 30, top = (opt.refs || []).length ? 30 : 8;
+  const H = top + rows.length * rowH + 22;
+  let lo = Math.min(...rows.map(r => r.box.min), ...(opt.refs || []).map(r => r.x), opt.lo ?? Infinity);
+  let hi = Math.max(...rows.map(r => r.box.max), ...(opt.refs || []).map(r => r.x), opt.hi ?? -Infinity);
+  if (hi === lo) hi = lo + 1;
+  const pad = (hi - lo) * .05; lo = opt.zero ? Math.min(0, lo) : lo - pad; hi += pad;
+  const x = v => L + (v - lo) / (hi - lo) * (W - L - R);
+  const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, role: "img"});
+  axis(svg, x, niceTicks(lo, hi), top, top + rows.length * rowH, opt.unit || "");
+  for (const ref of (opt.refs || [])) {
+    svg.append(s("line", {x1: x(ref.x), x2: x(ref.x), y1: top - 2, y2: top + rows.length * rowH,
+                          stroke: "var(--ref)", "stroke-dasharray": "4 3", "stroke-width": 1.5}));
+  }
+  (opt.refs || []).forEach((ref, i) => svg.append(
+    s("text", {x: Math.min(x(ref.x), W - R), y: 10 + (i % 2) * 12, "text-anchor": x(ref.x) > W - 80 ? "end" : "middle", class: "strong"}, ref.label)));
+  rows.forEach((row, i) => {
+    const y = top + i * rowH + rowH / 2, b = row.box, g = s("g");
+    svg.append(s("text", {x: L - 8, y: y + 4, "text-anchor": "end", class: "strong"}, row.label));
+    g.append(s("rect", {x: L, y: y - rowH / 2, width: W - L - R, height: rowH, fill: "transparent"}));
+    g.append(s("line", {x1: x(b.low), x2: x(b.high), y1: y, y2: y, stroke: "var(--s1)", "stroke-width": 2}));
+    g.append(s("rect", {x: x(b.q1), y: y - 8, width: Math.max(2, x(b.q3) - x(b.q1)), height: 16, rx: 3,
+                        fill: "var(--band)", stroke: "var(--s1)", "stroke-width": 2}));
+    g.append(s("line", {x1: x(b.median), x2: x(b.median), y1: y - 8, y2: y + 8, stroke: "var(--s1)",
+                        "stroke-width": 3}));
+    for (const v of b.out) g.append(s("circle", {cx: x(v), cy: y, r: 3, fill: "none", stroke: "var(--s1)",
+                                                 "stroke-width": 1.5}));
+    hover(g, `${row.label}: mediana ${fmt(b.median, 2)}${opt.unit || ""}, meitat central ${fmt(b.q1, 2)}–${fmt(b.q3, 2)}, ` +
+             `mínim ${fmt(b.min, 2)}, màxim ${fmt(b.max, 2)} (n = ${b.n})`);
+    svg.append(g);
+  });
+  return svg;
+}
+
+function letterBars(letters) {
+  const W = 520, H = 190, L = 34, top = 12, bottom = H - 26, max = Math.max(...letters.flatMap(d => [d.predicted, d.true]), 1);
+  const y = v => bottom - v / max * (bottom - top), band = (W - L - 10) / letters.length;
+  const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, role: "img"});
+  for (const t of niceTicks(0, max, 4)) {
+    svg.append(s("line", {x1: L, x2: W - 10, y1: y(t), y2: y(t), stroke: "var(--grid)"}));
+    svg.append(s("text", {x: L - 6, y: y(t) + 4, "text-anchor": "end"}, t));
+  }
+  letters.forEach((d, i) => {
+    const x0 = L + i * band + band * .18, w = band * .3;
+    [["predicted", "var(--s1)", "prediu"], ["true", "var(--s2)", "és correcta"]].forEach(([key, color, word], j) => {
+      const v = d[key], x = x0 + j * (w + 2), g = s("g");
+      const top4 = Math.min(4, (bottom - y(v)));
+      g.append(s("path", {d: `M${x} ${bottom}V${y(v) + top4}q0 ${-top4} ${top4} ${-top4}h${w - 2 * top4}q${top4} 0 ${top4} ${top4}V${bottom}Z`, fill: color}));
+      g.append(s("text", {x: x + w / 2, y: y(v) - 4, "text-anchor": "middle"}, v));
+      hover(g, `Lletra ${d.letter}: el model la ${word} ${v} vegades`.replace("la és", "és"));
+      svg.append(g);
+    });
+    svg.append(s("text", {x: L + i * band + band / 2, y: H - 8, "text-anchor": "middle", class: "strong"}, d.letter));
+  });
+  return svg;
+}
+
+function curve(points) {
+  const W = 520, H = 210, L = 44, R = 14, top = 12, bottom = H - 30;
+  const maxY = Math.max(...points.map(p => p.q3)) * 1.05, maxX = points[points.length - 1].step;
+  const x = v => L + (v - 1) / (maxX - 1) * (W - L - R), y = v => bottom - v / maxY * (bottom - top);
+  const svg = s("svg", {viewBox: `0 0 ${W} ${H}`, role: "img"});
+  for (const t of niceTicks(0, maxY, 4)) {
+    svg.append(s("line", {x1: L, x2: W - R, y1: y(t), y2: y(t), stroke: "var(--grid)"}));
+    svg.append(s("text", {x: L - 6, y: y(t) + 4, "text-anchor": "end"}, t));
+  }
+  for (const t of [1, 10, 20, 30, 40, 50, 60].filter(t => t <= maxX))
+    svg.append(s("text", {x: x(t), y: bottom + 14, "text-anchor": "middle"}, t));
+  svg.append(s("text", {x: (L + W - R) / 2, y: H - 2, "text-anchor": "middle"}, "respostes de l'alumne"));
+  const band = points.map(p => `${x(p.step)},${y(p.q3)}`).join(" ") + " " +
+               points.slice().reverse().map(p => `${x(p.step)},${y(p.q1)}`).join(" ");
+  svg.append(s("polygon", {points: band, fill: "var(--band)"}));
+  svg.append(s("polyline", {points: points.map(p => `${x(p.step)},${y(p.median)}`).join(" "),
+                            fill: "none", stroke: "var(--s1)", "stroke-width": 2, "stroke-linejoin": "round"}));
+  const guide = s("line", {y1: top, y2: bottom, stroke: "var(--ref)", "stroke-width": 1, visibility: "hidden"});
+  const dot = s("circle", {r: 4, fill: "var(--s1)", stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden"});
+  const pad = s("rect", {x: L, y: top, width: W - L - R, height: bottom - top, fill: "transparent"});
+  pad.addEventListener("mousemove", e => {
+    const box = svg.getBoundingClientRect(), px = (e.clientX - box.left) / box.width * W;
+    const p = points.reduce((a, b) => Math.abs(x(b.step) - px) < Math.abs(x(a.step) - px) ? b : a);
+    guide.setAttribute("x1", x(p.step)); guide.setAttribute("x2", x(p.step)); guide.setAttribute("visibility", "visible");
+    dot.setAttribute("cx", x(p.step)); dot.setAttribute("cy", y(p.median)); dot.setAttribute("visibility", "visible");
+    tip.textContent = `Després de ${p.step} respostes: error medià ${fmt(p.median, 0)} punts (meitat central ${fmt(p.q1, 0)}–${fmt(p.q3, 0)})`;
+    tip.style.display = "block"; tip.style.left = Math.min(e.clientX + 14, innerWidth - 300) + "px"; tip.style.top = e.clientY + 14 + "px";
+  });
+  pad.addEventListener("mouseleave", () => { tip.style.display = "none"; guide.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); });
+  svg.append(guide, dot, pad);
+  return svg;
+}
+
+function table(head, rows) {
+  const t = h("table"), tr = h("tr");
+  head.forEach((c, i) => tr.append(h("th", i ? {class: "n"} : {}, c)));
+  t.append(tr);
+  for (const row of rows) {
+    const r = h("tr");
+    row.forEach((c, i) => r.append(h("td", i ? {class: "n"} : {}, String(c))));
+    t.append(r);
+  }
+  return h("details", {}, h("summary", {}, "Veure les dades en taula"), h("div", {class: "scroll"}, t));
+}
+function chart(title, node) { return h("div", {class: "chart"}, h("h3", {}, title), node); }
+function legend(items) { const box = h("div", {class: "legend"});
+  for (const [color, label] of items) { const i = h("i"); i.style.background = color; box.append(h("span", {}, i, label)); }
+  return box; }
+function panel(key, title, question, body, says, decision) {
+  const sec = h("section", {}, h("h2", {}, title), h("p", {class: "q"}, question));
+  for (const node of body) sec.append(node);
+  if (says || decision) {
+    const reads = h("div", {class: "reads"});
+    const a = h("div", {class: "read"}, h("h4", {}, "Què diuen les dades"));
+    (says || []).forEach(text => a.append(h("p", {}, text)));
+    const b = h("div", {class: "read decision"}, h("h4", {}, "Decisió"));
+    (decision || []).forEach(text => b.append(h("p", {}, text)));
+    if (DATA.notes[key]) b.append(h("p", {class: "team"}, "Equip: " + DATA.notes[key]));
+    reads.append(a, b); sec.append(reads);
+  }
+  return sec;
+}
+function missing(command, what) {
+  return h("div", {class: "empty"}, "Encara no hi ha dades per a aquest panell. " + what + " ", h("code", {}, command));
+}
+const pct = g => `${fmt(g.pct)}% (${g.hits}/${g.n})`;
+const pWord = p => p < 0.05 ? "difícilment és casualitat" : "pot ser casualitat";
+const pText = p => p < 0.001 ? "p < 0,001" : "p = " + fmt(p, 3);
+
+// ---------------------------------------------------------------- page
+const runs = DATA.runs, base = runs.find(r => r.is_baseline);
+document.getElementById("sub").textContent =
+  "Side Challenge Tukey · Datathon FME 2026 · generat el " + DATA.built +
+  (base ? " · comparat amb l'experiment «" + base.name + "»" : "");
+if (DATA.label) document.getElementById("banner").append(h("div", {class: "banner"}, DATA.label));
+const panels = document.getElementById("panels");
+
+// 1. Which configuration?
+const valid = runs.filter(r => r.over === 0 && r.seconds.max <= 60);
+const best = valid.slice().sort((a, b) => b.pct - a.pct || a.mean_s - b.mean_s)[0];
+if (runs.length) {
+  const tiles = document.getElementById("tiles");
+  const tile = (value, label) => tiles.append(h("div", {class: "tile"}, h("b", {}, value), h("span", {}, label)));
+  tile(fmt(base.pct) + "%", `encert de «${base.name}» (${base.hits}/${base.n})`);
+  if (best && best !== base) tile(fmt(best.pct) + "%", `millor experiment vàlid: «${best.name}»`);
+  tile(fmt(base.floor.pct) + "%", `respondre sempre ${base.floor.letter} en aquests problemes`);
+  tile(fmt(Math.max(...runs.map(r => r.seconds.max))) + " s", "pitjor temps de tots (límit: 60 s)");
+
+  const accuracy = forest(runs.map(r => ({label: r.name, value: r.pct, lo: r.ci[0], hi: r.ci[1],
+      right: `${fmt(r.pct)}% n=${r.n}`, dim: r.over > 0,
+      tip: `${r.name}: ${pct(r)}, interval del 95% ${fmt(r.ci[0])}–${fmt(r.ci[1])}%. ${r.settings}`})),
+    {refs: [{x: 20, label: "atzar"}, {x: base.floor.pct, label: "sempre " + base.floor.letter}]});
+  const times = boxes(runs.map(r => ({label: r.name, box: r.seconds})),
+    {unit: " s", refs: [{x: 60, label: "límit 60 s"}], zero: true});
+  const says = [`«${base.name}» encerta ${pct(base)}; amb ${base.n} problemes, l'encert real pot ser entre ${fmt(base.ci[0])}% i ${fmt(base.ci[1])}%.`];
+  says.push(base.ci[0] > base.floor.pct ? `Supera clarament respondre sempre ${base.floor.letter} (${fmt(base.floor.pct)}%).`
+    : `No es pot dir que superi respondre sempre ${base.floor.letter} (${fmt(base.floor.pct)}%): aquest valor cau dins l'interval.`);
+  for (const r of runs) if (r.vs_baseline && r.vs_baseline.shared)
+    says.push(`«${r.name}» contra «${base.name}», mateixos ${r.vs_baseline.shared} problemes: en guanya ${r.vs_baseline.gained} i en perd ${r.vs_baseline.lost} (${pText(r.vs_baseline.p)}: ${pWord(r.vs_baseline.p)}).`);
+  const slow = runs.filter(r => r.over > 0);
+  if (slow.length) says.push("Passen dels 60 s: " + slow.map(r => `«${r.name}» (${r.over} problemes)`).join(", ") + ".");
+  const decision = [];
+  if (best && best !== base && best.vs_baseline && best.vs_baseline.p < 0.05 && best.vs_baseline.gained > best.vs_baseline.lost)
+    decision.push(`Proposta: fer servir «${best.name}». Millora «${base.name}» de manera clara i respecta el límit de temps.`);
+  else if (best && best !== base)
+    decision.push(`«${best.name}» té l'encert més alt, però la diferència amb «${base.name}» pot ser soroll. Proposta: confirmar-ho amb tots els problemes de validació (eval.py --limit 0) abans de canviar.`);
+  else decision.push(`Cap experiment supera «${base.name}». Proposta: mantenir-lo.`);
+  if (slow.length) decision.push("Descartar els experiments que passen del límit, encara que encertin més.");
+  panels.append(panel("config", "1 · Quina configuració fem servir a predict.py?",
+    "Encert de cada experiment, amb el seu marge d'error, i quant triga cada problema.",
+    [h("div", {class: "charts"}, chart("Encert (punt) i interval de confiança del 95% (línia)", accuracy),
+                                  chart("Segons per problema (boxplot)", times)),
+     table(["Experiment", "n", "Encert", "IC 95%", "Mitjana s", "Pitjor s", "> 60 s", "Opcions"],
+       runs.map(r => [r.name, r.n, fmt(r.pct) + "%", `${fmt(r.ci[0])}–${fmt(r.ci[1])}%`, fmt(r.mean_s), fmt(r.seconds.max), r.over, r.settings]))],
+    says, decision));
+} else {
+  panels.append(panel("config", "1 · Quina configuració fem servir a predict.py?", "",
+    [missing("python3 eval.py --limit 50 --name baseline", "Mesureu el baseline a la placa:")]));
+}
+
+// 2 and 3 follow one experiment
+function errorsPanel(run) {
+  const make = (rows, left) => forest(rows.map(g => ({label: g.key, value: g.pct, lo: g.ci[0], hi: g.ci[1],
+      right: `${fmt(g.pct)}% n=${g.n}`, dim: g.n < 10,
+      tip: `${g.key}: ${pct(g)}, interval del 95% ${fmt(g.ci[0])}–${fmt(g.ci[1])}%` + (g.n < 10 ? ". Menys de 10 problemes: no en traieu conclusions." : "")})),
+    {left, refs: [{x: 20, label: "atzar"}]});
+  const big = run.by_topic.filter(g => g.n >= 10).sort((a, b) => a.pct - b.pct);
+  const says = [], decision = [];
+  if (big.length) says.push(`Tema amb menys encert (amb 10 problemes o més): ${big[0].key}, ${pct(big[0])}. Amb més encert: ${big[big.length - 1].key}, ${pct(big[big.length - 1])}.`);
+  const overlap = big.length > 1 && big[0].ci[1] >= big[big.length - 1].ci[0];
+  if (big.length > 1) says.push(overlap ? "Els intervals del millor i del pitjor tema se solapen: amb aquestes dades no es pot dir que un tema sigui més difícil que un altre per al model."
+                                        : "Els intervals del millor i del pitjor tema no se solapen: la diferència és real.");
+  const small = [...run.by_topic, ...run.by_level].filter(g => g.n < 10).length;
+  if (small) says.push(`${small} grups tenen menys de 10 problemes (dibuixats més clars): només orienten.`);
+  const opt = run.by_options.find(g => g.key === "False"), with_ = run.by_options.find(g => g.key === "True");
+  if (opt && with_) says.push(`Amb opcions llegides: ${pct(with_)}. Sense opcions: ${pct(opt)}.`);
+  decision.push(overlap || big.length < 2 ? "Proposta: no adaptar el model per temes encara; primer cal més dades (eval.py --limit 0)."
+                                          : `Proposta: revisar a mà 10 errors de «${big[0].key}» a l'explorer i explicar-los a l'anàlisi d'errors.`);
+  decision.push("El tutor només ofereix problemes amb les cinc opcions llegides, on el model té alguna cosa a dir.");
+  return panel("errors", "2 · On falla el model?", "Encert per nivell, tema i idioma. Cada punt porta el seu marge d'error.",
+    [h("div", {class: "charts"}, chart("Per nivell del Cangur", make(run.by_level, 60)),
+                                  chart("Per idioma", make(run.by_language, 60)),
+                                  chart("Per tema (paraules clau)", make(run.by_topic, 200))),
+     table(["Grup", "n", "Encerts", "Encert", "IC 95%"],
+       [...run.by_level.map(g => ["Nivell " + g.key, g.n, g.hits, fmt(g.pct) + "%", `${fmt(g.ci[0])}–${fmt(g.ci[1])}%`]),
+        ...run.by_language.map(g => ["Idioma " + g.key, g.n, g.hits, fmt(g.pct) + "%", `${fmt(g.ci[0])}–${fmt(g.ci[1])}%`]),
+        ...run.by_topic.map(g => [g.key, g.n, g.hits, fmt(g.pct) + "%", `${fmt(g.ci[0])}–${fmt(g.ci[1])}%`])])],
+    says, decision);
+}
+function biasPanel(run) {
+  const worst = run.letters.slice().sort((a, b) => (b.predicted - b.true) - (a.predicted - a.true))[0];
+  const spread = Math.max(...run.letters.map(d => Math.abs(d.predicted - d.true))) / run.n;
+  const says = [spread > 0.15
+    ? `La lletra més sobrerepresentada és la ${worst.letter}: el model la diu ${worst.predicted} vegades i és correcta ${worst.true} (de ${run.n}).`
+    : `Cap lletra destaca: la diferència més gran entre les vegades que el model diu una lletra i les que és correcta és de ${Math.round(spread * run.n)} problemes (de ${run.n}).`];
+  const decision = [spread > 0.15 ? "Proposta: aplicar la correcció del biaix (prep/letter_bias.py) i tornar a mesurar. Trieu al desplegable l'experiment amb correcció per comparar-ho."
+                                  : "Les lletres que diu el model s'assemblen a les correctes: el biaix ja no és el problema principal."];
+  return panel("bias", "3 · El model té una lletra preferida?", "Quantes vegades diu cada lletra, i quantes vegades és la correcta.",
+    [legend([["var(--s1)", "El model la prediu"], ["var(--s2)", "És la correcta"]]),
+     h("div", {class: "charts"}, chart("Respostes per lletra", letterBars(run.letters))),
+     table(["Lletra", "Predita", "Correcta"], run.letters.map(d => [d.letter, d.predicted, d.true]))],
+    says, decision);
+}
+if (runs.length) {
+  const holder = h("div"), select = h("select");
+  runs.forEach((r, i) => select.append(h("option", {value: i}, r.name)));
+  const draw = () => { const run = runs[select.value]; holder.replaceChildren(errorsPanel(run), biasPanel(run)); };
+  select.onchange = draw;
+  panels.append(h("div", {class: "controls"}, "Experiment dels panells 2 i 3: ", select), holder);
+  select.value = Math.max(0, runs.indexOf(best || base)); draw();
+}
+
+// 4. Hints
+if (DATA.hints) {
+  const H = DATA.hints, names = {good: "Pista bona", bad: "Pista absurda", leak: "Pista amb la resposta"};
+  const rows = ["good", "bad", "leak"].filter(k => H.kinds[k]).map(k => ({label: names[k], box: H.kinds[k]}));
+  const refs = [{x: 0, label: "cap efecte"}];
+  if (H.tau !== null) refs.push({x: H.tau, label: "llindar τ"});
+  const says = [];
+  for (const k of ["good", "bad", "leak"]) if (H.kinds[k])
+    says.push(`${names[k]}: mediana ${fmt(H.kinds[k].median, 2)}; mou el Cangur cap a la correcta en ${H.up[k]} de ${H.kinds[k].n}.`);
+  if (H.pairs) says.push(`Mateix problema, bona contra absurda: guanya la bona ${H.wins} vegades i l'absurda ${H.losses} (${pText(H.p)}: ${pWord(H.p)}).`);
+  says.push(`Una crida amb pista triga ${fmt(H.seconds.median)} s de mediana (pitjor: ${fmt(H.seconds.max)} s).`);
+  const go = H.pairs >= 10 && H.p < 0.05 && H.wins > H.losses;
+  const decision = [go ? "Proposta: mantenir la barra de confiança. El Cangur distingeix una pista bona d'una d'absurda."
+    : H.pairs < 10 ? "Hi ha massa pocs problemes per decidir. Proposta: arribar a 25 abans de concloure res."
+    : "El Cangur no distingeix prou una pista bona d'una d'absurda. Proposta: treure la barra de confiança i valorar les pistes només pels alumnes que encerten després de veure-les."];
+  if (H.tau !== null) decision.push(`Llindar per donar una pista per bona: τ = ${fmt(H.tau, 2)} (9 de cada 10 pistes absurdes queden per sota)` +
+    (H.above_tau !== null && H.kinds.good ? `; el superen ${H.above_tau} de ${H.kinds.good.n} pistes bones.` : "."));
+  panels.append(panel("hints", "4 · El Cangur distingeix una pista bona d'una d'absurda?",
+    "Efecte de cada pista: quant mou el Cangur cap a la resposta correcta (Δ del marge). Zero vol dir cap efecte.",
+    [h("div", {class: "charts"}, chart("Efecte de la pista (boxplot)", boxes(rows, {refs})))], says, decision));
+} else panels.append(panel("hints", "4 · El Cangur distingeix una pista bona d'una d'absurda?", "",
+    [missing("python3 prep/hint_experiment.py --make-template 25", "Feu l'experiment de pistes:")]));
+
+// 5. Leak filter and the Kangaroo's start
+const five = [];
+if (DATA.leak) {
+  const K = DATA.leak;
+  five.push(chart("Filtre de fuites", forest([
+    {label: "Fuites aturades", value: 100 * K.leaks_caught / Math.max(1, K.leaks), right: `${K.leaks_caught}/${K.leaks}`,
+     tip: `${K.leaks_caught} de ${K.leaks} pistes amb la resposta han estat rebutjades`},
+    {label: "Pistes netes acceptades", value: 100 * K.clean_accepted / Math.max(1, K.clean), right: `${K.clean_accepted}/${K.clean}`,
+     tip: `${K.clean_accepted} de ${K.clean} pistes netes han estat acceptades`}], {left: 190})));
+}
+if (DATA.kangaroo) {
+  const K = DATA.kangaroo;
+  five.push(chart("Problemes on el Cangur té alguna cosa per aprendre, per nivell",
+    forest(K.by_level.map(g => ({label: "Nivell " + g.key, value: g.pct, lo: g.ci[0], hi: g.ci[1], right: `${fmt(g.pct)}% n=${g.n}`,
+      tip: `Nivell ${g.key}: el model prefereix una opció incorrecta en ${g.hits} de ${g.n} problemes`})), {left: 80})));
+}
+if (five.length) {
+  const says = [], decision = [];
+  if (DATA.leak) { const K = DATA.leak;
+    says.push(`El filtre atura ${K.leaks_caught} de ${K.leaks} fuites i accepta ${K.clean_accepted} de ${K.clean} pistes netes.`);
+    decision.push(K.leaks_missed ? `Se n'escapen ${K.leaks_missed}: reviseu-les i afegiu una regla si es repeteixen. Les fuites indirectes («és el doble de 5») no es poden aturar amb regles.`
+                                 : "El filtre atura totes les fuites de la llista de prova. Amplieu la llista amb casos més difícils."); }
+  if (DATA.kangaroo) { const K = DATA.kangaroo;
+    says.push(`El model prefereix una opció incorrecta en ${K.teachable} de ${K.n} problemes mesurats (${fmt(100 * K.teachable / K.n)}%).`);
+    decision.push("El mode «ensenya el Cangur» només s'ofereix en aquests problemes; en la resta, el Cangur ja prefereix la resposta correcta."); }
+  panels.append(panel("leaks", "5 · El tutor guia sense donar la resposta?",
+    "Quantes pistes amb la resposta atura el filtre, i en quants problemes el Cangur comença equivocat.",
+    [h("div", {class: "charts"}, ...five)], says, decision));
+} else panels.append(panel("leaks", "5 · El tutor guia sense donar la resposta?", "",
+    [missing("python3 -m copilot.leak data/leak_cases.jsonl results/leak.json", "Proveu el filtre amb una llista de pistes:")]));
+
+// 6. Simulated students
+if (DATA.sim) {
+  const S = DATA.sim, body = [], says = [], decision = [];
+  const charts = h("div", {class: "charts"});
+  if (S.curve.length) {
+    charts.append(chart("Error en el nivell estimat (mediana i meitat central)", curve(S.curve)));
+    const at = n => S.curve.find(p => p.step === n);
+    if (at(10) && at(20)) says.push(`Un alumne que comença 300 punts lluny del seu nivell queda a ${fmt(at(10).median, 0)} punts després de 10 respostes i a ${fmt(at(20).median, 0)} després de 20 (un nivell del Cangur són 150 punts).`);
+    decision.push("Calen unes 20 respostes perquè el nivell estimat sigui fiable; abans, el tutor no ha de mostrar-lo com una nota.");
+  }
+  const per = [...new Set(S.gap.map(g => g.per))].filter(n => n === 15 || n === 30);
+  if (S.gap.length) {
+    const rows = [];
+    for (const g of S.gap.filter(g => per.includes(g.per)))
+      rows.push({label: `Real ${g.penalty} · ${g.per}+${g.per} respostes`, value: g.median, lo: g.q1, hi: g.q3, truth: g.penalty,
+                 right: `${fmt(g.median, 0)}`, tip: `Bretxa real ${g.penalty} punts; mesurada ${fmt(g.median, 0)} de mediana (meitat central ${fmt(g.q1, 0)} a ${fmt(g.q3, 0)}) amb ${g.per} respostes per llengua`});
+    charts.append(h("div", {class: "chart"}, h("h3", {}, "Bretxa d'idioma mesurada contra la real"),
+      legend([["var(--s1)", "Mesurada (mediana i meitat central)"], ["var(--s2)", "Real"]]),
+      forest(rows, {left: 200, lo: -150, hi: 400, ticks: [-100, 0, 100, 200, 300, 400], unit: ""})));
+    const g15 = S.gap.find(g => g.penalty === 200 && g.per === 15), g30 = S.gap.find(g => g.penalty === 200 && g.per === 30);
+    if (g15 && g30) says.push(`Amb una bretxa real de 200 punts, es mesuren ${fmt(g15.median, 0)} amb 15 respostes per llengua i ${fmt(g30.median, 0)} amb 30; la meitat central dels alumnes va de ${fmt(g30.q1, 0)} a ${fmt(g30.q3, 0)}.`);
+    decision.push("La bretxa d'idioma només es mostra amb 30 respostes per llengua, i com una franja orientativa, mai com una xifra exacta.");
+  }
+  says.push(`Són simulacions del mètode (${S.students || "?"} alumnes simulats per cas), no mesures d'alumnes reals.`);
+  body.push(charts);
+  panels.append(panel("sim", "6 · L'entrenador troba el nivell de l'alumne i la barrera de l'idioma?",
+    "Alumnes simulats amb un nivell conegut: quant triga l'Elo a trobar-lo, i si recupera una bretxa d'idioma coneguda.", body, says, decision));
+} else panels.append(panel("sim", "6 · L'entrenador troba el nivell de l'alumne i la barrera de l'idioma?", "",
+    [missing("python3 sim/students.py", "Executeu els alumnes simulats (triga un minut, no cal el model):")]));
+</script>
+</body>
+</html>
