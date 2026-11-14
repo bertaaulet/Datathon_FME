@@ -25,7 +25,7 @@ sys.path.insert(0, HERE)
 
 import demo_data  # noqa: E402
 import fake_llama  # noqa: E402
-from copilot import elo, led, leak, llm, pipeline, topics  # noqa: E402
+from copilot import elo, hintsim, led, leak, llm, pipeline, topics  # noqa: E402
 from copilot.config import CONFIG  # noqa: E402
 from copilot.store import Store  # noqa: E402
 from copilot.tutor import Tutor, bar_value, kangaroo  # noqa: E402
@@ -38,6 +38,26 @@ SAMPLE = {"id": "s1", "level": 0,
 
 def english(rows):
     return [r for r in rows if r["language"] == "eng"]
+
+
+def fake_embedder(texts, timeout=None):
+    """A deterministic bag of words, 64 numbers per text: enough to test the plumbing.
+
+    It says nothing about how bge-small would score the same texts.
+    """
+    out = []
+    for text in texts:
+        vector = [0.0] * 64
+        for word in leak.plain(text).split():
+            word = "".join(ch for ch in word if ch.isalnum())
+            if word:
+                vector[sum(map(ord, word)) % 64] += 1.0
+        out.append(vector)
+    return out
+
+
+def dead_embedder(texts, timeout=None):
+    raise OSError("no embedding server")
 
 
 class WithServers(unittest.TestCase):
@@ -300,7 +320,7 @@ class TutorFlow(WithServers):
         self.store = Store(self.path)
         self.addCleanup(self.store.close)
         self.tutor = Tutor(self.store, ask=self.ask, background=False,
-                           images_dir=self.folder.name)
+                           images_dir=self.folder.name, embedder=fake_embedder)
 
     def wrong_letter(self):
         label = self.tutor.current["label"]
@@ -389,6 +409,48 @@ class TutorFlow(WithServers):
         hint = self.store.hints()[0]
         self.assertEqual((hint["shown"], hint["solved_after"]), (1, 1))
 
+    def test_duplicate_hint_is_not_stored_twice(self):
+        import embed_refs
+        embed_refs.run(self.store, fake_embedder)                  # the topics' method hints
+        self.tutor.start("Test", "", 1)
+        self.teachable()
+        self.store.set_meta("tau", "100")                          # nothing convinces: three tries
+        self.tutor.hint("Compta quantes pomes hi ha a cada bossa.")
+        self.tutor.hint("Compta quantes pomes hi ha a cada bossa!")  # the same words
+        self.tutor.hint("Dibuixa un esquema amb totes les dades.")
+        hints = self.store.hints()
+        self.assertEqual(len(hints), 2)
+        self.assertEqual(hints[0]["dups"], 1)
+        self.assertIsNotNone(hints[0]["vec"])
+        self.assertIsNotNone(hints[1]["relevance"])                # the topic's method hints
+
+    def test_without_embedding_server_the_hint_is_stored_anyway(self):
+        self.tutor.embedder = dead_embedder
+        self.tutor.start("Test", "", 1)
+        self.teachable()
+        self.store.set_meta("tau", "100")
+        for _ in range(2):
+            view = self.tutor.hint("Compta quantes pomes hi ha a cada bossa.")
+        hints = self.store.hints()
+        self.assertEqual(len(hints), 2)                            # no duplicate check without vectors
+        self.assertTrue(all(h["relevance"] is None and h["vec"] is None for h in hints))
+        self.assertIn(view["phase"], ("teach", "done"))            # the student carries on
+
+    def test_hint_of_a_similar_problem(self):
+        self.tutor.start("Test", "", 1)
+        self.tutor.next()
+        current = self.tutor.current
+        neighbour = current["row"]["neighbours"][0]
+        self.store.add_hint(neighbour, 1, "Agrupa-les de dues en dues.", 2.0, True)
+        self.tutor.answer(self.wrong_letter())
+        for _ in range(3):
+            view = self.tutor.help()
+        self.assertIn("Una pista d'un problema semblant: «Agrupa-les de dues en dues.»",
+                      [m["text"] for m in view["messages"]])
+        self.assertEqual(self.store.hints()[0]["shown"], 0)       # its counts stay its own
+        self.store.add_hint(current["id"], None, "La del banc.", None, False, source="agent")
+        self.assertEqual(self.store.best_hint(current["id"])["text"], "La del banc.")
+
     def test_language_stages_and_two_ratings(self):
         view = self.tutor.start("Test", "esp", 1)
         self.assertEqual(view["student"]["etapa"], 1)
@@ -470,7 +532,7 @@ class TutorFlow(WithServers):
     def test_model_down(self):
         def dead(problem, **kwargs):
             raise OSError("down")
-        tutor = Tutor(self.store, ask=dead, background=False)
+        tutor = Tutor(self.store, ask=dead, background=False, embedder=None)
         tutor.start("Test", "", 1)
         tutor.next()
         view = tutor.answer(tutor.current["label"])
@@ -518,7 +580,7 @@ class Scripts(WithServers):
             path = os.path.join(folder, "tutor.db")
             self.assertEqual(build_db(path, self.embed.server_port).returncode, 0)
             store = Store(path)
-            tutor = Tutor(store, ask=self.ask, background=False)
+            tutor = Tutor(store, ask=self.ask, background=False, embedder=None)
             server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(tutor, folder))
             threading.Thread(target=server.serve_forever, daemon=True).start()
             base = f"http://127.0.0.1:{server.server_port}"
@@ -815,8 +877,60 @@ class HintSource(unittest.TestCase):
         old.close()
         for _ in range(2):   # opening it twice must not fail on the second ALTER
             store = Store(self.path)
-            self.assertEqual(store.hints()[0]["source"], "student")
+            hint = store.hints()[0]
+            self.assertEqual((hint["source"], hint["dups"], hint["relevance"], hint["vec"]),
+                             ("student", 0, None, None))
+            self.assertEqual(store.ref_vectors("method", "geometria"), [])
             store.close()
+
+    def test_best_hint_order(self):
+        store = Store(self.path)
+        self.addCleanup(store.close)
+        self.assertIsNone(store.best_hint("p1"))
+        bank = store.add_hint("p1", None, "from the bank", None, False, source="agent")
+        store.add_hint("p1", 1, "did not convince", 3.0, False)
+        self.assertEqual(store.best_hint("p1")["n"], bank)          # the bank is the fallback
+        first = store.add_hint("p1", 1, "convinced, older", 1.0, True, relevance=0.2)
+        second = store.add_hint("p1", 2, "convinced, newer", 1.0, True, relevance=0.2)
+        self.assertEqual(store.best_hint("p1")["n"], first)         # a tie: the oldest
+        store.run("UPDATE hints SET relevance = 0.5 WHERE n = ?", (second,))
+        self.assertEqual(store.best_hint("p1")["n"], second)        # then relevance
+        for _ in range(3):
+            store.hint_shown(first)
+            store.hint_solved(first)
+        self.assertEqual(store.best_hint("p1")["n"], first)         # the human signal first
+        for _ in range(3):
+            store.hint_shown(bank)
+            store.hint_solved(bank)
+        self.assertEqual(store.best_hint("p1")["n"], first)         # students before the bank
+        self.assertEqual(store.best_hint("p1", min_relevance=0.6)["n"], bank)
+        store.add_hint("p2", None, "other bank", None, False, source="agent")
+        found = store.best_neighbour_hint(["p3", "p2", "p1"])
+        self.assertEqual((found["from_problem"], found["n"]), ("p1", first))  # a student's first
+        self.assertEqual(store.best_neighbour_hint(["p2"])["text"], "other bank")
+        self.assertIsNone(store.best_neighbour_hint(["p3"]))
+
+    def test_assess_and_reference_vectors(self):
+        store = Store(self.path)
+        self.addCleanup(store.close)
+        self.assertIsNone(hintsim.assess(store, "p1", "geometria", "x", None))
+        self.assertIsNone(hintsim.assess(store, "p1", "geometria", "x", dead_embedder))
+        import embed_refs
+        store.add_hint("p1", None, "Fes un dibuix del quadrat.", None, False, source="agent")
+        solutions = os.path.join(os.path.dirname(self.path), "solutions.jsonl")
+        with open(solutions, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"id": "p1", "solution": "Side 9, area 81."}) + "\n")
+        store.run("INSERT INTO problems (id, topic) VALUES ('p1', 'geometria')")
+        counts = embed_refs.run(store, fake_embedder, solutions)
+        self.assertEqual(counts, {"agent_hints": 1, "method": 3 * len(topics.NAMES), "solutions": 1})
+        self.assertEqual(embed_refs.run(store, fake_embedder, solutions)["agent_hints"], 0)
+        result = hintsim.assess(store, "p1", "geometria", "Fes un dibuix del quadrat!", fake_embedder)
+        self.assertAlmostEqual(result["relevance"], 1.0, places=5)
+        self.assertIsNotNone(result["duplicate_of"])                # same words as the bank hint
+        other = hintsim.assess(store, "p1", "geometria", "Pensa en els angles rectes.", fake_embedder)
+        self.assertIsNone(other["duplicate_of"])
+        self.assertLess(other["relevance"], 1.0)
+        self.assertEqual(len(hintsim.from_blob(result["vec"])), 64)
 
     def test_add_hint_source(self):
         store = Store(self.path)
