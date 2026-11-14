@@ -100,6 +100,8 @@ El 22,5% és el model sol, amb un prompt i una crida. Un **harness** és tot el 
 
 ## Pistes
 
+> **2026-11-14:** cada alumne té la seva placa. No hi ha pistes de companys: les pistes que escriu l'alumne per ensenyar el Cangur només es desen com a dades. El graó 3 i el flux de pistes s'estan redissenyant (Berta).
+
 Les pistes surten de dos llocs. Un agent prepara al portàtil un banc de pistes de referència. Després, el model de la placa genera pistes noves fent servir aquest banc com a exemple. Totes passen pel filtre de fuites i es mesuren. No s'escriu cap pista a mà.
 
 ### 1. El banc de l'agent (al portàtil, per endavant)
@@ -154,7 +156,7 @@ Per als problemes del banc, les pistes es generen per endavant i es desen a `tut
 | Temps | Lectura (`prompt_n`) i escriptura a la placa, amb 1 i 2 veïns |
 | Problemes externs | Amb els problemes inventats: qualitat de la cerca, fuites i correcció |
 | Llengua | Si la pista surt millor en català o en anglès |
-| Senyal humà | Quants alumnes resolen el problema després de veure la pista |
+| Senyal humà | Si l'alumne resol el problema després de veure la pista (un sol alumne per placa: no hi ha pistes de companys, vegeu `DECISIONS.md`) |
 
 ## Dades: què es pot pujar i què no
 

@@ -1,6 +1,6 @@
 # Estat actual
 
-_Última actualització: 2026-11-14 23:55 — Berta (amb Claude)_
+_Última actualització: 2026-11-15 00:05 — Berta (amb Claude)_
 
 ## Fase
 - **Tutor:** funciona a la placa amb el banc real (`tutor.db`, 601 problemes utilitzables, el Cangur precalculat), arrenca sol amb la placa i amb la matriu LED, i els problemes externs segueixen el mateix recorregut que els del banc (provat amb problemes inventats).
@@ -22,7 +22,7 @@ Les tasques s'assignen en veu alta a l'equip; aquí només hi ha què queda i de
 | Línia | Fet | Pendent | Depèn de |
 | --- | --- | --- | --- |
 | `predict.py` | Calibració, guardrails, biaix per lot, expressió (descartada), RAG amb pregunta + valor correcte, biaix robust | Segona ronda d'experiments; triar la configuració de `config.env`; `letter_bias.json` bo a la placa; confirmar amb el conjunt de pràctica; anàlisi d'errors; placa a punt per al *last call* | La placa |
-| Pistes | Infraestructura (lots, validació, importació, rànquing, similitud, pistes de mètode en 6 llengües) | Banc de pistes de l'agent; τ (D2); revisar l'escala d'ajuda (punts a la conversa d'A); decidir les pistes generades pel model | `tutor.db` i la placa per a D2 |
+| Pistes (Berta) | Infraestructura (lots, validació, importació, rànquing, similitud, pistes de mètode en 6 llengües). **Decidit: sense pistes de companys** (un alumne per placa) | Redissenyar el graó 3 (banc i externs), l'ensenyament del Cangur i l'idioma; treure les pistes de companys del codi; banc de pistes de l'agent; τ (D2); pistes generades pel model | `tutor.db` i la placa per a D2 |
 | Tutor (Teach) | Escala d'ajuda, Cangur, pont d'idioma, Elo de l'alumne (el dels problemes és fix), problemes externs, interfície nova, servei i reinici | Problemes 11–14 de `PROBLEMES.md`; revisar l'Elo i el pont d'idioma; reconstruir `tutor.db` amb les dades noves de l'OCR (si es vol) | — |
 | Lliuraments | — | README, `LICENSE`, xifres de PISA, pitch, vídeo de reserva, Project Hub, dashboard Tukey | Resultats per als números |
 
