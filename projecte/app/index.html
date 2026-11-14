@@ -246,8 +246,15 @@ function render(view) {
 
   const chat = $("chat");
   chat.replaceChildren();
-  for (const message of view.messages)
-    chat.append(el("div", {class: "msg " + message.who + " " + (message.kind || "")}, message.text));
+  for (const message of view.messages) {
+    const bubble = el("div", {class: "msg " + message.who + " " + (message.kind || "")}, message.text);
+    if (message.origen) {   // the same hint in the student's language (language bridge)
+      bubble.append(el("br"));
+      bubble.append(el("small", {lang: message.origen.lang},
+                       (LANG_NAMES[message.origen.lang] || message.origen.lang) + ": " + message.origen.text));
+    }
+    chat.append(bubble);
+  }
   if (view.busy) chat.append(el("div", {class: "msg cangur thinking"}, "El Cangur hi està pensant…"));
   chat.scrollTop = chat.scrollHeight;
 

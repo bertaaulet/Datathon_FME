@@ -46,6 +46,8 @@ def parse_args():
     p.add_argument("--no-ocr", action="store_true", help="skip OCR; options will be empty")
     p.add_argument("--save-images", action="store_true", help="also save problem images as PNG")
     p.add_argument("--limit", type=int, default=0, help="only process the first N rows (for testing)")
+    p.add_argument("--ocr-threads", type=int, default=0,
+                   help="threads for the OCR model (0: onnxruntime decides; 4 was fastest on a 16-core laptop)")
     return p.parse_args()
 
 
@@ -147,16 +149,19 @@ def main():
     ocr = None
     if not args.no_ocr:
         from rapidocr_onnxruntime import RapidOCR
-        ocr = RapidOCR()
+        # On a laptop with many cores, a few threads per run are faster than all of them.
+        threads = {"intra_op_num_threads": args.ocr_threads, "inter_op_num_threads": 1}
+        ocr = RapidOCR(**threads) if args.ocr_threads else RapidOCR()
 
     cache_path = os.path.join(args.out, ".ocr_cache.jsonl")
     cache = {}
     if os.path.exists(cache_path):
-        with open(cache_path) as f:
+        with open(cache_path, encoding="utf-8") as f:
             for line in f:
                 row = json.loads(line)
                 cache[row["key"]] = row["options"]
-    cache_file = open(cache_path, "a")
+    # Line-buffered: a run that stops half way keeps every OCR result it already paid for.
+    cache_file = open(cache_path, "a", encoding="utf-8", buffering=1)
 
     rows = []
     t0 = time.time()
@@ -202,7 +207,7 @@ def main():
 
     for split in ("train", "val"):
         out = os.path.join(args.out, f"{split}.jsonl")
-        with open(out, "w") as f:
+        with open(out, "w", encoding="utf-8") as f:
             for r in rows:
                 if r["split"] == split:
                     f.write(json.dumps({k: v for k, v in r.items() if k != "split"}, ensure_ascii=False) + "\n")
