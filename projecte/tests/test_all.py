@@ -927,7 +927,7 @@ class Scripts(WithServers):
                 with urllib.request.urlopen(base + "/", timeout=10) as page:
                     html = page.read().decode("utf-8")
                 self.assertIn("Ensenya el Cangur", html)
-                self.assertNotIn("http://", html.replace("http://127.0.0.1", ""))   # nothing from the internet
+                self.assertNotIn("http://", html.replace("http://127.0.0.1", "").replace("http://www.w3.org/2000/svg", ""))   # nothing from the internet (the SVG namespace is a name, not a request)
                 self.assertNotIn("https://", html)
             finally:
                 server.shutdown()

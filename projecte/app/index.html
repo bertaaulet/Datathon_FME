@@ -3,187 +3,775 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f2f3f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111215" media="(prefers-color-scheme: dark)">
 <title>Ensenya el Cangur</title>
 <style>
+/* ──────────────────────────────────────────────────────────────────────────
+   ENSENYA EL CANGUR
+   Calm, paper-like and quiet. One warm accent (terracotta) and one cool one
+   (slate blue). The only playful thing is the Kangaroo itself, built from LED
+   dots like the board it lives on, who has to jump a gap when a hint convinces
+   it. No web fonts, no CDN: everything works offline on the board.
+   ────────────────────────────────────────────────────────────────────────── */
+:root {
+  /* Neutral and cool. Orange belongs to the Kangaroo and the LEDs only; the rest of the page is ink and blue. */
+  --bg: #f2f3f5;  --surface: #ffffff;  --ink: #15171c;  --soft: #5a6270;  --line: #dcdfe5;
+  --accent: #c8553a;  --accent-text: #2c4a7c;  --accent-bg: #e6ebf4;  --err: #a4402a;
+  --blue: #3d5a80;  --blue-bg: #e4ebf3;  --good: #3d5a80;
+  --r-card: 10px;  --r-ctl: 8px;
+  --warn-bg: #f7efcf;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --serif: var(--sans);      /* statements in the system sans: no bookish serif */
+  --ease: cubic-bezier(.3,.7,.2,1);
+  --on-accent: #fff;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
   :root {
-    --bg: #f6f4ee; --card: #ffffff; --ink: #1f2a37; --soft: #5b6675; --line: #dcd7ca;
-    --accent: #c2571a; --accent-ink: #ffffff; --good: #1f7a4d; --bad: #b3261e;
-    --me: #e7eef9; --roo: #fdeedd; --note: #f1efe7; --warn: #fff4c2;
+    --bg: #111215;  --surface: #1a1b1f;  --ink: #eceef2;  --soft: #9aa0ab;  --line: #2c2e34;
+    --accent: #e8826a;  --accent-text: #9db8e6;  --accent-bg: #232b3a;  --err: #f0987f;
+    --blue: #8fb0d8;  --blue-bg: #25303d;  --good: #8fb0d8;
+    --warn-bg: #3b3721;  --on-accent: #17181b;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #15191f; --card: #1e242c; --ink: #e8ebef; --soft: #9aa5b3; --line: #343c47;
-      --accent: #f08a4b; --accent-ink: #1a1205; --good: #6fcf97; --bad: #f28b82;
-      --me: #253349; --roo: #3a2a1c; --note: #262d36; --warn: #4a4018;
-    }
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink);
-         font: 18px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-           padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--card); }
-  header h1 { font-size: 20px; margin: 0; flex: 1; min-width: 180px; }
-  .chip { font-size: 14px; color: var(--soft); border: 1px solid var(--line);
-          border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
-  main { max-width: 1100px; margin: 0 auto; padding: 16px;
-         display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 16px; }
-  @media (max-width: 800px) { main { grid-template-columns: minmax(0, 1fr); } }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
-  .meta { font-size: 14px; color: var(--soft); margin-bottom: 8px; }
-  .texts { display: grid; gap: 12px; }
-  .texts.both { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  @media (max-width: 600px) { .texts.both { grid-template-columns: minmax(0, 1fr); } }
-  .text { white-space: pre-wrap; overflow-wrap: anywhere; }
-  .text small { display: block; color: var(--soft); font-size: 13px; margin-bottom: 2px; }
-  .text img { max-width: 100%; border-radius: 8px; border: 1px solid var(--line); background: #fff; }
-  .options { display: grid; gap: 8px; margin-top: 14px; }
-  button { font: inherit; color: inherit; cursor: pointer; border-radius: 10px;
-           border: 1px solid var(--line); background: var(--card); padding: 8px 14px; }
-  button:hover:not(:disabled) { border-color: var(--accent); }
-  button:disabled { opacity: .5; cursor: default; }
-  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-  .option { display: flex; gap: 10px; text-align: left; align-items: baseline; }
-  .option b { min-width: 1.4em; }
-  .option.wrong { border-color: var(--bad); color: var(--bad); text-decoration: line-through; }
-  .option.right { border-color: var(--good); color: var(--good); font-weight: 600; }
-  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
-  #chat { display: flex; flex-direction: column; gap: 8px; min-height: 180px; max-height: 52vh;
-          overflow-y: auto; padding-right: 4px; }
-  .msg { padding: 8px 12px; border-radius: 12px; max-width: 92%; white-space: pre-wrap;
-         overflow-wrap: anywhere; }
-  .msg.cangur { background: var(--roo); align-self: flex-start; }
-  .msg.cangur::before { content: "🦘 "; }
-  .msg.alumne { background: var(--me); align-self: flex-end; }
-  .msg.sistema { background: var(--note); align-self: stretch; max-width: 100%; font-size: 16px; }
-  .msg.be { color: var(--good); font-weight: 600; }
-  .msg.malament, .msg.fuita { color: var(--bad); }
-  .msg.avis { background: var(--warn); }
-  .msg.exemple { border-left: 4px solid var(--accent); }
-  .thinking { color: var(--soft); font-style: italic; }
-  form.hint { display: flex; gap: 8px; margin-top: 12px; }
-  .hintbox { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-  .count { align-self: flex-end; font-size: 13px; color: var(--soft); font-variant-numeric: tabular-nums; }
-  .count.full { color: var(--bad); font-weight: 600; }
-  textarea, input, select { font: inherit; color: inherit; background: var(--card);
-           border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; width: 100%; }
-  textarea { resize: vertical; min-height: 64px; }
-  label { display: block; font-size: 15px; color: var(--soft); margin: 10px 0 4px; }
-  .side { display: flex; flex-direction: column; gap: 16px; }
-  .bar { height: 18px; border-radius: 9px; background: var(--note); border: 1px solid var(--line);
-         position: relative; overflow: hidden; }
-  .bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .4s; }
-  .bar::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 2px;
-                background: var(--ink); opacity: .45; }
-  .barlabel { display: flex; justify-content: space-between; font-size: 13px; color: var(--soft); }
-  #led { display: grid; grid-template-columns: repeat(13, 1fr); gap: 3px; background: #111;
-         padding: 8px; border-radius: 8px; max-width: 260px; }
-  #led span { aspect-ratio: 1; border-radius: 50%; background: #2a2a2a; }
-  table { border-collapse: collapse; width: 100%; font-size: 15px; }
-  td, th { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); }
-  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
-  .hidden { display: none !important; }
-  details summary { cursor: pointer; color: var(--soft); }
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: 16px; }
+button, summary, input, select, textarea { touch-action: manipulation; }
+button, summary { -webkit-tap-highlight-color: transparent; }
+body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font: 18px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
+.hidden { display: none !important; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.skip { position: absolute; left: 12px; top: 12px; translate: 0 -80px; z-index: 100; background: var(--ink); color: var(--bg); padding: 12px 18px; border-radius: var(--r-ctl); font-weight: 600; text-decoration: none; transition: translate .15s var(--ease); }
+.skip:focus { translate: 0 0; }
+main:focus { outline: none; }
+::placeholder { color: var(--soft); opacity: 1; }
+h1, h2, h3 { text-wrap: balance; }
+.net { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; max-width: 1180px; width: calc(100% - 32px); margin: 8px auto 0; padding: 10px 16px; background: var(--warn-bg); border-radius: var(--r-ctl); font-size: 16px; }
+:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: default; }
+
+/* ── header ───────────────────────────────────────────────────────────── */
+.mast { display: flex; align-items: center; gap: 12px 20px; flex-wrap: wrap; max-width: 1180px; margin: 0 auto; padding: 18px clamp(16px, 3vw, 32px) 6px; }
+.title { margin: 0; line-height: 0; }
+.title svg { height: 26px; width: auto; display: block; }
+.spacer { flex: 1; }
+.ladder { display: flex; gap: 4px; align-items: center; font-size: 13.5px; color: var(--soft); }
+.ladder span { padding: 4px 10px; border-radius: 6px; white-space: nowrap; }
+.ladder span.on { background: var(--accent-bg); color: var(--accent-text); font-weight: 600; }
+.level { font-size: 14px; color: var(--soft); white-space: nowrap; }
+.steps { display: inline-flex; align-items: flex-end; gap: 3px; margin-left: 6px; vertical-align: -2px; }
+.steps i { width: 6px; height: calc(7px + var(--k) * 1.6px); border-radius: 2px; background: var(--line); transition: background-color .3s var(--ease); }
+.steps i.on { background: var(--blue); }
+.btn svg { vertical-align: -3px; margin-right: 8px; } .btn svg.after { margin: 0 0 0 8px; }
+.link { background: none; border: 0; padding: 12px 6px; min-height: 44px; color: var(--soft); font-size: 14.5px; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }
+@media (hover: hover) { .link:hover { color: var(--ink); text-decoration-color: currentColor; } }
+
+/* ── layout ───────────────────────────────────────────────────────────── */
+#app { max-width: 1180px; margin: 0 auto; padding: 14px clamp(16px, 3vw, 32px) 56px;
+  display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(320px, 1fr); gap: clamp(22px, 3.4vw, 44px); align-items: start; }
+#app[data-phase="welcome"] { grid-template-columns: minmax(0, 1fr); }
+#app[data-phase="welcome"] .side, #app[data-phase="welcome"] #problem { display: none; }
+#app:not([data-phase="welcome"]) #welcome { display: none; }
+@media (max-width: 900px) {
+  #app { grid-template-columns: minmax(0, 1fr); }
+  /* on a phone the Kangaroo sits above the problem, then the chat, then the board */
+  #app .side { display: contents; }
+  #yard { order: -1; } #problem { order: 0; } #app .board { order: 1; } #talk { order: 2; }
+  .board::before { display: none; }
+  .stage { height: 190px; }
+}
+.side { display: flex; flex-direction: column; gap: 22px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); }
+
+/* ── buttons ──────────────────────────────────────────────────────────── */
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-ctl); padding: 10px 18px; min-height: 44px; font-weight: 600; font-size: 16px; line-height: 1.2;
+  transition: border-color .15s, background-color .15s, scale .15s var(--ease); }
+@media (hover: hover) { .btn:hover:not(:disabled) { border-color: var(--ink); } }
+.btn:active:not(:disabled) { scale: .97; }
+.btn:disabled { opacity: .45; }
+.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+@media (hover: hover) { .btn.primary:hover:not(:disabled) { background: var(--accent-text); border-color: var(--accent-text); color: var(--on-accent); } }
+.btn.big { padding: 14px 26px; font-size: 18px; border-radius: var(--r-ctl); }
+.btn.quiet { border-color: transparent; background: transparent; color: var(--soft); font-weight: 500; }
+@media (hover: hover) { .btn.quiet:hover:not(:disabled) { color: var(--ink); border-color: transparent; background: var(--accent-bg); } }
+.btn[aria-busy="true"], #app[aria-busy="true"] button { cursor: progress; }
+.row { display: flex; gap: 10px 12px; flex-wrap: wrap; align-items: center; margin-top: 22px; }
+
+/* ── the problem ──────────────────────────────────────────────────────── */
+#problem { padding: clamp(22px, 3vw, 38px); }
+.p-head { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; margin-bottom: 18px; font-size: 14px; color: var(--soft); }
+.p-head .tag { color: var(--accent-text); font-weight: 600; letter-spacing: .02em; }
+.rungs { margin-left: auto; display: flex; gap: 5px; align-items: center; }
+.rungs b { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--soft); display: block; }
+.rungs b.on { background: var(--blue); border-color: var(--blue); }
+.texts { display: grid; gap: 22px; }
+.texts.both { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+@media (max-width: 640px) { .texts.both { grid-template-columns: minmax(0, 1fr); } }
+.text { white-space: pre-wrap; overflow-wrap: anywhere; font: clamp(20px, 2.1vw, 23px)/1.6 var(--serif); text-wrap: pretty; }
+.text small { display: block; font: 600 12px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--soft); margin-bottom: 8px; }
+.text.second { border-left: 1px solid var(--line); padding-left: 22px; }
+@media (max-width: 640px) { .text.second { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: 16px; } }
+.text img { max-width: 100%; height: auto; border-radius: 8px; outline: 1px solid rgba(0,0,0,.1); outline-offset: -1px; background: #fff; }
+/* a new problem arrives in two small steps: statement, then options one after another */
+.enter > * { animation: rise .28s var(--ease) both; animation-delay: calc(var(--i, 0) * 60ms); }
+@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+
+.options { display: grid; gap: 2px; margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--line); }
+.opt { display: grid; grid-template-columns: 44px 1fr; gap: 14px; align-items: center; text-align: left; background: transparent; border: 0; border-radius: var(--r-ctl);
+  padding: 8px 12px 8px 8px; transition: background-color .15s; }
+@media (hover: hover) {
+  button.opt:hover:not(:disabled) { background: var(--accent-bg); }
+  button.opt:hover:not(:disabled) .bub { scale: 1.06; border-color: var(--accent-text); color: var(--accent-text); }
+}
+button.opt:active:not(:disabled) .bub { scale: .94; }
+.opt .bub { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--ink); display: grid; place-items: center; font: 600 16px/1 var(--sans);
+  background: var(--surface); transition: background-color .15s, color .15s, border-color .15s, scale .2s var(--ease); }
+.opt .t { overflow-wrap: anywhere; font: clamp(19px, 2vw, 21px)/1.45 var(--serif); text-wrap: pretty; }
+.opt.wrong { opacity: .55; }
+.opt.wrong .t { text-decoration: line-through 1.5px var(--soft); }
+.opt.wrong .bub { border-color: var(--soft); color: var(--soft); border-style: dashed; }
+.opt.right .bub { background: var(--blue); border-color: var(--blue); color: var(--surface); }
+.opt.right .t { font-weight: 600; }
+.opt:disabled { cursor: default; }
+.options:empty, .texts:empty { display: none; }
+#p-warning { margin: 0 0 16px; font-size: 15.5px; }
+.keys { font-size: 13px; color: var(--soft); margin-top: 10px; }
+details.own { margin-top: 26px; border-top: 1px solid var(--line); padding-top: 14px; }
+details.own summary { cursor: pointer; font-size: 14.5px; color: var(--soft); padding: 12px 0; min-height: 44px; }
+@media (hover: hover) { details.own summary:hover { color: var(--ink); } }
+.lab { display: block; font-size: 14.5px; color: var(--soft); margin: 18px 0 7px; }
+textarea, input[type=text], select { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-ctl); padding: 11px 14px; font-size: 17px; transition: border-color .15s; }
+textarea:hover, input[type=text]:hover, select:hover { border-color: var(--soft); }
+textarea:focus-visible, input[type=text]:focus-visible, select:focus-visible { outline: 2px solid var(--blue); outline-offset: 0; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
+textarea { resize: vertical; min-height: 88px; line-height: 1.5; }
+select option { background-color: var(--surface); color: var(--ink); }
+select { appearance: none; padding-right: 40px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--soft) 50%), linear-gradient(135deg, var(--soft) 50%, transparent 50%);
+  background-size: 6px 6px; background-repeat: no-repeat; background-position: calc(100% - 22px) 52%, calc(100% - 16px) 52%; }
+
+/* ── the Kangaroo's yard ──────────────────────────────────────────────── */
+.stage { position: relative; height: clamp(210px, 30vh, 260px); overflow: hidden; container-type: inline-size; isolation: isolate; }
+.stage-cap { position: absolute; z-index: 5; left: 18px; top: 14px; font-size: 13px; color: var(--soft); }
+.ground { position: absolute; left: 0; right: 0; bottom: 0; height: 62px; background: var(--blue-bg); }
+.ground::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--blue); opacity: .55; }
+/* a dotted cross under the first lamp and a tick under the last: wrong at one end, right at the other */
+.sym { position: absolute; z-index: 2; bottom: 8px; width: 34px; line-height: 0; }
+.sym.l { left: calc(16% - 17px); fill: var(--accent); } .sym.r { right: calc(16% - 17px); fill: var(--blue); }
+.sym svg { display: block; width: 100%; height: auto; }
+/* the road: 13 lamps, as many as the board's columns. They light up as the Kangaroo gets surer, and it walks along them. */
+.lamps { position: absolute; z-index: 2; left: calc(16% - 4px); right: calc(16% - 4px); bottom: 36px; display: flex; justify-content: space-between; pointer-events: none; }
+.lamps i { width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--soft) 38%, transparent);
+  transition: background-color .2s var(--ease), scale .2s var(--ease); transition-delay: calc(var(--k) * 30ms); }
+.lamps i.on { background: var(--accent); scale: 1.15; }
+.lamps i.on.r { background: var(--blue); }
+.lamps { transition: opacity .3s var(--ease); }
+.lamps i.was { box-shadow: 0 0 0 2px var(--soft); }                  /* where it stood before the last hint */
+.lamps.scan i { animation: scan 1.1s ease-in-out infinite; animation-delay: calc(var(--k) * 60ms); }   /* a light runs along it while it thinks */
+@keyframes scan { 40% { scale: 1.7; background-color: var(--accent); } }
+.lamps i.blink { animation: blink .6s var(--ease) 2; }                /* the hint changed nothing: the lamp it stands on blinks */
+@keyframes blink { 50% { scale: 1.9; } }
+.stage.waiting .lamps { opacity: .45; }                               /* no hint sent yet: the road is not tracking anything */
+.msg .res { display: inline-block; margin-left: 8px; vertical-align: -1px; line-height: 0; }
+.msg .res svg { height: 14px; width: auto; display: block; }
+.spark { position: fixed; z-index: 70; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-bg); pointer-events: none; }
+.actor { position: absolute; z-index: 3; bottom: 60px; width: clamp(96px, 32cqw, 132px); left: 0;
+  translate: calc(var(--x, 16) * 1cqw - 50%) 0;           /* position as a % of the stage: moves on the compositor, not through layout */
+  transition: translate 1s cubic-bezier(.45, .05, .3, 1); }
+.actor svg { display: block; width: 100%; height: auto; overflow: visible; }
+.sprite { transform-origin: 50% 100%; }
+.sprite.idle { animation: breathe 3.2s ease-in-out infinite; }
+@keyframes breathe { 50% { transform: scale(1.012, .988); } }
+.sprite.think { animation: ponder 1.4s ease-in-out infinite; }
+@keyframes ponder { 0%,100% { transform: rotate(0); } 50% { transform: rotate(-2deg); } }
+.react { position: absolute; z-index: 4; left: 2%; top: 4px; line-height: 0; pointer-events: none; transform-origin: 0 100%; }
+.react svg { height: 26px; width: auto; }
+.react.pop { animation: pop .3s var(--ease); }
+@keyframes pop { from { transform: scale(.3); opacity: 0; } }
+.confetti { position: absolute; z-index: 5; width: 7px; height: 7px; border-radius: 50%; pointer-events: none; }
+
+/* ── the conversation ─────────────────────────────────────────────────── */
+.talk { padding: 18px 18px 16px; }
+.log { display: flex; flex-direction: column; gap: 12px; max-height: 34vh; overflow-y: auto; overscroll-behavior: contain; padding: 2px 6px 4px 2px;
+  scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.log:empty { display: none; }
+.msg { position: relative; max-width: 94%; overflow-wrap: anywhere; white-space: pre-wrap; font-size: 17px; line-height: 1.5; text-wrap: pretty; }
+.msg.new { animation: slip .25s var(--ease) both; }
+@keyframes slip { from { opacity: 0; transform: translateY(6px); } }
+.msg.cangur { align-self: flex-start; padding: 9px 14px; background: var(--bg); border-radius: 2px 10px 10px 10px; }
+.msg.alumne { align-self: flex-end; padding: 9px 14px; background: var(--blue-bg); border-radius: 10px 2px 10px 10px; }
+.msg.sistema { align-self: stretch; max-width: 100%; font-size: 15px; color: var(--soft); padding: 2px 4px; }
+.msg.be { color: var(--blue); font-weight: 600; }
+.msg.malament, .msg.fuita { color: var(--err); }
+.msg.avis { background: var(--warn-bg); color: var(--ink); padding: 9px 14px; border-radius: var(--r-ctl); }
+.msg.exemple { border-left: 3px solid var(--accent); padding: 2px 0 2px 14px; margin-left: 2px; }
+.msg small { display: block; font-size: 14px; color: var(--soft); margin-top: 4px; }
+.thinking { align-self: flex-start; color: var(--soft); padding: 6px 4px; font-size: 16px; }
+.thinking i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 4px; animation: dot 1.1s infinite; }
+.thinking i:nth-child(3) { animation-delay: .18s; } .thinking i:nth-child(4) { animation-delay: .36s; }
+@keyframes dot { 0%,60%,100% { transform: translateY(0); opacity: .4; } 30% { transform: translateY(-4px); opacity: 1; } }
+
+form.hint { margin-top: 12px; padding-top: 14px; border-top: 1px solid var(--line); }
+form.hint label { display: block; font-size: 14.5px; color: var(--soft); margin: 0 0 8px; }
+form.hint textarea { min-height: 78px; }
+.hint-foot { display: flex; align-items: center; gap: 10px 12px; margin-top: 10px; flex-wrap: wrap; }
+.stubs { display: flex; gap: 5px; align-items: center; }
+.stubs i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--soft); display: block; }
+.stubs i.on { background: var(--blue); border-color: var(--blue); }
+.count { margin-left: auto; font-size: 13px; color: var(--soft); font-variant-numeric: tabular-nums; }
+.tip { font-size: 13px; color: var(--soft); margin: 6px 0 0; }
+@media (pointer: coarse) { .tip { display: none; } }
+.count.full { color: var(--err); font-weight: 600; }
+#outside .row { margin-top: 10px; }
+
+/* ── the board, mirrored ──────────────────────────────────────────────── */
+.board { display: flex; align-items: center; gap: 14px; padding: 0 4px; }
+.pcb { background: #17181b; border-radius: 10px; padding: 9px 11px; flex: 0 0 auto; }
+#led { display: grid; grid-template-columns: repeat(13, 10px); gap: 3px; }
+#led span { width: 10px; height: 10px; border-radius: 50%; background: #2a2b31; }
+.board { position: relative; }
+/* a dotted wire from the yard to the board: what the Kangaroo does here, the board draws there */
+.board::before { content: ""; position: absolute; left: 98px; top: -22px; height: 22px; border-left: 3px dotted var(--soft); opacity: .7; }
+.board p { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--soft); }
+.board p b { color: var(--ink); font-weight: 600; }
+
+/* ── welcome ──────────────────────────────────────────────────────────── */
+#welcome { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 460px); gap: clamp(28px, 6vw, 84px); align-items: center; min-height: min(68vh, 620px); }
+@media (max-width: 900px) { #welcome { grid-template-columns: minmax(0, 1fr); } }
+.hero h2 { margin: 0; line-height: 0; }
+.hero h2 svg { width: min(100%, 520px); height: auto; display: block; }
+.hero p.lead { font: clamp(21px, 2.4vw, 26px)/1.4 var(--serif); max-width: 24ch; margin: 28px 0 0; }
+.hero .roo { width: min(220px, 56%); margin: 26px 0 0; }
+.ticket { padding: clamp(24px, 3vw, 34px); }
+.ticket h3 { margin: 0 0 2px; font: 600 20px/1.2 var(--serif); }
+.ticket .fine { font-size: 14px; color: var(--soft); margin: 16px 0 0; }
+.levels { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r-ctl); padding: 10px 16px; min-height: 44px; font-size: 15.5px; transition: border-color .15s, background-color .15s, color .15s, scale .15s var(--ease); }
+@media (hover: hover) { .pill:hover:not([aria-pressed="true"]) { border-color: var(--ink); } }
+.pill:active { scale: .97; }
+.pill[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); font-weight: 600; }
+
+/* ── teacher drawer ───────────────────────────────────────────────────── */
+.scrim { position: fixed; inset: 0; z-index: 60; background: rgba(20,18,14,.35); opacity: 0; pointer-events: none; overscroll-behavior: contain; transition: opacity .25s var(--ease); }
+.scrim.on { opacity: 1; pointer-events: auto; }
+#teacher { position: fixed; z-index: 61; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); background: var(--surface); border-left: 1px solid var(--line);
+  padding: 28px 26px 32px; overflow-y: auto; overscroll-behavior: contain; transform: translateX(104%);
+  visibility: hidden; transition: transform .25s var(--ease), visibility 0s .25s; }      /* visibility waits, so the panel can slide out */
+#teacher.on { transform: none; visibility: visible; transition: transform .25s var(--ease), visibility 0s; }
+#teacher h3 { margin: 0 0 6px; font: 600 22px/1.2 var(--serif); }
+#teacher .close { position: absolute; top: 14px; right: 14px; padding: 6px 12px; font-size: 22px; line-height: 1; }
+.stat { display: flex; align-items: baseline; gap: 12px; margin: 14px 0 4px; }
+.stat b { font: 600 44px/1 var(--serif); color: var(--accent-text); font-variant-numeric: tabular-nums; }
+.trow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 16.5px; }
+.dots { display: flex; gap: 3px; flex-wrap: wrap; justify-content: flex-end; max-width: 150px; }
+.dots i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--soft); display: block; }
+.dots i.on { background: var(--blue); border-color: var(--blue); }
+.gapbox { margin-top: 22px; padding: 16px; background: var(--bg); border-radius: var(--r-ctl); font-size: 16px; line-height: 1.5; }
+.ebar { height: 8px; border-radius: 99px; background: var(--line); margin: 6px 0 12px; overflow: hidden; }
+.ebar i { display: block; height: 100%; background: var(--blue); border-radius: 99px; }
+.ebar.o i { background: var(--accent); }
+#teacher h4.lab { font-weight: 600; }
+.loading { color: var(--soft); }
+.hintnote { margin: 8px 0; padding: 9px 13px; font: italic 16.5px/1.45 var(--serif); background: var(--accent-bg); border-radius: var(--r-ctl); }
+
+/* ── on a computer everything fits on one screen: the page never scrolls, only the problem or the chat inside their own card ── */
+.options.short { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 10px; }
+@media (min-width: 901px) and (min-height: 560px) {
+  body { height: 100vh; height: 100dvh; display: flex; flex-direction: column; }   /* no overflow: hidden, so nothing can ever be cut off */
+  .mast { flex: none; width: 100%; padding-top: 12px; padding-bottom: 2px; }
+  .net { flex: none; }
+  #app { flex: 1 1 auto; min-height: 0; width: 100%; padding-top: 10px; padding-bottom: 18px; align-items: stretch; grid-template-rows: minmax(0, 1fr); }
+  #app[data-phase="welcome"] { overflow-y: auto; }
+  #welcome { min-height: 100%; }
+  #problem { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+    padding: clamp(18px, 2.2vw, 30px); align-self: start; max-height: 100%; }
+  .p-head { margin-bottom: 12px; }
+  .text { font-size: clamp(18px, 1.5vw, 21px); line-height: 1.5; }
+  .opt .t { font-size: clamp(17px, 1.4vw, 20px); }
+  .options { margin-top: 16px; padding-top: 12px; }
+  .opt { padding: 5px 10px 5px 6px; }
+  .opt .bub { width: 36px; height: 36px; font-size: 15px; }
+  .keys { margin-top: 6px; }
+  .row { margin-top: 14px; }
+  details.own { margin-top: 14px; padding-top: 4px; }
+  .side { min-height: 0; gap: 14px; }
+  #yard, .board { flex: none; }
+  .board::before { top: -14px; height: 14px; }
+  .stage { --stage-h: clamp(185px, 27vh, 250px); height: var(--stage-h); }
+  .actor { width: min(clamp(96px, 32cqw, 132px), calc((var(--stage-h) - 72px) * .92)); }   /* never taller than its yard */
+  #talk { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; }   /* as tall as the chat, up to what is left */
+  #talk.hidden { display: none; }
+  #talk .log { flex: 1 1 auto; min-height: 48px; max-height: none; }
+  #talk form.hint, #talk #outside { flex: none; }
+}
+/* short laptop screens: a smaller yard, LED mirror and hint box, so the Send button stays in view */
+@media (min-width: 901px) and (min-height: 560px) and (max-height: 780px) {
+  .stage { --stage-h: 172px; }
+  .pcb { padding: 7px 9px; }
+  #led { grid-template-columns: repeat(13, 8px); gap: 2px; }
+  #led span { width: 8px; height: 8px; }
+  .talk { padding: 12px 14px 12px; }
+  form.hint { margin-top: 8px; padding-top: 10px; }
+  form.hint label { margin-bottom: 5px; font-size: 14px; }
+  form.hint textarea { min-height: 52px; }
+  .tip { display: none; }
+  .hint-foot { margin-top: 6px; }
+}
+@media (max-width: 560px) { body { font-size: 17px; } .ladder span { font-size: 12.5px; padding: 3px 8px; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 </style>
 </head>
 <body>
-<header>
-  <h1>🦘 Ensenya el Cangur</h1>
-  <span class="chip" id="chip-level"></span>
-  <span class="chip" id="chip-stage"></span>
-  <button id="btn-teacher">Docent</button>
+
+<a class="skip" href="#app">Salta al contingut</a>
+<header class="mast">
+  <h1 class="title" id="title" translate="no"></h1>
+  <span class="spacer"></span>
+  <div class="ladder hidden" id="ladder" role="group" aria-label="Etapa de llengua"></div>
+  <span class="level hidden" id="level" role="img">Nivell <span class="steps" id="level-steps"></span></span>
+  <button class="link" id="btn-teacher" aria-expanded="false" aria-controls="teacher">Docent</button>
 </header>
 
-<main>
-  <section class="card" id="welcome">
-    <h2 style="margin-top:0">Hola!</h2>
-    <p>Resoldràs problemes de matemàtiques i ajudaràs el Cangur, que s'equivoca força.
-       Tot el que facis es queda en aquesta placa.</p>
-    <label for="in-name">Com et dius? (opcional)</label>
-    <input id="in-name" maxlength="40" autocomplete="off">
-    <label for="in-level">Quin curs fas?</label>
-    <select id="in-level">
-      <option value="0">5è de primària</option><option value="1">6è de primària</option>
-      <option value="2">1r d'ESO</option><option value="3">2n d'ESO</option>
-      <option value="4">3r d'ESO</option><option value="5">4t d'ESO</option>
-      <option value="6">1r de batxillerat</option><option value="7">2n de batxillerat</option>
-    </select>
-    <label for="in-lang">Vols veure els problemes també en una altra llengua?</label>
-    <select id="in-lang"></select>
-    <div class="row"><button class="primary" id="btn-start">Comencem</button></div>
+<div class="net hidden" id="net" role="alert"><span id="net-msg"></span>
+  <button class="btn" id="btn-retry" type="button">Torna-ho a provar</button></div>
+<div class="vh" id="announce" aria-live="polite"></div>
+
+<main id="app" data-phase="welcome" tabindex="-1">
+
+  <!-- ─ welcome ─ -->
+  <section id="welcome" aria-labelledby="hello">
+    <div class="hero">
+      <h2 id="hello" translate="no"></h2>
+      <p class="lead">Un cangur que s'equivoca força. Tu l'ensenyes.</p>
+      <div class="roo" id="roo-welcome" aria-hidden="true"></div>
+    </div>
+    <form class="card ticket" id="start-form">
+      <h3>Hola! Comencem?</h3>
+      <label class="lab" for="in-name">Com et dius? (opcional)</label>
+      <input type="text" id="in-name" name="name" maxlength="40" autocomplete="off" spellcheck="false" autocapitalize="words" enterkeyhint="go">
+      <div class="lab" id="lab-level">Quin curs fas?</div>
+      <div class="levels" id="levels" role="group" aria-labelledby="lab-level"></div>
+      <label class="lab" for="in-lang">Vols veure els problemes també en una altra llengua?</label>
+      <select id="in-lang" name="lang"></select>
+      <div class="row"><button class="btn primary big" id="btn-start" type="submit">Comencem</button></div>
+      <p class="fine">Tot el que facis es queda en aquesta placa.</p>
+    </form>
   </section>
 
-  <section class="card hidden" id="problem">
-    <div class="meta" id="p-meta"></div>
+  <!-- ─ the problem ─ -->
+  <section class="card" id="problem" aria-labelledby="h-problem" tabindex="-1">
+    <h2 class="vh" id="h-problem">Problema</h2>
+    <div class="p-head">
+      <span class="tag" id="p-level"></span><span id="p-topic"></span>
+      <div class="rungs hidden" id="p-rungs" title="Pistes demanades"></div>
+    </div>
     <div class="msg avis hidden" id="p-warning" role="note"></div>
     <div class="texts" id="p-texts"></div>
-    <div class="options" id="p-options"></div>
+    <div class="options" id="p-options" role="group" aria-label="Opcions de resposta"></div>
+    <div class="keys hidden" id="p-keys">Drecera de teclat: amb el focus en una opció, prem A–E per respondre.</div>
     <div class="row">
-      <button id="btn-help">Demana una pista</button>
-      <button id="btn-reveal" class="hidden">Veure en la meva llengua</button>
-      <button id="btn-next" class="primary hidden">Problema següent</button>
-      <button id="btn-leave" class="hidden">Prou, següent problema</button>
+      <button class="btn" id="btn-help">Demana una pista</button>
+      <button class="btn quiet hidden" id="btn-reveal">Veure en la meva llengua</button>
+      <button class="btn primary big hidden" id="btn-next">Problema següent</button>
+      <button class="btn quiet hidden" id="btn-leave">Prou, següent problema</button>
     </div>
-    <details style="margin-top:16px">
+    <details class="own">
       <summary>Tinc un problema meu</summary>
-      <label for="in-ext">Escriu l'enunciat i les opcions (A) … B) … fins a E)).</label>
-      <textarea id="in-ext"></textarea>
-      <div class="row"><button id="btn-ext">Envia'l al Cangur</button></div>
+      <label class="lab" for="in-ext">Escriu l'enunciat i les opcions (A) … B) … fins a E)).</label>
+      <textarea id="in-ext" name="external" placeholder="Quant fa 2 + 3?&#10;A) 4   B) 5   C) 6   D) 7   E) 8"></textarea>
+      <div class="row" style="margin-top:12px"><button class="btn" id="btn-ext" type="button" disabled>Envia'l al Cangur</button></div>
     </details>
   </section>
 
+  <!-- ─ the yard ─ -->
   <div class="side">
-    <section class="card">
-      <div id="chat" aria-live="polite"></div>
+    <section class="card" id="yard" aria-labelledby="h-yard">
+      <h2 class="vh" id="h-yard">El Cangur</h2>
+      <div class="stage" id="stage" role="meter" aria-valuemin="0" aria-valuemax="100" aria-label="Què prefereix el Cangur">
+        <div class="stage-cap">El Cangur</div>
+        <div class="ground" aria-hidden="true"></div>
+        <div class="sym l" id="sym-l" aria-hidden="true"></div><div class="sym r" id="sym-r" aria-hidden="true"></div>
+        <div class="lamps" id="lamps" aria-hidden="true"></div>
+        <div class="actor" id="actor"><div class="react" id="react" aria-hidden="true"></div><div id="roo" aria-hidden="true"></div></div>
+      </div>
+    </section>
+
+    <section class="board" aria-label="Matriu LED de la placa">
+      <div class="pcb"><div id="led" aria-hidden="true"></div></div>
+      <p><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg><b>Placa</b></p>
+    </section>
+
+    <section class="card talk" aria-labelledby="h-talk" id="talk">
+      <h2 class="vh" id="h-talk">Conversa amb el Cangur</h2>
+      <div class="log" id="chat" role="log" aria-live="off"></div>
       <form class="hint hidden" id="hint-form">
-        <div class="hintbox">
-          <textarea id="in-hint" maxlength="200" placeholder="Escriu una pista per al Cangur, sense dir-li la resposta"></textarea>
-          <small class="count" id="hint-count" aria-live="polite">0/200</small>
+        <label for="in-hint">Escriu-li una pista, sense dir-li la resposta.</label>
+        <textarea id="in-hint" name="hint" maxlength="200" enterkeyhint="send" aria-describedby="hint-tip" placeholder="Per exemple: compta de dos en dos…"></textarea>
+        <p class="tip" id="hint-tip">Enter l'envia · Maj+Enter fa una línia nova</p>
+        <div class="hint-foot">
+          <span class="stubs" id="stubs"></span>
+          <span class="count" id="hint-count">0/200</span>
+          <button class="btn primary" id="btn-hint" type="submit">Envia</button>
         </div>
-        <button class="primary" id="btn-hint">Envia</button>
       </form>
       <div id="outside" class="hidden">
         <div class="row" id="similar"></div>
-        <div class="row"><button id="btn-back" class="primary">Tornem als problemes</button></div>
+        <div class="row"><button class="btn primary" id="btn-back">Tornem als problemes</button></div>
       </div>
     </section>
-    <section class="card" id="confidence">
-      <div class="barlabel"><span>El Cangur prefereix una resposta equivocada</span><span>la correcta</span></div>
-      <div class="bar"><i id="bar-fill"></i></div>
-      <div class="meta" style="margin:10px 0 6px">Matriu LED de la placa</div>
-      <div id="led"></div>
-    </section>
-    <section class="card hidden" id="teacher">
-      <h3 style="margin-top:0">Vista del docent</h3>
-      <div id="teacher-body"></div>
-    </section>
+
   </div>
 </main>
 
-<script>
-const LANG_NAMES = {eng: "English", cat: "Català", esp: "Castellano", fra: "Français",
-  arb: "العربية", zho: "中文", deu: "Deutsch", tur: "Türkçe", vie: "Tiếng Việt",
-  ind: "Bahasa Indonesia", swh: "Kiswahili", kor: "한국어", jpn: "日本語", lit: "Lietuvių",
-  ron: "Română", urd: "اردو", ukr: "Українська", rus: "Русский", por: "Português", ita: "Italiano"};
-const STAGES = {1: "Dues llengües", 2: "Català amb ajuda", 3: "Català"};
-const $ = id => document.getElementById(id);
-let state = null, timer = null, langsFilled = false;
+<div class="scrim" id="scrim"></div>
+<aside id="teacher" role="dialog" aria-modal="true" aria-label="Vista del docent" aria-hidden="true">
+  <button class="btn quiet close" id="btn-close" aria-label="Tanca">×</button>
+  <h3>Vista del docent</h3>
+  <div id="teacher-body"></div>
+</aside>
 
+<script>
+"use strict";
+/* ───────── small helpers ───────── */
+const $ = id => document.getElementById(id);
+const SVGNS = "http://www.w3.org/2000/svg";
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 function el(tag, attrs, text) {
   const node = document.createElement(tag);
   for (const key in (attrs || {})) node.setAttribute(key, attrs[key]);
-  if (text !== undefined) node.textContent = text;   // textContent: nothing typed is run as HTML
+  if (text !== undefined) node.textContent = text;     // textContent: nothing typed is ever run as HTML
+  return node;
+}
+function sv(tag, attrs) {
+  const node = document.createElementNS(SVGNS, tag);
+  for (const key in (attrs || {})) node.setAttribute(key, attrs[key]);
   return node;
 }
 async function call(path, body) {
   const response = await fetch(path, body === undefined ? {} :
     {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+  if (!response.ok) throw new Error("HTTP " + response.status);
   return response.json();
 }
-async function act(path, body) { render(await call(path, body || {})); }
+const NET_MSG = "No hi ha connexió amb la placa. Comprova que està encesa i connectada i torna-ho a provar.";
+function offline(down) {
+  const net = $("net"), wasDown = !net.classList.contains("hidden");
+  net.classList.toggle("hidden", !down);
+  // an alert is read when its text changes, so write it each time the link drops
+  if (down && !wasDown) { $("net-msg").textContent = ""; setTimeout(() => { $("net-msg").textContent = NET_MSG; }, 60); }
+}
+let inflight = false;                      // one action at a time: a double click must not answer twice
+async function act(path, body) {
+  if (inflight) return;
+  inflight = true;
+  $("app").setAttribute("aria-busy", "true");
+  try { render(await call(path, body || {})); offline(false); } catch (error) { offline(true); }
+  finally { inflight = false; $("app").removeAttribute("aria-busy"); }
+}
+const ISO1 = {cat: "ca", eng: "en", esp: "es", fra: "fr", deu: "de", ita: "it", por: "pt", arb: "ar", zho: "zh",
+  tur: "tr", vie: "vi", ind: "id", swh: "sw", kor: "ko", jpn: "ja", lit: "lt", ron: "ro", urd: "ur", ukr: "uk", rus: "ru"};
+
+/* ───────── dot-matrix lettering (5x7), drawn as SVG dots ───────── */
+const FONT = {
+  A:"01110/10001/10001/11111/10001/10001/10001", B:"11110/10001/10001/11110/10001/10001/11110",
+  C:"01110/10001/10000/10000/10000/10001/01110", D:"11100/10010/10001/10001/10001/10010/11100",
+  E:"11111/10000/10000/11110/10000/10000/11111", F:"11111/10000/10000/11110/10000/10000/10000",
+  G:"01110/10001/10000/10111/10001/10001/01111", H:"10001/10001/10001/11111/10001/10001/10001",
+  I:"01110/00100/00100/00100/00100/00100/01110", J:"00111/00010/00010/00010/00010/10010/01100",
+  K:"10001/10010/10100/11000/10100/10010/10001", L:"10000/10000/10000/10000/10000/10000/11111",
+  M:"10001/11011/10101/10101/10001/10001/10001", N:"10001/11001/10101/10011/10001/10001/10001",
+  O:"01110/10001/10001/10001/10001/10001/01110", P:"11110/10001/10001/11110/10000/10000/10000",
+  Q:"01110/10001/10001/10001/10101/10010/01101", R:"11110/10001/10001/11110/10100/10010/10001",
+  S:"01111/10000/10000/01110/00001/00001/11110", T:"11111/00100/00100/00100/00100/00100/00100",
+  U:"10001/10001/10001/10001/10001/10001/01110", V:"10001/10001/10001/10001/10001/01010/00100",
+  W:"10001/10001/10001/10101/10101/10101/01010", X:"10001/10001/01010/00100/01010/10001/10001",
+  Y:"10001/10001/01010/00100/00100/00100/00100", Z:"11111/00001/00010/00100/01000/10000/11111",
+  "=":"00000/00000/11111/00000/11111/00000/00000",
+  "↑":"00100/01110/10101/00100/00100/00100/00100", "↓":"00100/00100/00100/00100/10101/01110/00100",
+  "?":"01110/10001/00001/00010/00100/00000/00100", "!":"00100/00100/00100/00100/00100/00000/00100",
+  ".":"00000/00000/00000/00000/00000/01100/01100", " ":"00000/00000/00000/00000/00000/00000/00000"
+};
+/* Returns an <svg> of dots in one colour. */
+function dotText(text, {color = "var(--accent)", label} = {}) {
+  const glyphs = [...text.toUpperCase().normalize("NFD")].reduce((list, ch) => {
+    if (/[̀-ͯ]/.test(ch)) { if (list.length) list[list.length - 1].accent = true; }
+    else list.push({rows: (FONT[ch] || FONT[" "]).split("/"), accent: false, ch});
+    return list;
+  }, []);
+  const width = glyphs.length * 6 - 1, height = 10;
+  const svg = sv("svg", {viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": label || text});
+  const group = sv("g", {fill: color});
+  glyphs.forEach((g, i) => {
+    g.rows.forEach((row, y) => [...row].forEach((bit, x) => {
+      if (bit === "1") group.append(sv("circle", {cx: i * 6 + x + .5, cy: y + 2.5, r: .42}));
+    }));
+    if (g.accent) group.append(sv("circle", {cx: i * 6 + 3, cy: 1, r: .42}));
+    if (g.ch === "Ç") group.append(sv("circle", {cx: i * 6 + 2.5, cy: 9.5, r: .42}));
+  });
+  svg.append(group);
+  svg.style.aspectRatio = width + " / " + height;
+  return svg;
+}
+
+/* ───────── the Kangaroo, rasterised into LED dots ───────── */
+const KW = 46, KH = 50;
+function inEllipse(px, py, e) {
+  const dx = px - e.cx, dy = py - e.cy, c = Math.cos(e.rot || 0), s = Math.sin(e.rot || 0);
+  const x = dx * c + dy * s, y = -dx * s + dy * c;
+  return (x / e.rx) ** 2 + (y / e.ry) ** 2 <= 1;
+}
+function inPoly(px, py, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+function kangarooShapes(mood) {
+  const S = [];
+  const E = (cx, cy, rx, ry, rot, c) => S.push({t: "e", cx, cy, rx, ry, rot, c});
+  const P = (pts, c) => S.push({t: "p", pts, c});
+  const D = (cells, c) => S.push({t: "c", cells, c});
+  P([[15,30],[4,37],[0,46],[8,45],[21,41],[28,35]], "s");                       // tail
+  E(22, 39, 9.5, 8, -.35, "o");                                                 // thigh
+  P([[17,43],[25,42],[29,46],[41,47],[43,49],[14,49],[14,46]], "o");           // foot
+  E(26, 28, 9, 12.5, .22, "o");                                                 // torso
+  E(30, 31, 4.8, 8, .16, "w");                                                  // belly
+  E(32, 13, 6.6, 6, 0, "o");                                                    // head
+  P([[34,9],[44,14],[44,17],[35,19]], "o");                                     // snout
+  P([[27,9],[26,1],[31,7]], "o"); P([[32,6],[35,1],[37,9]], "o");              // ears
+  P([[27,8],[27,4],[30,7]], "w"); P([[33,6],[35,3],[36,8]], "w");
+  P([[26,18],[38,18],[39,21],[32,24],[25,22]], "b");                            // scarf
+  P([[26,22],[24,31],[28,31],[30,23]], "b");
+  P([[33,24],[39,28],[39,30],[35,29],[32,27]], "o");                            // arm
+  D([[38,29],[39,29]], "d");
+  E(31.5, 30.5, 2.4, 2.4, 0, "j"); D([[30,28],[33,28]], "j");                   // joey in the pouch
+  D([[29,32],[30,32],[31,32],[32,32],[33,32]], "s");
+  const eyes = {
+    open: [[35,12],[35,13]], blink: [[34,13],[35,13],[36,13]], happy: [[34,13],[35,12],[36,13]],
+    think: [[36,11],[36,12]], sad: [[35,13],[35,14],[34,10],[35,10],[36,11]],
+  };
+  const faces = {idle: "open", wait: "open", think: "think", happy: "happy", unsure: "sad", wave: "happy"};
+  D(eyes[faces[mood] || "open"], "d");
+  D([[44,15],[43,15]], "d");                                                    // nose
+  if (mood === "happy" || mood === "wave") D([[37,17],[38,18],[39,18],[40,18],[41,17]], "d");
+  if (mood === "unsure") D([[38,18],[39,17],[40,17],[41,18]], "d");
+  if (mood === "think") D([[38,18],[39,18],[40,18]], "d");
+  if (mood === "unsure") D([[41,8],[41,9]], "b");                               // a sweat drop
+  return S;
+}
+function kangarooSVG(mood) {
+  const grid = Array.from({length: KH}, () => Array(KW).fill(""));
+  for (const shape of kangarooShapes(mood)) {
+    if (shape.t === "c") { for (const [x, y] of shape.cells) if (grid[y] && x < KW) grid[y][x] = shape.c; continue; }
+    for (let y = 0; y < KH; y++) for (let x = 0; x < KW; x++) {
+      const px = x + .5, py = y + .5;
+      if (shape.t === "e" ? inEllipse(px, py, shape) : inPoly(px, py, shape.pts)) grid[y][x] = shape.c;
+    }
+  }
+  const svg = sv("svg", {viewBox: `0 0 ${KW} ${KH}`});
+  const group = sv("g", {class: "sprite " + (mood === "think" ? "think" : "idle")});
+  for (let y = 0; y < KH; y++) for (let x = 0; x < KW; x++) {
+    const c = grid[y][x];
+    if (c) group.append(sv("circle", {cx: x + .5, cy: y + .5, r: .47, class: "k-" + c}));
+  }
+  svg.append(group);
+  return svg;
+}
+const kcss = document.createElement("style");
+kcss.textContent = `
+  .k-o { fill: var(--accent); } .k-s { fill: #ae432a; } .k-w { fill: #f3dccb; }
+  .k-b { fill: var(--blue); } .k-d { fill: #24211c; } .k-j { fill: #f0a58c; }
+  @media (prefers-color-scheme: dark) { .k-s { fill: #cf6a52; } .k-d { fill: #17181b; } }`;
+document.head.append(kcss);
+
+/* ───────── static pieces ───────── */
+$("title").append(dotText("Ensenya el Cangur", {label: "Ensenya el Cangur"}));
+$("hello").append(dotText("Ensenya el Cangur", {label: "Ensenya el Cangur"}));
+$("roo-welcome").append(kangarooSVG("wave"));
+
+/* the banks and the bridge: the same cross, tick and 13 lamps the board draws */
+const CROSS_ART = [".............", "...#.....#...", "....#...#....", ".....#.#.....", "......#......", ".....#.#.....", "....#...#....", "...#.....#..."];
+const TICK_ART = [".............", "...........#.", "..........##.", ".........##..", ".#......##...", ".##....##....", "..##..##.....", "...####......"];
+function art(lines) {
+  const svg = sv("svg", {viewBox: "0 0 13 8"});
+  lines.forEach((row, y) => [...row].forEach((ch, x) => { if (ch === "#") svg.append(sv("circle", {cx: x + .5, cy: y + .5, r: .42})); }));
+  return svg;
+}
+$("sym-l").append(art(CROSS_ART)); $("sym-r").append(art(TICK_ART));
+const LAMPS = 13;
+for (let i = 0; i < LAMPS; i++) $("lamps").append(el("i", {class: i > LAMPS >> 1 ? "r" : "", style: "--k:" + i}));
+
+/* small line icons for the buttons */
+const ICONS = {lamp: "M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z", next: "M5 12h14M13 6l6 6-6 6"};
+function labelled(btn, icon, text, after) {
+  const svg = sv("svg", {viewBox: "0 0 24 24", width: 18, height: 18, fill: "none", stroke: "currentColor", "stroke-width": 2,
+    "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true", class: after ? "after" : ""});
+  svg.append(sv("path", {d: ICONS[icon]}));
+  btn.replaceChildren(...(after ? [document.createTextNode(text), svg] : [svg, document.createTextNode(text)]));
+}
+labelled($("btn-hint"), "next", "Envia", true);
+
+const LEVELS = [["5è de primària"], ["6è de primària"], ["1r d'ESO"], ["2n d'ESO"], ["3r d'ESO"], ["4t d'ESO"], ["1r de batxillerat"], ["2n de batxillerat"]];
+let chosenLevel = 2;
+function drawLevels() {
+  const box = $("levels");
+  LEVELS.forEach(([name], i) => {
+    const b = el("button", {type: "button", class: "pill", "aria-pressed": String(i === chosenLevel)}, name);
+    b.onclick = () => {        // update in place: rebuilding the buttons would drop the keyboard focus
+      chosenLevel = i;
+      [...box.children].forEach((pill, k) => pill.setAttribute("aria-pressed", String(k === i)));
+    };
+    box.append(b);
+  });
+}
+drawLevels();
+
+const LANG_NAMES = {eng: "English", cat: "Català", esp: "Castellano", fra: "Français",
+  arb: "العربية", zho: "中文", deu: "Deutsch", tur: "Türkçe", vie: "Tiếng Việt",
+  ind: "Bahasa Indonesia", swh: "Kiswahili", kor: "한국어", jpn: "日本語", lit: "Lietuvių",
+  ron: "Română", urd: "اردو", ukr: "Українська", rus: "Русский", por: "Português", ita: "Italiano"};
+const STAGES = {1: "Dues llengües", 2: "Català amb ajuda", 3: "Només català"};
+
+/* ───────── the yard: where the Kangaroo stands, and how it jumps ───────── */
+const roo = {mood: "", x: 16, bar: null, problem: null, was: -1};
+let pending = null;                   // the hint just sent, until the Kangaroo answers
+const marks = new Map();              // "problem:message" -> up | same | down, the result drawn next to each hint
+const hinted = new Set();             // problems where a hint was sent
+const RESULT = {up: ["↑", "var(--blue)", "Ha pujat"], same: ["=", "var(--soft)", "Sense canvis"], down: ["↓", "var(--accent)", "Ha baixat"]};
+function resultGlyph(kind) {
+  const [glyph, color, label] = RESULT[kind];
+  const box = el("span", {class: "res", role: "img", "aria-label": label});
+  const svg = dotText(glyph, {color});
+  svg.removeAttribute("role"); svg.removeAttribute("aria-label");
+  box.append(svg);
+  return box;
+}
+/* once the Kangaroo has answered the hint, say how it went: up, down, or no change at all */
+function settle(view, before, after) {
+  if (!pending) return;
+  if (view.busy) { pending.sawBusy = true; return; }
+  const text = pending.text, sawBusy = pending.sawBusy;
+  pending = null;
+  if (!sawBusy) return;                 // refused before reaching the Kangaroo: the chat already says why
+  const result = after === null || before === null || Math.abs(after - before) < .005 ? "same" : after > before ? "up" : "down";
+  const index = view.messages.map(m => m.who === "alumne" && m.text === text).lastIndexOf(true);
+  if (index >= 0 && view.problem) {
+    marks.set(view.problem.id + ":" + index, result);
+    const bubble = $("chat").children[index];
+    if (bubble) bubble.append(resultGlyph(result));
+  }
+  if (result === "same") {
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      $("roo").animate([{transform: "translateX(0)"}, {transform: "translateX(-5px)"}, {transform: "translateX(5px)"},
+        {transform: "translateX(-4px)"}, {transform: "translateX(3px)"}, {transform: "translateX(0)"}], {duration: 500, easing: "ease-in-out"});
+      const lamp = $("lamps").children[after === null ? 0 : Math.round(after * (LAMPS - 1))];
+      if (lamp) { lamp.classList.add("blink"); setTimeout(() => lamp.classList.remove("blink"), 1300); }
+    }
+    setTimeout(() => react("="), 250);
+  }
+}
+function barToX(bar) { return 16 + (bar === null ? 0 : bar) * 68; }      /* the road runs from 16% to 84% of the yard */
+function setMood(mood) {
+  if (roo.mood === mood) return;
+  roo.mood = mood;
+  $("roo").replaceChildren(kangarooSVG(mood));
+}
+function react(kind) {
+  const box = $("react"); box.replaceChildren(); box.classList.remove("pop");
+  if (!kind) return;
+  box.append(dotText(kind));
+  void box.offsetWidth; box.classList.add("pop");
+}
+function hop(toX) {
+  $("actor").style.setProperty("--x", toX);
+  if (reduced) return;
+  const crossing = Math.abs(toX - roo.x) > 25;
+  $("roo").animate([
+    {transform: "translateY(0) scale(1,1)"},
+    {transform: "translateY(-" + (crossing ? 96 : 48) + "px) scale(.96,1.05)", offset: .5},
+    {transform: "translateY(0) scale(1.07,.92)", offset: .92},
+    {transform: "translateY(0) scale(1,1)"}], {duration: 1000, easing: "ease-in-out"});
+}
+function confetti() {
+  if (reduced) return;
+  const stage = $("stage"), actor = $("actor").getBoundingClientRect(), box = stage.getBoundingClientRect();
+  for (let i = 0; i < 14; i++) {
+    const dot = el("i", {class: "confetti"});
+    dot.style.background = i % 2 ? "var(--accent)" : "var(--blue)";
+    dot.style.left = (actor.left - box.left + actor.width * .5) + "px";
+    dot.style.top = (actor.top - box.top + actor.height * .3) + "px";
+    stage.append(dot);
+    const angle = Math.random() * Math.PI * 2, dist = 40 + Math.random() * 70;
+    dot.animate([{transform: "translate(0,0) scale(1)", opacity: 1},
+      {transform: `translate(${Math.cos(angle) * dist}px, ${Math.sin(angle) * dist - 30}px) scale(.3)`, opacity: 0}],
+      {duration: 800 + Math.random() * 400, easing: "cubic-bezier(.2,.7,.3,1)"}).onfinish = () => dot.remove();
+  }
+}
+function updateRoo(view) {
+  const problem = view.problem;
+  const bar = problem && problem.bar !== null && problem.bar !== undefined ? problem.bar : null;
+  const sameProblem = problem && roo.problem === problem.id;
+  const before = roo.bar, lampBefore = before === null ? -1 : Math.round(before * (LAMPS - 1));
+  let mood = "idle";
+  if (view.phase === "welcome") mood = "wave";
+  else if (view.busy) mood = "think";
+  else if (bar !== null) mood = bar > .5 ? "happy" : "unsure";
+  else if (view.phase === "external") mood = "think";
+  setMood(mood);
+  const x = barToX(bar);
+  if (!sameProblem) {                         // a new problem: back to the left bank, no jump
+    const actor = $("actor");
+    actor.style.transition = "none"; actor.style.setProperty("--x", x);
+    void actor.offsetWidth; actor.style.transition = "";
+    roo.x = x; roo.bar = bar; roo.problem = problem ? problem.id : null;
+    roo.was = -1; pending = null;
+    react(null);
+  } else if (bar !== roo.bar && !view.busy) {
+    const crossed = (roo.bar === null || roo.bar <= .5) && bar !== null && bar > .5;
+    hop(x);
+    // an arrow says which way the hint pushed it; "!" when it makes it across
+    const up = roo.bar === null || (bar !== null && bar > roo.bar);
+    const mark = bar === null ? null : (bar > .5 && (roo.bar === null || roo.bar <= .5)) ? "!" : up ? "↑" : "↓";
+    setTimeout(() => react(mark), 700);
+    if (crossed) setTimeout(confetti, 950);
+    roo.x = x; roo.bar = bar;
+    const lampNow = bar === null ? -1 : Math.round(bar * (LAMPS - 1));
+    if (lampBefore >= 0 && lampNow !== lampBefore) roo.was = lampBefore;
+  }
+  const lit = bar === null ? 0 : Math.round(bar * (LAMPS - 1)) + 1;     // the lamp under the Kangaroo is the last lit one
+  [...$("lamps").children].forEach((lamp, i) => lamp.classList.toggle("on", i < lit));
+  $("stage").setAttribute("aria-valuenow", String(bar === null ? 0 : Math.round(bar * 100)));
+  $("stage").setAttribute("aria-valuetext", bar === null ? "El Cangur encara no ha donat cap resposta" :
+    bar > .5 ? "El Cangur prefereix la resposta correcta" : "El Cangur prefereix una resposta equivocada");
+  [...$("lamps").children].forEach((lamp, i) => lamp.classList.toggle("was", i === roo.was));
+  $("lamps").classList.toggle("scan", !!view.busy);
+  $("stage").classList.toggle("waiting", !(problem && hinted.has(problem.id)));
+  settle(view, before, bar);
+}
+
+/* ───────── the page ───────── */
+let state = null, timer = null, langsFilled = false, seenMessages = 0, maxTries = 3, lastProblem = null, wasBusy = false;
+const HELP_RUNGS = 4;
+/* a new problem slides in: statement first, then the options one by one */
+function enter() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const boxes = [$("p-texts"), $("p-options")];
+  boxes.forEach(box => box.classList.add("enter"));
+  setTimeout(() => boxes.forEach(box => box.classList.remove("enter")), 700);
+}
 
 function render(view) {
   state = view;
   const student = view.student, problem = view.problem;
+  $("app").dataset.phase = view.phase;
+  $("title").classList.toggle("vh", view.phase === "welcome");   // the hero already shows it
+  const focused = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
+  const hadFocusInProblem = !!(focused && $("problem").contains(focused));
   if (!langsFilled) {
     const select = $("in-lang");
     select.append(el("option", {value: ""}, "No, només en català"));
@@ -194,19 +782,33 @@ function render(view) {
       select.append(el("option", {value: "eng"}, LANG_NAMES.eng));
     langsFilled = true;
   }
-  $("welcome").classList.toggle("hidden", view.phase !== "welcome");
-  $("problem").classList.toggle("hidden", view.phase === "welcome");
-  $("chip-level").textContent = student ? "Nivell " + student.level : "";
-  $("chip-level").classList.toggle("hidden", !student);
-  $("chip-stage").textContent = student && student.etapa ? STAGES[student.etapa] : "";
-  $("chip-stage").classList.toggle("hidden", !(student && student.etapa));
 
+  // header
+  $("level").classList.toggle("hidden", !student);
+  if (student) {
+    const steps = $("level-steps"); steps.replaceChildren();
+    for (let i = 0; i < LEVELS.length; i++) steps.append(el("i", {class: i <= Math.max(0, student.level) ? "on" : "", style: "--k:" + i}));
+    $("level").setAttribute("aria-label", "Nivell " + student.level);
+  }
+  const ladder = $("ladder"), stage = student && student.etapa ? student.etapa : 0;
+  ladder.replaceChildren();
+  ladder.classList.toggle("hidden", !stage);
+  for (const key of [1, 2, 3]) ladder.append(el("span", {class: key === stage ? "on" : "", "aria-current": key === stage ? "step" : "false"}, STAGES[key]));
+
+  // the problem
   const texts = $("p-texts"), options = $("p-options");
   texts.replaceChildren(); options.replaceChildren();
   const open = ["solving", "help"].includes(view.phase);
+  $("p-keys").classList.toggle("hidden", !open);
+  $("p-rungs").classList.toggle("hidden", !(problem && problem.helps > 0));
   if (problem) {
-    $("p-meta").textContent = (problem.external ? "Problema teu · " : "") +
-      "Nivell " + problem.level + " · " + problem.topic;
+    if (problem.id !== lastProblem) { lastProblem = problem.id; maxTries = 3; enter(); }
+    maxTries = Math.max(maxTries, problem.tries_left);
+    $("p-level").textContent = (problem.external ? "Problema teu · nivell " : "Problema de nivell ") + problem.level;
+    $("p-topic").textContent = "· " + problem.topic;
+    const rungs = $("p-rungs"); rungs.replaceChildren();
+    rungs.setAttribute("role", "img"); rungs.setAttribute("aria-label", "Pistes demanades: " + problem.helps + " de " + HELP_RUNGS);
+    for (let i = 0; i < HELP_RUNGS; i++) rungs.append(el("b", {class: i < problem.helps ? "on" : ""}));
     const own = problem.origen || problem.origen_image;
     texts.className = "texts" + (problem.cat && own ? " both" : "");
     if (problem.cat) {
@@ -216,85 +818,157 @@ function render(view) {
       texts.append(box);
     }
     if (own) {
-      const box = el("div", {class: "text", dir: "auto"});
+      const box = el("div", {class: "text" + (problem.cat ? " second" : ""), dir: "auto"});
+      if (ISO1[problem.origen_lang]) box.setAttribute("lang", ISO1[problem.origen_lang]);
       box.append(el("small", {}, LANG_NAMES[problem.origen_lang] || problem.origen_lang));
-      if (problem.origen_image) box.append(el("img", {src: "/img/" + problem.origen_image, alt: ""}));
+      if (problem.origen_image) box.append(el("img", {src: "/img/" + problem.origen_image, decoding: "async",
+        alt: "Enunciat original en " + (LANG_NAMES[problem.origen_lang] || problem.origen_lang)}));
       else box.append(document.createTextNode(problem.origen));
       texts.append(box);
     }
     for (const letter of "ABCDE") {
       if (!(letter in problem.options)) continue;
-      const button = el("button", {class: "option"});
-      button.append(el("b", {}, letter + ")"), el("span", {}, problem.options[letter]));
-      if (problem.wrong.includes(letter)) button.classList.add("wrong");
-      if (problem.label === letter) button.classList.add("right");
-      // An outside problem can't be answered until the harness has worked out its answer
-      button.disabled = !open || view.busy || problem.wrong.includes(letter);
+      const button = el("button", {class: "opt", type: "button", "data-letter": letter});
+      button.style.setProperty("--i", options.children.length + 1);
+      button.append(el("span", {class: "bub"}, letter), el("span", {class: "t"}, problem.options[letter]));
+      const wrong = problem.wrong.includes(letter), right = problem.label === letter;
+      if (wrong) button.classList.add("wrong");
+      if (right) button.classList.add("right");
+      button.disabled = !open || view.busy || wrong;     // an outside problem waits for the harness's answer
+      if (wrong) button.setAttribute("aria-label", letter + ": " + problem.options[letter] + " (equivocada)");
+      if (right) button.setAttribute("aria-label", letter + ": " + problem.options[letter] + " (correcta)");
       button.onclick = () => act("/api/answer", {letter});
       options.append(button);
     }
   } else if (view.outside) {
-    $("p-meta").textContent = "Problema teu · " + view.outside.topic;
+    $("p-level").textContent = "Problema teu";
+    $("p-topic").textContent = "· " + view.outside.topic;
     texts.className = "texts";
     texts.append(el("div", {class: "text"}, view.outside.text));
     for (const letter in view.outside.options) {
-      const row = el("div", {class: "option"});
-      row.append(el("b", {}, letter + ")"), el("span", {}, view.outside.options[letter]));
+      const row = el("div", {class: "opt static"});
+      row.append(el("span", {class: "bub"}, letter), el("span", {class: "t"}, view.outside.options[letter]));
       options.append(row);
     }
   } else {
-    $("p-meta").textContent = "";
+    $("p-level").textContent = view.phase === "ready" ? "Tot a punt" : "";
+    $("p-topic").textContent = "";
   }
-  // Always visible while working on an outside problem (CLAUDE.md)
+
+  // always visible while working on an outside problem (CLAUDE.md)
   $("p-warning").textContent = problem && problem.warning ? problem.warning : "";
   $("p-warning").classList.toggle("hidden", !(problem && problem.warning));
+
+  // short answers (numbers, single words) sit side by side instead of one per line
+  const answers = [...options.querySelectorAll(".t")].map(t => t.textContent.trim());
+  options.classList.toggle("short", answers.length > 0 && answers.every(t => t.length <= 14));
+
   $("btn-help").classList.toggle("hidden", !open);
-  $("btn-help").textContent = problem && problem.helps >= 3 ? "Ensenya'm la solució" :
-    problem && problem.helps > 0 ? "Una altra pista" : "Demana una pista";
+  labelled($("btn-help"), "lamp", problem && problem.helps >= 3 ? "Ensenya'm la solució" :
+    problem && problem.helps > 0 ? "Una altra pista" : "Demana una pista");
   $("btn-reveal").classList.toggle("hidden", !(problem && problem.can_reveal));
   const canNext = ["ready", "done"].includes(view.phase) && !view.busy;
   $("btn-next").classList.toggle("hidden", !canNext);
-  $("btn-next").textContent = view.phase === "ready" ? "Primer problema" : "Problema següent";
-  // Teaching the Kangaroo is optional: the problem is already solved
+  labelled($("btn-next"), "next", view.phase === "ready" ? "Primer problema" : "Problema següent", true);
+  // teaching the Kangaroo is optional: the problem is already solved
   $("btn-leave").classList.toggle("hidden", !(view.phase === "teach" && !view.busy));
   if (view.hint_max_chars && $("in-hint").maxLength !== view.hint_max_chars) {
     $("in-hint").maxLength = view.hint_max_chars;
     countHint();
   }
 
+  // the conversation
   const chat = $("chat");
   chat.replaceChildren();
-  for (const message of view.messages) {
-    const bubble = el("div", {class: "msg " + message.who + " " + (message.kind || "")}, message.text);
+  view.messages.forEach((message, i) => {
+    const bubble = el("div", {class: "msg " + message.who + " " + (message.kind || "") + (i >= seenMessages ? " new" : "")}, message.text);
     if (message.origen) {   // the same hint in the student's language (language bridge)
-      bubble.append(el("br"));
       bubble.append(el("small", {lang: message.origen.lang},
                        (LANG_NAMES[message.origen.lang] || message.origen.lang) + ": " + message.origen.text));
     }
+    const kind = problem && marks.get(problem.id + ":" + i);
+    if (kind) bubble.append(resultGlyph(kind));
     chat.append(bubble);
+  });
+  // screen readers hear only the new messages, not the whole log again
+  const fresh = view.messages.slice(seenMessages).map(m => m.text);
+  if (fresh.length) $("announce").textContent = fresh.join(" ");
+  else if (view.busy && !wasBusy) $("announce").textContent = "El Cangur hi està pensant…";
+  wasBusy = !!view.busy;
+  seenMessages = view.messages.length;
+  if (view.busy) {
+    const wait = el("div", {class: "thinking"}, "El Cangur hi està pensant");
+    wait.append(el("i"), el("i"), el("i"));
+    chat.append(wait);
   }
-  if (view.busy) chat.append(el("div", {class: "msg cangur thinking"}, "El Cangur hi està pensant…"));
-  chat.scrollTop = chat.scrollHeight;
+  $("talk").classList.toggle("hidden", !view.messages.length && !view.busy && view.phase !== "teach" && view.phase !== "external");
 
+  // the hint form
   const teaching = view.phase === "teach" && !view.busy && problem && problem.tries_left > 0;
-  $("hint-form").classList.toggle("hidden", !teaching);
+  const form = $("hint-form"), wasHidden = form.classList.contains("hidden");
+  form.classList.toggle("hidden", !teaching);
+  if (teaching) {
+    const stubs = $("stubs"); stubs.replaceChildren();
+    for (let i = 0; i < maxTries; i++) stubs.append(el("i", {class: i < problem.tries_left ? "on" : ""}));
+    stubs.setAttribute("role", "img");
+    stubs.setAttribute("aria-label", "Intents que et queden: " + problem.tries_left);
+    // moving focus pops the keyboard open on a phone, so only do it with a mouse or keyboard
+    if (wasHidden && matchMedia("(pointer: fine)").matches) setTimeout(() => $("in-hint").focus({preventScroll: true}), 50);
+  }
   $("outside").classList.toggle("hidden", view.phase !== "external");
   if (view.outside) {
     const similar = $("similar");
     similar.replaceChildren();
     view.outside.similar.slice(0, 3).forEach((item, i) => {
-      const button = el("button", {}, "Practica un de semblant (" + (i + 1) + ")");
+      const button = el("button", {class: "btn", type: "button"}, "Practica un de semblant (" + (i + 1) + ")");
       button.onclick = () => act("/api/practice", {id: item.id});
       similar.append(button);
     });
   }
-  $("bar-fill").style.width = problem && problem.bar !== null ? Math.round(100 * problem.bar) + "%" : "0";
 
+  updateRoo(view);
+  // scroll the chat to its end only now: the hint box may have just opened and taken some of its height
+  const toEnd = () => { chat.scrollTop = chat.scrollHeight; };
+  toEnd(); setTimeout(toEnd, 30);
+  // on a phone the page scrolls: bring the hint box into view when it opens
+  if (teaching && wasHidden) setTimeout(() => form.scrollIntoView({block: "nearest", behavior: reduced ? "auto" : "smooth"}), 30);
+  // the buttons were rebuilt: if the keyboard focus was on one, give it to the next useful place
+  if (hadFocusInProblem && document.activeElement === document.body) {
+    const next = !$("btn-next").classList.contains("hidden") ? $("btn-next")
+      : teaching ? $("in-hint") : $("problem");
+    next.focus({preventScroll: true});
+  }
   clearTimeout(timer);
   if (view.busy) timer = setTimeout(refresh, 1000);
 }
-async function refresh() { render(await call("/api/state")); }
+async function refresh() {
+  try { render(await call("/api/state")); offline(false); }
+  catch (error) { offline(true); timer = setTimeout(refresh, 2000); }
+}
 
+/* a spark runs from the Send button to the Kangaroo: the hint is what moves it */
+function spark() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const from = $("btn-hint").getBoundingClientRect(), to = $("actor").getBoundingClientRect();
+  const x = from.left + from.width / 2, y = from.top + from.height / 2;
+  const dot = el("i", {class: "spark"});
+  dot.style.left = x - 5 + "px"; dot.style.top = y - 5 + "px";
+  document.body.append(dot);
+  dot.animate([{transform: "translate(0,0) scale(1)", opacity: 1},
+    {transform: `translate(${to.left + to.width / 2 - x}px, ${to.top + to.height * .35 - y}px) scale(.5)`, opacity: .9}],
+    {duration: 650, easing: "cubic-bezier(.3,.7,.2,1)"}).onfinish = () => dot.remove();
+}
+
+/* hint counter */
+function countHint() {
+  const box = $("in-hint"), n = box.value.length, max = box.maxLength;
+  $("hint-count").textContent = n + "/" + max;
+  const full = n >= max, was = $("hint-count").classList.contains("full");
+  $("hint-count").classList.toggle("full", full);
+  if (full && !was) $("announce").textContent = "Has arribat al límit de " + max + " caràcters.";
+}
+
+/* LED mirror */
 async function led() {
   try {
     const view = await call("/api/led"), box = $("led");
@@ -303,7 +977,7 @@ async function led() {
       box.replaceChildren();
       for (const row of view.frame) for (const value of row) {
         const dot = el("span");
-        if (value) dot.style.background = "rgba(255,70,50," + (0.25 + 0.75 * value / 7) + ")";
+        if (value) dot.style.background = "rgba(255,84,48," + (0.3 + 0.7 * value / 7) + ")";
         box.append(dot);
       }
     }
@@ -311,59 +985,95 @@ async function led() {
   setTimeout(led, 700);
 }
 
+/* teacher drawer */
 async function teacher() {
-  const data = await call("/api/teacher"), body = $("teacher-body");
+  const body = $("teacher-body");
+  body.replaceChildren(el("p", {class: "loading"}, "Carregant les dades…"));
+  let data;
+  try { data = await call("/api/teacher"); }
+  catch (error) { body.replaceChildren(el("p", {}, "No s'ha pogut carregar la vista del docent. Tanca-la i torna-la a obrir.")); return; }
   body.replaceChildren();
-  body.append(el("p", {}, "Problemes fets: " + data.attempts +
-    (data.external_attempts ? " (i " + data.external_attempts + " d'externs, que no compten per al nivell)" : "")));
+  const stat = el("div", {class: "stat"}); stat.append(el("b", {}, String(data.attempts)), el("span", {}, "problemes fets"));
+  if (data.external_attempts) stat.append(el("span", {class: "loading"}, "(i " + data.external_attempts + " d'externs, que no compten per al nivell)"));
+  body.append(stat);
   if (data.by_topic.length) {
-    const table = el("table"), head = el("tr");
-    head.append(el("th", {}, "Tema"), el("th", {class: "n"}, "Encerts"));
-    table.append(head);
+    body.append(el("h4", {class: "lab"}, "Encerts per tema"));
     for (const row of data.by_topic) {
-      const tr = el("tr");
-      tr.append(el("td", {}, row.topic), el("td", {class: "n"}, row.correct + " de " + row.n));
-      table.append(tr);
+      const line = el("div", {class: "trow"});
+      line.append(el("span", {}, row.topic));
+      const dots = el("span", {class: "dots", role: "img", "aria-label": row.correct + " encerts de " + row.n});
+      for (let i = 0; i < row.n; i++) dots.append(el("i", {class: i < row.correct ? "on" : ""}));
+      line.append(dots);
+      body.append(line);
     }
-    body.append(table);
   }
   if (data.gap) {
-    const gap = data.gap;
-    body.append(el("p", {}, gap.ready ?
-      "Llengua o matemàtiques? En la seva llengua rendeix a " + gap.elo_origen + " punts, en català a " +
-      gap.elo_cat + " (diferència: " + gap.gap + "). Amb pocs problemes, aquesta xifra és orientativa." :
-      "Diferència entre llengües: encara no es pot dir. Calen " + gap.needed +
-      " problemes per llengua (fets: " + gap.n_origen + " en la seva llengua, " + gap.n_cat + " en català)."));
+    const gap = data.gap, box = el("div", {class: "gapbox"});
+    box.append(el("h4", {style: "margin:0;font-size:inherit"}, "Llengua o matemàtiques?"));
+    if (gap.ready) {
+      const scale = v => Math.max(6, Math.min(100, (v - 700) / 8));
+      box.append(el("p", {style: "margin:8px 0 2px"}, "En la seva llengua: " + gap.elo_origen + " punts"));
+      const a = el("div", {class: "ebar o"}); a.append(el("i", {style: "width:" + scale(gap.elo_origen) + "%"})); box.append(a);
+      box.append(el("p", {style: "margin:0 0 2px"}, "En català: " + gap.elo_cat + " punts"));
+      const b = el("div", {class: "ebar"}); b.append(el("i", {style: "width:" + scale(gap.elo_cat) + "%"})); box.append(b);
+      box.append(el("span", {}, "Diferència: " + gap.gap + ". Amb pocs problemes, aquesta xifra és orientativa."));
+    } else {
+      box.append(el("p", {style: "margin:6px 0 0"}, "Encara no es pot dir. Calen " + gap.needed + " problemes per llengua (fets: " +
+        gap.n_origen + " en la seva llengua, " + gap.n_cat + " en català)."));
+    }
+    body.append(box);
   }
-  body.append(el("p", {}, "Pistes escrites per l'alumne: " + data.hints.length));
+  body.append(el("h4", {class: "lab"}, "Pistes escrites per l'alumne: " + data.hints.length));
   for (const hint of data.hints.slice(-5))
-    body.append(el("div", {class: "msg sistema"}, "«" + hint.text + "»" + (hint.convinced ? " ✓" : "")));
+    body.append(el("div", {class: "hintnote"}, "«" + hint.text + "»" + (hint.convinced ? " ✓" : "")));
+}
+function drawer(open) {
+  $("teacher").classList.toggle("on", open); $("scrim").classList.toggle("on", open);
+  $("teacher").setAttribute("aria-hidden", String(!open));
+  document.querySelector("header").inert = open; $("app").inert = open; $("net").inert = open; document.querySelector(".skip").inert = open;     // keep focus inside the panel
+  $("btn-teacher").setAttribute("aria-expanded", String(open));
+  if (open) { teacher(); $("btn-close").focus(); } else $("btn-teacher").focus();
 }
 
-$("btn-start").onclick = () => act("/api/start", {name: $("in-name").value,
-  level: Number($("in-level").value), lang: $("in-lang").value});
+/* wiring */
+$("start-form").onsubmit = async event => { event.preventDefault();
+  const button = $("btn-start");
+  if (inflight) return;
+  button.textContent = "Preparant el primer problema…"; button.setAttribute("aria-busy", "true");
+  await act("/api/start", {name: $("in-name").value, level: chosenLevel, lang: $("in-lang").value});
+  button.textContent = "Comencem"; button.removeAttribute("aria-busy"); };
 $("btn-next").onclick = () => act("/api/next");
 $("btn-leave").onclick = () => { $("in-hint").value = ""; countHint(); act("/api/leave-teaching"); };
 $("btn-help").onclick = () => act("/api/help");
 $("btn-reveal").onclick = () => act("/api/reveal");
 $("btn-back").onclick = () => act("/api/next");
+$("btn-retry").onclick = () => refresh();
+$("in-ext").oninput = () => { $("btn-ext").disabled = !$("in-ext").value.trim(); };
 $("btn-ext").onclick = () => { const text = $("in-ext").value.trim();
-  if (text) { act("/api/external", {text}); $("in-ext").value = ""; } };
+  if (text) { act("/api/external", {text}); $("in-ext").value = ""; $("btn-ext").disabled = true;
+    document.querySelector("details.own").open = false; } };
 $("hint-form").onsubmit = event => { event.preventDefault();
   const text = $("in-hint").value.trim();
-  if (text) { act("/api/hint", {text}); $("in-hint").value = ""; countHint(); } };
-function countHint() {
-  const box = $("in-hint"), n = box.value.length, max = box.maxLength;
-  $("hint-count").textContent = n + "/" + max;
-  $("hint-count").classList.toggle("full", n >= max);
-}
+  if (text) { spark(); pending = {text, sawBusy: false}; if (state && state.problem) hinted.add(state.problem.id); act("/api/hint", {text}); $("in-hint").value = ""; countHint(); } };
 $("in-hint").oninput = countHint;
 $("in-hint").onkeydown = event => { if (event.key === "Enter" && !event.shiftKey) {
   event.preventDefault(); $("hint-form").requestSubmit(); } };
-$("btn-teacher").onclick = () => { const hidden = $("teacher").classList.toggle("hidden");
-  if (!hidden) teacher(); };
+$("btn-teacher").onclick = () => drawer(!$("teacher").classList.contains("on"));
+$("btn-close").onclick = () => drawer(false);
+$("scrim").onclick = () => drawer(false);
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && $("teacher").classList.contains("on")) return drawer(false);
+  const tag = (event.target.tagName || "").toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select" || event.ctrlKey || event.metaKey || event.altKey) return;
+  if (!$("problem").contains(event.target)) return;     // single-key shortcuts only while the focus is on the problem (WCAG 2.1.4)
+  const letter = event.key.toUpperCase();
+  if (state && ["solving", "help"].includes(state.phase) && state.problem && letter.length === 1 && "ABCDE".includes(letter)) {
+    const button = document.querySelector('.opt[data-letter="' + letter + '"]');
+    if (button && !button.disabled) button.click();
+  }
+});
 
-refresh(); led();
+setMood("idle"); refresh(); led();
 </script>
 </body>
 </html>
