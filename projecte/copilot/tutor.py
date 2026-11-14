@@ -32,8 +32,9 @@ PROMOTE_AFTER = 4     # right answers in a row to move to the next language stag
 # third, and even at 30 the middle half of students spans some 130 points.
 GAP_MIN_ATTEMPTS = 30
 DUPLICATE = 0.97      # similarity above which an outside problem is taken as one of the bank
-DISCLAIMER = ("Si introdueixes un problema extern no podem confirmar al 100 % la resposta. "
-              "Consulta-ho a fonts oficials o amb el teu professor!")
+# Always on screen while a student works on a problem from outside the bank (CLAUDE.md)
+EXTERNAL_WARNING = ("No podem assegurar les respostes per a problemes externs. "
+                    "Confirma la solució en fonts oficials o amb el teu professor.")
 
 
 def kangaroo(probs, label):
@@ -57,9 +58,10 @@ def bar_value(margin):
 
 class Tutor:
     def __init__(self, store, ask=letter_probs, index=None, images_dir=None, background=True,
-                 embedder=embed.embed):
+                 embedder=embed.embed, solver=solve):
         self.store = store
         self.ask = ask                    # letter_probs, or a fake one in the tests
+        self.solver = solver              # the harness (pipeline.solve), for outside problems
         self.embedder = embedder          # embeds a student's hint; None switches it off
         self.index = index                # copilot.rag.Index, to place outside problems
         self.images_dir = images_dir or os.path.join(ROOT, "data", "images")
@@ -219,7 +221,7 @@ class Tutor:
                 "started": time.time(), "answered": False, "correct": None, "revealed": False,
                 "helps": 0, "solution_shown": False, "hint_n": None, "wrong": [],
                 "ref": None, "ref_done": False, "teach_wait": False, "tries": 0, "bar": None,
-                "taught": False, "solved": False,
+                "taught": False, "solved": False, "external": False,
             }
             precomputed = bool(row.get("k_probs"))
             if precomputed:  # measured ahead of time (prep/kangaroo_baseline.py): answer at once
@@ -266,9 +268,19 @@ class Tutor:
             return self.view()
 
     def _record_first(self, letter, correct):
-        """The first answer is the one that counts for the ratings."""
+        """The first answer is the one that counts for the ratings.
+
+        An outside problem is stored apart (external=1) and moves nothing: its answer comes
+        from the harness, which can be wrong, and it has no rating to measure against.
+        """
         current, student = self.current, self.student
         current["answered"], current["correct"] = True, correct
+        if current["external"]:
+            self.store.add_attempt(1, current["id"], "cat", current["shown"], letter, correct,
+                                   False, current["helps"],
+                                   round(time.time() - current["started"], 1), external=True)
+            self.failed_topic = None if correct else current["row"]["topic"]
+            return
         own = current["counts_for"] == "origen" or current["revealed"]
         key = "elo_origen" if own else "elo_cat"
         seen = sum(a["lang"] == ("origen" if own else "cat") for a in self.store.attempts())
@@ -284,7 +296,8 @@ class Tutor:
         with self.lock:
             current = self.current
             letter = (letter or "").strip().upper()[:1]
-            if not current or self.phase not in ("solving", "help") or letter not in tuple(LETTERS):
+            if not current or self.phase not in ("solving", "help") or letter not in tuple(LETTERS) \
+                    or current["label"] is None:   # an outside problem still being solved
                 return self.view()
             correct = letter == current["label"]
             self._say("alumne", f"Jo dic la {letter}.")
@@ -294,8 +307,9 @@ class Tutor:
                 current["wrong"].append(letter)
                 self.phase = "help"
                 self._show(led.cross())
-                self._say("sistema", "No és aquesta. Pots demanar una pista i tornar-ho a provar.",
-                          "malament")
+                self._say("sistema", "No coincideix amb la resposta que hem calculat. Pots demanar "
+                                     "una pista i tornar-ho a provar." if current["external"] else
+                          "No és aquesta. Pots demanar una pista i tornar-ho a provar.", "malament")
                 return self.view()
             current["solved"] = True
             self._show(led.tick())
@@ -340,12 +354,19 @@ class Tutor:
             self._say("alumne", text)
             statements = [current["model"]["text"], (current["cat"] or {}).get("text"),
                           (current["origen"] or {}).get("text")]
-            reason = leak.check(text, current["label"], current["options"], statements)
-            if not reason and current["model"]["options"] != current["options"]:
-                reason = leak.check(text, current["label"], current["model"]["options"], statements)
+            if current["external"]:
+                # The harness's answer may be wrong: the hint may point at no option at all
+                reason = leak.check_strict(text, current["options"], statements)
+            else:
+                reason = leak.check(text, current["label"], current["options"], statements)
+                if not reason and current["model"]["options"] != current["options"]:
+                    reason = leak.check(text, current["label"], current["model"]["options"],
+                                        statements)
             if reason:
-                # Kept as data (how often students give the answer away), never shown to anyone
-                self.store.add_hint(current["id"], 1, text, None, False, rejected=reason)
+                # Kept as data (how often students give the answer away), never shown to anyone.
+                # Not for outside problems: hints are stored per bank problem only.
+                if not current["external"]:
+                    self.store.add_hint(current["id"], 1, text, None, False, rejected=reason)
                 self._say("sistema", leak.MESSAGES[reason], "fuita")
                 return self.view()
             current["tries"] += 1
@@ -362,7 +383,8 @@ class Tutor:
         except Exception:
             state = None
         # Only the new hint is embedded; None (no server) stores it without the signals.
-        signals = None if state is None else hintsim.assess(
+        # An outside problem's hints aren't stored: no one else will see that problem.
+        signals = None if state is None or current["external"] else hintsim.assess(
             self.store, current["id"], current["row"]["topic"], text, self.embedder)
         with self.lock:
             if self.current is not current:
@@ -375,7 +397,9 @@ class Tutor:
             delta = state["margin"] - current["ref"]["margin"]
             tau = self._tau()
             convinced = delta > tau and state["margin"] > 0
-            if signals and signals["duplicate_of"]:
+            if current["external"]:
+                pass
+            elif signals and signals["duplicate_of"]:
                 self.store.hint_duplicate(signals["duplicate_of"], convinced)
             else:
                 self.store.add_hint(current["id"], 1, text, delta, convinced,
@@ -386,8 +410,10 @@ class Tutor:
             if convinced:
                 current["taught"] = True
                 self.phase = "done"
+                thanks = ("Gràcies!" if current["external"] else
+                          "Gràcies! La teva pista ajudarà altres companys.")
                 self._say("cangur", f"Aaah, ara ho veig! Llavors és la {current['label']}. "
-                                    "Gràcies! La teva pista ajudarà altres companys.", "be")
+                                    f"{thanks}", "be")
             elif current["tries"] >= MAX_TRIES:
                 self.phase = "done"
                 self._say("cangur", "Avui estic espès… Deixem-ho aquí. Gràcies per provar-ho!")
@@ -439,8 +465,11 @@ class Tutor:
                 label = current["label"]
                 self.phase = "done"
                 self._show(led.text(label))
-                self._say("sistema", f"La resposta és la {label}) "
+                lead = "Segons els nostres càlculs, la resposta" if current["external"] else "La resposta"
+                self._say("sistema", f"{lead} és la {label}) "
                                      f"{current['options'].get(label, '')}.", "solucio")
+                if current["external"]:
+                    self._say("sistema", EXTERNAL_WARNING, "avis")
             return self.view()
 
     def _neighbour_hint(self, current):
@@ -452,7 +481,10 @@ class Tutor:
         statements = [current["model"]["text"], (current["cat"] or {}).get("text"),
                       (current["origen"] or {}).get("text")]
         for options in (current["options"], current["model"]["options"]):
-            if leak.check(found["text"], current["label"], options, statements):
+            if current["external"]:
+                if leak.check_strict(found["text"], options, statements):
+                    return None
+            elif leak.check(found["text"], current["label"], options, statements):
                 return None
         return found
 
@@ -462,7 +494,8 @@ class Tutor:
         for other_id in current["row"]["neighbours"]:
             other = self.store.problem(other_id)
             if other and other["id"] != current["id"]:
-                if other["elo"] < current["row"]["elo"]:
+                # An outside problem has no rating: its closest neighbour will do
+                if current["row"]["elo"] is not None and other["elo"] < current["row"]["elo"]:
                     best = other
                     break
                 best = best or other
@@ -478,19 +511,29 @@ class Tutor:
     # ------------------------------------------------------------------ problems from outside
 
     def external(self, text, options=None):
-        """A problem that isn't in the bank: place it, and offer similar ones to practise.
+        """A problem that isn't in the bank: the same path as a bank problem.
 
-        Nobody knows its answer, so the tutor doesn't check it or teach with it.
+        Nobody knows its answer for sure, so the harness (pipeline.solve, the same code as
+        predict.py) works it out in the background, and that answer plays the label: the
+        student's answer is checked against it, the help ladder and the Kangaroo use it.
+        The warning stays on screen the whole time. The attempt is stored apart
+        (external=1) and moves no rating (docs/DECISIONS.md).
+
+        Without five readable options there's nothing to check: the tutor only places the
+        problem (topic, level, similar problems to practise). A near copy of a bank problem
+        is that problem.
         """
         with self.lock:
+            if not self.student:
+                return self.view()
             problem = {"id": "extern", "text": (text or "").strip(), "options": options or {}}
             if not problem["text"]:
                 return self.view()
             question, found = split_problem(problem)
             problem = {"id": "extern", "text": question, "options": found}
-            self.current, self.phase, self.busy = None, "external", False
+            self.current, self.phase, self.busy = None, "external", True
             self.outside = {"problem": problem, "topic": topics.classify(question),
-                            "level": None, "similar": [], "guess": None}
+                            "level": None, "similar": []}
             self.messages = []
             self._say("alumne", text.strip())
             outside = self.outside
@@ -503,6 +546,7 @@ class Tutor:
         with self.lock:
             if self.outside is not outside:
                 return self.view()
+            self.busy = False
             for score, other in hits:
                 row = self.store.problem(other["id"])
                 if row and row["eligible"] and all(s["id"] != row["id"] for s in outside["similar"]):
@@ -519,43 +563,74 @@ class Tutor:
                 if weights and sum(w for w, _ in weights) > 0:
                     outside["level"] = round(sum(w * level for w, level in weights)
                                              / sum(w for w, _ in weights), 1)
-                level = "" if outside["level"] is None else f" (nivell aproximat: {outside['level']})"
-                self._say_method(outside["topic"], 0,
-                                 "Aquest problema no és al meu banc, o sigui que no en sé la "
-                                 f"resposta segura. Sembla de «{topics.name(outside['topic'])}»"
-                                 f"{level}. ", who="cangur", kind="", reveal=False)
-                if outside["similar"]:
-                    self._say("sistema", "Aquí tens problemes semblants del banc per practicar.")
-                self._show(led.text("?"))
+                if all(letter in found for letter in LETTERS):
+                    current = self._open_external(outside)
+                else:
+                    current = None
+                    self._say_method(outside["topic"], 0,
+                                     "No he pogut llegir les cinc opcions, A) … E), o sigui que no "
+                                     "et puc corregir la resposta. Sembla un problema de "
+                                     f"«{topics.name(outside['topic'])}». ", who="cangur", kind="",
+                                     reveal=False)
+                    if outside["similar"]:
+                        self._say("sistema", "Aquí tens problemes semblants del banc per practicar.")
+                    self._show(led.text("?"))
         if duplicate:
             return self.next(duplicate)
+        if current:
+            self._spawn(self._solve_external, current)
         return self.view()
 
-    def external_guess(self):
-        """Only when the student asks: the Kangaroo's guess, with the warning."""
-        with self.lock:
-            outside = self.outside
-            if not outside or self.phase != "external" or self.busy or outside["guess"]:
-                return self.view()
-            self.busy = True
-        self._spawn(self._guess, outside)
-        return self.view()
+    def _open_external(self, outside):
+        """Make an outside problem the current one, with no label until the harness answers."""
+        problem = outside["problem"]
+        problem_id = f"extern-{int(time.time() * 1000)}"
+        row = {"id": problem_id, "level": outside["level"], "topic": outside["topic"],
+               "elo": None, "label": None, "eligible": 1, "k_probs": None,
+               "neighbours": [s["id"] for s in outside["similar"]]}
+        text = {"text": problem["text"], "options": problem["options"], "lang": LANG}
+        self.current = {
+            "id": problem_id, "row": row, "label": None, "options": problem["options"],
+            "model": {"id": problem_id, "text": problem["text"], "options": problem["options"],
+                      "level": outside["level"]},
+            "cat": text, "origen": None, "shown": "cat", "counts_for": "cat",
+            "started": time.time(), "answered": False, "correct": None, "revealed": False,
+            "helps": 0, "solution_shown": False, "hint_n": None, "wrong": [],
+            "ref": None, "ref_done": False, "teach_wait": False, "tries": 0, "bar": None,
+            "taught": False, "solved": False, "external": True, "solve_failed": False,
+        }
+        self.phase, self.outside, self.busy = "solving", None, True
+        level = "" if outside["level"] is None else f" (nivell aproximat: {outside['level']})"
+        self._say("cangur", "Aquest problema no és al meu banc. Sembla de "
+                            f"«{topics.name(outside['topic'])}»{level}. Calculo la resposta "
+                            "mentre el llegeixes, i després el fem com els altres.")
+        self._say("sistema", EXTERNAL_WARNING, "avis")
+        self._show(led.text("?"))
+        return self.current
 
-    def _guess(self, outside):
-        with self.model_lock:
-            result = solve(outside["problem"])
+    def _solve_external(self, current):
+        """The harness's answer becomes the label. Then the Kangaroo reads it, as for any problem."""
+        label = None
+        try:
+            with self.model_lock:
+                result = self.solver(current["model"])
+            # A fallback letter (model down, timeout) is no answer: don't grade against it
+            if result["status"] == "ok" and result.get("calls"):
+                label = result["answer"]
+        except Exception:
+            label = None
         with self.lock:
-            if self.outside is not outside:
+            if self.current is not current:
                 return
             self.busy = False
-            outside["guess"] = result["answer"]
-            sure = ""
-            if result.get("probs") and result.get("letters_found"):
-                sure = f" (n'estic un {round(100 * result['probs'][result['answer']])} % segur)"
-            self._say("cangur", f"Jo diria que és la {result['answer']}{sure}, "
-                                "però ja saps que m'equivoco sovint.")
-            self._say("sistema", DISCLAIMER, "avis")
-            self._show(led.text(result["answer"]))
+            if label is None:
+                current["solve_failed"] = True
+                self.phase = "done"
+                self._say("sistema", "No he pogut calcular la resposta d'aquest problema (el model "
+                                     "no respon). Prova'n un altre o tornem als problemes del banc.")
+                return
+            current["label"] = label
+        self._reference(current)
 
     def leave_teaching(self):
         """The student solved the problem and doesn't want to teach the Kangaroo (any more).
@@ -568,7 +643,8 @@ class Tutor:
             current = self.current
             if self.phase != "teach" or self.busy or not current:
                 return self.view()
-            self.store.add_teach_exit(current["id"], 1, current["tries"])
+            if not current["external"]:
+                self.store.add_teach_exit(current["id"], 1, current["tries"])
             return self.next()
 
     # ------------------------------------------------------------------ what the page shows
@@ -605,7 +681,10 @@ class Tutor:
                 own = current["shown"] in ("both", "origen") or current["revealed"]
                 solved = current["solved"] or current["solution_shown"]
                 view["problem"] = {
-                    "id": current["id"], "level": current["row"]["level"],
+                    "id": current["id"],
+                    "level": "?" if current["row"]["level"] is None else current["row"]["level"],
+                    "external": current["external"],
+                    "warning": EXTERNAL_WARNING if current["external"] else None,
                     "topic": topics.name(current["row"]["topic"]),
                     "shown": current["shown"], "options": current["options"],
                     "cat": current["cat"]["text"] if current["shown"] != "origen" else None,
@@ -625,7 +704,6 @@ class Tutor:
                 view["outside"] = {"topic": topics.name(self.outside["topic"]),
                                    "level": self.outside["level"],
                                    "similar": self.outside["similar"],
-                                   "guess": self.outside["guess"],
                                    "text": self.outside["problem"]["text"],
                                    "options": self.outside["problem"]["options"]}
             return view
@@ -639,7 +717,9 @@ class Tutor:
         with self.lock:
             student = self.student
             attempts = self.store.attempts()
-            summary = {"student": student, "attempts": len(attempts), "by_topic": [],
+            # Outside problems are counted apart: they're checked against the harness's answer
+            summary = {"student": student, "attempts": len(attempts),
+                       "external_attempts": len(self.store.attempts(external=True)), "by_topic": [],
                        "gap": None, "hints": self.store.hints(), "tau": self._tau()}
             groups = {}
             for attempt in attempts:

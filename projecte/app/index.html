@@ -114,6 +114,7 @@
 
   <section class="card hidden" id="problem">
     <div class="meta" id="p-meta"></div>
+    <div class="msg avis hidden" id="p-warning" role="note"></div>
     <div class="texts" id="p-texts"></div>
     <div class="options" id="p-options"></div>
     <div class="row">
@@ -142,8 +143,7 @@
       </form>
       <div id="outside" class="hidden">
         <div class="row" id="similar"></div>
-        <div class="row"><button id="btn-guess">I tu, Cangur, què diries?</button>
-          <button id="btn-back" class="primary">Tornem als problemes</button></div>
+        <div class="row"><button id="btn-back" class="primary">Tornem als problemes</button></div>
       </div>
     </section>
     <section class="card" id="confidence">
@@ -205,7 +205,8 @@ function render(view) {
   texts.replaceChildren(); options.replaceChildren();
   const open = ["solving", "help"].includes(view.phase);
   if (problem) {
-    $("p-meta").textContent = "Nivell " + problem.level + " · " + problem.topic;
+    $("p-meta").textContent = (problem.external ? "Problema teu · " : "") +
+      "Nivell " + problem.level + " · " + problem.topic;
     const own = problem.origen || problem.origen_image;
     texts.className = "texts" + (problem.cat && own ? " both" : "");
     if (problem.cat) {
@@ -227,7 +228,8 @@ function render(view) {
       button.append(el("b", {}, letter + ")"), el("span", {}, problem.options[letter]));
       if (problem.wrong.includes(letter)) button.classList.add("wrong");
       if (problem.label === letter) button.classList.add("right");
-      button.disabled = !open || problem.wrong.includes(letter);
+      // An outside problem can't be answered until the harness has worked out its answer
+      button.disabled = !open || view.busy || problem.wrong.includes(letter);
       button.onclick = () => act("/api/answer", {letter});
       options.append(button);
     }
@@ -243,6 +245,9 @@ function render(view) {
   } else {
     $("p-meta").textContent = "";
   }
+  // Always visible while working on an outside problem (CLAUDE.md)
+  $("p-warning").textContent = problem && problem.warning ? problem.warning : "";
+  $("p-warning").classList.toggle("hidden", !(problem && problem.warning));
   $("btn-help").classList.toggle("hidden", !open);
   $("btn-help").textContent = problem && problem.helps >= 3 ? "Ensenya'm la solució" :
     problem && problem.helps > 0 ? "Una altra pista" : "Demana una pista";
@@ -282,7 +287,6 @@ function render(view) {
       button.onclick = () => act("/api/practice", {id: item.id});
       similar.append(button);
     });
-    $("btn-guess").disabled = view.busy || !!view.outside.guess;
   }
   $("bar-fill").style.width = problem && problem.bar !== null ? Math.round(100 * problem.bar) + "%" : "0";
 
@@ -310,7 +314,8 @@ async function led() {
 async function teacher() {
   const data = await call("/api/teacher"), body = $("teacher-body");
   body.replaceChildren();
-  body.append(el("p", {}, "Problemes fets: " + data.attempts));
+  body.append(el("p", {}, "Problemes fets: " + data.attempts +
+    (data.external_attempts ? " (i " + data.external_attempts + " d'externs, que no compten per al nivell)" : "")));
   if (data.by_topic.length) {
     const table = el("table"), head = el("tr");
     head.append(el("th", {}, "Tema"), el("th", {class: "n"}, "Encerts"));
@@ -341,7 +346,6 @@ $("btn-next").onclick = () => act("/api/next");
 $("btn-leave").onclick = () => { $("in-hint").value = ""; countHint(); act("/api/leave-teaching"); };
 $("btn-help").onclick = () => act("/api/help");
 $("btn-reveal").onclick = () => act("/api/reveal");
-$("btn-guess").onclick = () => act("/api/guess");
 $("btn-back").onclick = () => act("/api/next");
 $("btn-ext").onclick = () => { const text = $("in-ext").value.trim();
   if (text) { act("/api/external", {text}); $("in-ext").value = ""; } };
