@@ -546,6 +546,22 @@ class TutorFlow(WithServers):
         hint = self.store.hints()[0]
         self.assertEqual((hint["shown"], hint["solved_after"]), (1, 1))
 
+    def test_rejected_hint_is_kept_as_data_only(self):
+        self.tutor.start("Test", "", 1)
+        self.teachable()
+        current = self.tutor.current
+        calls = len(self.model.calls)
+        view = self.tutor.hint(f"És la {current['label']}")
+        self.assertEqual(view["messages"][-1]["kind"], "fuita")   # the student sees the same
+        self.assertEqual((len(self.model.calls), current["tries"]), (calls, 0))
+        hint = self.store.hints()[-1]
+        self.assertEqual((hint["rejected"], hint["delta"], hint["convinced"], hint["vec"]),
+                         ("lletra", None, 0, None))
+        self.store.run("UPDATE hints SET convinced = 1, solved_after = 9 WHERE n = ?", (hint["n"],))
+        self.assertIsNone(self.store.best_hint(current["id"]))     # never shown to anyone
+        self.assertIsNone(self.store.best_neighbour_hint([current["id"]]))
+        self.assertEqual(self.store.hint_vectors(current["id"]), [])
+
     def test_duplicate_hint_is_not_stored_twice(self):
         import embed_refs
         embed_refs.run(self.store, fake_embedder)                  # the topics' method hints
@@ -1055,8 +1071,8 @@ class HintSource(unittest.TestCase):
         for _ in range(2):   # opening it twice must not fail on the second ALTER
             store = Store(self.path)
             hint = store.hints()[0]
-            self.assertEqual((hint["source"], hint["dups"], hint["relevance"], hint["vec"]),
-                             ("student", 0, None, None))
+            self.assertEqual((hint["source"], hint["dups"], hint["relevance"], hint["vec"],
+                              hint["rejected"]), ("student", 0, None, None, None))
             self.assertEqual(store.ref_vectors("method", "geometria"), [])
             store.close()
 
