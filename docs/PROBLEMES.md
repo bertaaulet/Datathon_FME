@@ -14,12 +14,13 @@ Cada problema porta què passa, la causa (comprovada o no), l'arreglo, de qui é
 | 2 | La caché no serveix per a les pistes | Alta | A i B | — | 🟡 A: decidit; B: pendent |
 | 3 | Les pistes es tallen a 200 caràcters sense avisar | Mitjana | Tutor | — | 🟨 fet a `irene/tutor-fixes`, provat a la placa |
 | 4 | El Cangur gairebé mai es convenç | Mitjana | B i tutor | Dades de B | ⬜ |
-| 5 | La matriu LED necessita el tutor a `0.0.0.0` i no arrenca sola | Mitjana | C | `tutor.db` real | 🟨 app per defecte configurada; falta el servei del tutor i el reinici |
+| 5 | La matriu LED necessita el tutor a `0.0.0.0` i no arrenca sola | Mitjana | C | `tutor.db` real | ✅ servei del tutor a `0.0.0.0` i app per defecte; provat amb un reinici |
 | 6 | `prepare_m3kang.py` falla a Windows i hi va lent | Baixa | B | — | 🟨 arreglo de Marc a `marc/agent-lots` |
-| 7 | Falten les mesures de temps i de RAM | Mitjana | C | `tutor.db` real | 🟨 provisionals fetes; cal repetir-les amb el banc real |
+| 7 | Falten les mesures de temps i de RAM | Mitjana | C | `tutor.db` real | ✅ fetes amb el banc real (falta la generació de pistes, que no existeix) |
 | 8 | El servei del tutor fallaria en bucle sense `tutor.db` | Baixa | C | — | 🟨 fet a `irene/tutor-fixes`, provat a la placa |
 | 9 | El tutor passa a l'anglès en silenci si falta el català | Mitjana | Tutor | — | 🟨 fet a `irene/tutor-fixes`, provat a la placa |
 | 10 | No es pot sortir de la fase "ensenyar el Cangur" | Mitjana | Tutor | — | 🟨 fet a `irene/tutor-fixes`, provat a la placa |
+| 11 | El tutor torna a preguntar al model encara que el Cangur estigui precalculat | Mitjana | Tutor | — | ⬜ proposta |
 
 ## Ordre de treball
 
@@ -90,7 +91,19 @@ Els problemes 3, 9 i 10 toquen els mateixos fitxers (`app/index.html` i `copilot
   - Totes les crides al model: 14 en total, mitjana 10,3 s, màxim 16,7 s; tokens llegits (`prompt_n`) 110 de mitjana, 139 de màxim. Com que la caché no serveix (problema 2), cada crida llegeix el problema sencer.
   - Els graons d'ajuda no fan servir el model: el graó 3 treu la pista del banc o una plantilla de mètode. La **generació de pistes amb el model encara no existeix**, i per això no s'ha pogut mesurar.
   - **RAM** amb els dos models, el tutor i l'app de la matriu: 2.687 MB disponibles en repòs, i com a mínim 2.674 MB durant les crides al model. Per procés: `llama-server` del model 1.060 MB, el d'embeddings 72 MB, el tutor 26 MB, el contenidor de la matriu 54 MB. Hi ha molt de marge.
-- **Depèn de:** el `tutor.db` real, per repetir-ho.
+- **Mesures definitives** (2026-11-14, a la placa, amb el `tutor.db` real: 601 problemes utilitzables i el Cangur precalculat; amb una còpia de la base, sense tocar la del tutor):
+
+  | Pas | n | Mitjana | Màxim |
+  |---|---|---|---|
+  | Problema nou: resposta de referència del Cangur (en segon pla) | 16 | 9,7 s | 15,6 s |
+  | Respondre A–E | 16 | 0,01 s | 0,01 s |
+  | Graons d'ajuda 1–4 (semblant, tema, pista, solució) | 8 de cada | 0,01 s | 0,01 s |
+  | El Cangur llegeix una pista de l'alumne | 8 | 10,7 s | 12,6 s |
+
+  - Totes les crides al model: 24 en total, mitjana 9,9 s, màxim 15,6 s; `prompt_n` 111 de mitjana, 172 de màxim.
+  - **RAM** amb els dos models, el tutor i l'app de la matriu: com a mínim 2.785 MB disponibles durant la prova.
+  - La generació de pistes amb el model continua sense existir al codi, i per tant no s'ha pogut mesurar.
+  - Problema nou que surt d'aquestes mesures: el 11.
 
 ## 8. El servei del tutor fallaria en bucle sense `tutor.db`
 
@@ -111,3 +124,12 @@ Els problemes 3, 9 i 10 toquen els mateixos fitxers (`app/index.html` i `copilot
 - **Decisió:** **no** es deixa saltar mai mentre es resol o es demana ajuda. Allà la sortida és veure la solució, i queda registrat. **Sí** es pot sortir mentre s'ensenya el Cangur, perquè el problema ja està resolt.
 - **Arreglo:** a la fase `teach`, un botó "Prou, següent problema" visible des del principi. Desar a `tutor.db` quantes pistes ha escrit l'alumne abans de sortir, per poder respondre al dashboard: "quants alumnes deixen el Cangur, i després de quants intents?".
 - **Com es comprova:** a la fase `teach` es pot passar al problema següent sense escriure cap pista, i l'abandonament queda desat.
+
+## 11. El tutor torna a preguntar al model encara que el Cangur estigui precalculat
+
+- **Què passa:** amb el `tutor.db` real, que ja porta la resposta del Cangur per a cada problema (`k_probs`, de `kangaroo_baseline.py`), cada problema nou continua fent una crida al model de ~10 s (màxim 15,6 s).
+- **Causa (comprovada al codi):** `next()` fa servir `k_probs` per a la referència, però després sempre llança `_reference()` (`copilot/tutor.py:231`), que torna a llegir el problema amb `NEUTRAL_HINT` "per omplir la caché del servidor". D1 (problema 2) va demostrar que aquesta caché no serveix per a les pistes, així que la crida no estalvia res.
+- **Per què importa:** mentre dura, ocupa el model (`model_lock`), i `ref_done` queda a fals. Si l'alumne encerta en menys de ~10 s, ha d'esperar abans de poder ensenyar el Cangur; a la demo es nota.
+- **Arreglo proposat:** si el problema té `k_probs`, no cridar `_reference()`, i posar `ref_done = True` de seguida. Només es crida el model quan no hi ha resposta precalculada. És un canvi petit a `next()`, amb una prova.
+- **Com es comprova:** amb el `tutor.db` real, un problema nou no fa cap crida al model, i la fase `teach` s'obre a l'instant.
+- **Pendent:** l'OK de qui porti el tutor, perquè canvia el comportament.
