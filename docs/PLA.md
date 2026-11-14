@@ -264,23 +264,25 @@ Aquesta és la llista completa, agrupada per àrees. Inclou tot el pla del proje
 
 **Placa i màquines**
 
-- [ ] Posada a punt de la placa: passos 0–8 de `SETUP.md`, amb les actualitzacions d'App Lab i els serveis `math-llm` i `math-embed`
-- [ ] Accés al repo des de la placa (token de GitHub o còpia dels fitxers)
-- [ ] `check_model.py` (D1)
-- [ ] Als portàtils: llama.cpp `2cbe0ec` i els mateixos GGUF. Comprovar que donen les mateixes lletres que la placa en 50 problemes
+- [x] Posada a punt de la placa: passos 0–8 de `SETUP.md`, amb les actualitzacions d'App Lab i els serveis `math-llm` i `math-embed`
+- [x] Accés al repo des de la placa (còpia dels fitxers, sense token)
+- [x] `check_model.py` (D1)
+- [x] Als portàtils: llama.cpp (binari `b12311`, vegeu `DECISIONS.md`) i els mateixos GGUF. Placa i portàtil: 47/50 lletres iguals; els números finals es mesuren a la placa
 - [ ] Serveis systemd perquè el tutor (`app/server.py`) i l'app de la matriu LED arrenquin amb la placa, pujats al repo
 - [ ] El tutor i la matriu LED funcionant a la placa: l'app arriba al tutor, i el tutor arriba als models
 - [ ] RAM amb tot engegat (`free -m`)
 
 **predict.py**
 
-- [ ] Excepcions al `.gitignore` per a `letter_bias.json` i `priors.json`, i la prova des d'un clon net
-- [ ] El nivell tret de l'`id` quan falta `level`, amb una prova
-- [ ] `eval.py`: guardar la màquina, `--debias batch`, i activar o desactivar cada etapa del harness des de la línia de comandes
+- [x] Excepcions al `.gitignore` per a `letter_bias.json`, `priors.json` i `ablations.csv`
+- [ ] La prova des d'un clon net
+- [x] El nivell tret de l'`id` quan falta `level`, amb una prova
+- [x] `eval.py`: guardar la màquina (`machine`), `--debias batch`, `--expression`, i les columnes `stage`, `shortened` i `expr*`
+- [x] Guardrails de `predict.py`: línies trencades, índex absent, problemes massa llargs escurçats, temps planificat abans de cada crida, `PREDICT_DEBIAS=batch`
 - [ ] `baseline-org` i `baseline`, i l'anàlisi d'errors del baseline per tipus de problema
 - [ ] Etapa 1: anàlisi de problemes gairebé idèntics entre train i validació, llindar, i validació sense germans
 - [ ] Etapa 2: solucionadors en Python per als tipus més freqüents
-- [ ] Etapa 3: expressió escrita pel model i calculada per Python
+- [ ] Etapa 3: expressió escrita pel model i calculada per Python (codi fet a `copilot/mathexpr.py`, desactivat per defecte; falta comprovar la gramàtica a la placa i mesurar-la)
 - [ ] Etapa 4: RAG amb les solucions de l'agent
 - [ ] Etapa 5: biaix, calibració per lot i rotacions
 - [ ] Etapa 6: millor OCR, i la imatge per als problemes sense opcions
@@ -376,14 +378,13 @@ Aquesta és la llista completa, agrupada per àrees. Inclou tot el pla del proje
 - [ ] El llindar de la decisió D4
 - [ ] En quin idioma va el README, i el nom de l'equip a la `LICENSE`
 
-**Per preguntar als organitzadors**
+**Supòsits sobre el test ocult** (14 nov: no podem fer preguntes als organitzadors; ens guiem per `SETUP.md` i les presentacions)
 
-- [ ] On s'executa el test ocult: a la nostra placa, amb els nostres fitxers de `data/`, o des d'un clon net del repo?
-- [ ] El test ocult porta les opcions en text? En quins idiomes? Porta el camp `level`, o ids amb el format `lvl-X_...`?
-- [ ] Es poden publicar xifres agregades com la lletra més freqüent per nivell, igual que `FALLBACK_ANSWER=D`?
-- [ ] Es poden preparar pistes al portàtil amb un model gran, si a la placa tot funciona sense xarxa?
-- [ ] Com i quan es lliura el dashboard Tukey, si ha de ser públic, i a quina hora s'ha de lliurar tot diumenge?
-- [ ] Es pot fer servir (i publicar) un model ajustat amb el train de M3Kang?
+- El jurat carrega el nostre repo i executa `predict.py`. Per tant, `predict.py` ha de funcionar només amb el que es pot pujar (codi, `priors.json`, `letter_bias.json`). Si falta un fitxer (`index.db`, `train.jsonl`), salta l'etapa, mai peta.
+- Format: el de `prepare_m3kang.py` (mateix OCR de les opcions, camp `level`, ids `lvl-X_ANY_N`).
+- Idiomes: de moment treballem amb `eng` i `cat`. La resta queda aparcada fins que tinguem més informació.
+- Xifres agregades: es pugen (decisió del 14 nov). Pistes amb un model gran fora de la placa: confirmat (Marc).
+- **Per decidir com a equip:** el lliurament del dashboard Tukey, i si fem servir (i publiquem) un model ajustat amb el train de M3Kang.
 
 ## Validació contra els requisits
 
