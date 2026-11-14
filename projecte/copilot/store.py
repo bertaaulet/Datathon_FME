@@ -289,3 +289,21 @@ class Store:
 
     def hints(self):
         return self.rows("SELECT * FROM hints ORDER BY n")
+
+    # --- leaving the Kangaroo ----------------------------------------------
+    # Its own table, created on first use, so older databases need no migration.
+
+    TEACH_EXITS = ("CREATE TABLE IF NOT EXISTS teach_exits (n INTEGER PRIMARY KEY AUTOINCREMENT, "
+                   "problem_id TEXT, student INTEGER, "
+                   "tries INTEGER, "  # hints the student sent before leaving the Kangaroo
+                   "ts REAL)")
+
+    def add_teach_exit(self, problem_id, student_id, tries):
+        """The student left the Kangaroo before it was convinced or the tries ran out."""
+        self.run(self.TEACH_EXITS)
+        self.run("INSERT INTO teach_exits (problem_id, student, tries, ts) VALUES (?, ?, ?, ?)",
+                 (problem_id, student_id, tries, time.time()))
+
+    def teach_exits(self, student_id=1):
+        self.run(self.TEACH_EXITS)
+        return self.rows("SELECT * FROM teach_exits WHERE student = ? ORDER BY n", (student_id,))

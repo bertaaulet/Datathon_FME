@@ -533,6 +533,34 @@ class TutorFlow(WithServers):
         self.assertEqual(view["phase"], "done")                    # three tries, then it stops
         self.assertTrue(all(not h["convinced"] for h in self.store.hints()))
 
+    def test_leave_the_kangaroo(self):
+        self.tutor.start("Test", "", 1)
+        self.teachable()
+        problem_id = self.tutor.current["id"]
+        view = self.tutor.leave_teaching()                          # no hint sent at all
+        self.assertEqual(view["phase"], "solving")
+        self.assertNotEqual(self.tutor.current["id"], problem_id)
+        exits = self.store.teach_exits()
+        self.assertEqual([(e["problem_id"], e["tries"]) for e in exits], [(problem_id, 0)])
+
+    def test_cannot_leave_while_solving(self):
+        self.tutor.start("Test", "", 1)
+        self.tutor.next()
+        problem_id = self.tutor.current["id"]
+        view = self.tutor.leave_teaching()                          # only after solving it
+        self.assertEqual((view["phase"], self.tutor.current["id"]), ("solving", problem_id))
+        self.assertEqual(self.store.teach_exits(), [])
+
+    def test_no_silent_switch_to_the_model_language(self):
+        self.store.run("DELETE FROM texts WHERE lang = 'cat'")
+        self.tutor.start("Test", "", 1)
+        view = self.tutor.next()
+        self.assertEqual(view["phase"], "empty")
+        self.assertIn("català", view["messages"][-1]["text"])
+
+    def test_hint_limit_is_sent_to_the_page(self):
+        self.assertEqual(self.tutor.view()["hint_max_chars"], int(CONFIG.get("HINT_MAX_CHARS", 200)))
+
     def test_peer_hint_reaches_the_next_student(self):
         self.tutor.start("Test", "", 1)
         self.tutor.next()
