@@ -1,25 +1,27 @@
 # Estat actual
 
-_Última actualització: 2026-11-14 23:30 — Berta (amb Claude)_
+_Última actualització: 2026-11-14 23:55 — Berta (amb Claude)_
 
 ## Fase
 - **Tutor:** funciona a la placa amb el banc real (`tutor.db`, 601 problemes utilitzables, el Cangur precalculat), arrenca sol amb la placa i amb la matriu LED, i els problemes externs segueixen el mateix recorregut que els del banc (provat amb problemes inventats).
-- **`predict.py`:** primera ronda d'experiments feta (taula de sota). Ara hi ha **dades noves** (segona volta d'OCR) i una **partició nova** (train 70% / validació 15% / test 15%), i el codi del RAG i del biaix robust és a la PR de `berta/rag-split`. **Cal repetir els experiments a la placa.**
+- **`predict.py`:** primera ronda d'experiments feta (taula de sota). Ara hi ha **dades noves** (segona volta d'OCR; train 85% i validació 15%), el **conjunt de pràctica dels organitzadors com a test**, i el codi del RAG i del biaix robust a la PR de `berta/rag-split`. **Cal repetir els experiments a la placa.**
+- **Test final:** 20 problemes nous, executats amb el nostre `predict.py` **a la nostra placa** després del *last call* de les 12:00 (detall a `PLA.md`).
 - **Lliuraments** (README, `LICENSE`, pitch, vídeo, Project Hub, dashboard): sense començar.
 - La presentació és **diumenge**. El pla és a [`PLA.md`](PLA.md), i els problemes trobats a la placa a [`PROBLEMES.md`](PROBLEMES.md).
 
 ## Ara mateix
 | Què | Estat |
 | --- | --- |
-| Fusionar la PR de `berta/rag-split` (partició, RAG des de `config.env`, biaix robust, `priors.json` nou, `--only-with-options`) | ⏳ |
-| Segona ronda d'experiments a la placa amb les dades noves: `build_index.py`, `letter_bias.py`, i `nou-baseline`, `nou-batch`, `nou-batch-rag1`, `nou-batch-rag1-letter` (50 problemes de validació amb opcions) | ⏳ ~60 min, quan la PR sigui a `main` |
+| Fusionar la PR de `berta/rag-split` (RAG des de `config.env`, biaix robust, `priors.json` nou, `--only-with-options`, documents) | ⏳ |
+| Preparar el conjunt de pràctica amb la comanda dels organitzadors (`prepare_m3kang.py --parquet … --val-fraction 0 --out data/demo --save-images`) | ⏳ |
+| Segona ronda d'experiments a la placa: `build_index.py`, `letter_bias.py`, i `nou-nodebias`, `nou-debias`, `nou-debias-rag1`, `nou-debias-rag1-letter` (50 problemes de validació amb opcions); després, la configuració triada amb el conjunt de pràctica | ⏳ ~2 h, quan la PR sigui a `main` |
 
 ## Línies de feina
 Les tasques s'assignen en veu alta a l'equip; aquí només hi ha què queda i de què depèn. La llista completa és a `PLA.md`.
 
 | Línia | Fet | Pendent | Depèn de |
 | --- | --- | --- | --- |
-| `predict.py` | Calibració, guardrails, biaix per lot, expressió (descartada), partició 70/15/15, RAG amb pregunta + valor correcte, biaix robust | Segona ronda d'experiments; triar la configuració de `config.env`; `letter_bias.json` bo; execució final amb `data/test.jsonl`; anàlisi d'errors; prova des d'un clon net | La placa |
+| `predict.py` | Calibració, guardrails, biaix per lot, expressió (descartada), RAG amb pregunta + valor correcte, biaix robust | Segona ronda d'experiments; triar la configuració de `config.env`; `letter_bias.json` bo a la placa; confirmar amb el conjunt de pràctica; anàlisi d'errors; placa a punt per al *last call* | La placa |
 | Pistes | Infraestructura (lots, validació, importació, rànquing, similitud, pistes de mètode en 6 llengües) | Banc de pistes de l'agent; τ (D2); revisar l'escala d'ajuda (punts a la conversa d'A); decidir les pistes generades pel model | `tutor.db` i la placa per a D2 |
 | Tutor (Teach) | Escala d'ajuda, Cangur, pont d'idioma, Elo de l'alumne (el dels problemes és fix), problemes externs, interfície nova, servei i reinici | Problemes 11–14 de `PROBLEMES.md`; revisar l'Elo i el pont d'idioma; reconstruir `tutor.db` amb les dades noves de l'OCR (si es vol) | — |
 | Lliuraments | — | README, `LICENSE`, xifres de PISA, pitch, vídeo de reserva, Project Hub, dashboard Tukey | Resultats per als números |
@@ -48,14 +50,14 @@ Les tasques s'assignen en veu alta a l'equip; aquí només hi ha què queda i de
 
 Conclusions: no preguntar al model sense opcions; el `letter_bias.json` d'aquesta ronda era dolent (C = 0,005) i no es puja; l'expressió es descarta. Detall a `DECISIONS.md`.
 
-**Dades noves:** reserva "sempre D" a la validació nova, 27,3% (71/260); la lletra de cada nivell, 25,4%, i per això ara la reserva és global.
+**Dades noves:** la lletra de reserva és la global del train (D). "Sempre D" encerta 65/280 (23,2%) a la validació nova en anglès.
 
 ## Bloquejos i riscos
 - **Lliuraments sense començar**, i són el que veurà el jurat.
 - **Una sola placa:** experiments de `predict.py`, la mesura final amb el test i les proves del tutor l'han de compartir. Desplegaments que es trepitgen: `PROBLEMES.md` 14.
 - **Abast:** `PLA.md` té moltes tasques obertes. Cal decidir què es fa per diumenge i què s'explica com a "no fet".
-- **El RAG al test del jurat** només funcionarà si construeix l'índex amb les seves dades seguint el README; si no, `predict.py` respon sense exemples.
-- **No podem preguntar als organitzadors:** supòsits a `PLA.md` (el jurat carrega el nostre repo; `eng` i `cat`; format de `prepare_m3kang.py`).
+- **Les opcions del test final passen per l'OCR:** els problemes amb figura o mal llegits es queden sense opcions i reben la lletra de reserva. Cal mesurar-ho amb el conjunt de pràctica.
+- **Amb 20 problemes, la correcció per lot no s'aplica:** el que compta és `letter_bias.json` a la placa.
 
 ## Per decidir com a equip
 - Què entra per diumenge i què s'aparca (pistes generades pel model, ajust fi, imatge…).
@@ -66,7 +68,7 @@ Conclusions: no preguntar al model sense opcions; el `letter_bias.json` d'aquest
 
 ## Resolt
 - Repo base importat a `projecte/` (commit `d6e3f1b` dels organitzadors). Idea final: "Ensenya el Cangur" amb `predict.py` millorat.
-- Dades: `eng` i `cat`, segona volta d'OCR (75% de files amb les 5 opcions) i partició per id i nivell: train 1.221, validació 260 i test 260 problemes.
+- Dades: `eng` i `cat`, segona volta d'OCR (75% de files amb les 5 opcions; sempre 5 o cap) i la partició de `prepare_m3kang.py`: train 1.461 i validació 280 problemes. Test: el conjunt de pràctica dels organitzadors (50 problemes nous).
 - Placa: passos 0–8, D1, placa contra portàtil, matriu LED, servei del tutor i reinici.
 - Es poden preparar pistes i altres lots amb un model gran fora de la placa (Marc).
 - `predict.py`: etapa 1 i expressió descartades; reserva global (D).

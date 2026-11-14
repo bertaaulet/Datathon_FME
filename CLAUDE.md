@@ -15,7 +15,7 @@ Memòria compartida de l'equip (4 persones). Es carrega a cada sessió de Claude
 - Codi de Teach separat (p. ex. `copilot/tutor.py`): no ha d'alterar l'execució oficial.
 - Qualsevol excepció a `solve()` ha d'acabar en lletra per defecte, mai en crash.
 - Pressupost (mesurat a la placa): temps ≈ tokens_prompt/10,8 + tokens_generats/5,8 ≤ 57 s. **La caché no es reaprofita** si el prompt canvia: cada crida paga la lectura sencera (~8–10 s), i hi caben unes 5 crides per problema. RAM disponible ≈ 2,8 GB amb els dos models.
-- `predict.py` ha de funcionar només amb el que es pot pujar al repo (supòsit: el jurat el carrega). Si falta `index.db`, `train.jsonl` o un altre fitxer no pujable, l'etapa se salta, mai peta.
+- **Test final:** 20 problemes nous (nivells 0–7, un idioma cada un, 4 amb figura), executats pels organitzadors amb el nostre `predict.py` **a la nostra placa** després del *last call* de les 12:00. L'estat de la placa en aquell moment (codi, `config.env`, `data/index.db`, `data/letter_bias.json`) és el que compta. Si falta un fitxer, l'etapa se salta, mai peta.
 - **Llicència M3Kang: només recerca.** Mai pujar `train.jsonl`, `val.jsonl`, `data/images/`, `index.db` ni text de problemes (tampoc a l'historial).
 - Placa: apagar sempre amb `sudo poweroff`.
 - Tutor: el model només escriu **pistes d'una frase**, que sempre passen pel filtre de fuites (si es rebutgen, surt una pista de mètode). Les frases del Cangur són plantilles. **No es dona la resposta** abans que l'alumne resolgui o demani la solució.

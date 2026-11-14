@@ -275,7 +275,7 @@ Aquesta és la llista completa, agrupada per àrees. Inclou tot el pla del proje
 **predict.py**
 
 - [x] Excepcions al `.gitignore` per a `letter_bias.json`, `priors.json` i `ablations.csv`
-- [ ] La prova des d'un clon net
+- [ ] La placa a punt per al *last call*: codi i `config.env` finals, `index.db` i `letter_bias.json` a `data/`, i la comanda al README
 - [x] El nivell tret de l'`id` quan falta `level`, amb una prova
 - [x] `eval.py`: guardar la màquina (`machine`), `--debias batch`, `--expression`, i les columnes `stage`, `shortened` i `expr*`
 - [x] Guardrails de `predict.py`: línies trencades, índex absent, problemes massa llargs escurçats, temps planificat abans de cada crida, `PREDICT_DEBIAS=batch`
@@ -379,13 +379,12 @@ Aquesta és la llista completa, agrupada per àrees. Inclou tot el pla del proje
 - [ ] El llindar de la decisió D4
 - [ ] En quin idioma va el README, i el nom de l'equip a la `LICENSE`
 
-**Supòsits sobre el test ocult** (14 nov: no podem fer preguntes als organitzadors; ens guiem per `SETUP.md` i les presentacions)
+**El test final** (organitzadors, 14 nov a la nit; detall al README del conjunt de pràctica)
 
-- El jurat carrega el nostre repo i executa `predict.py`. Per tant, `predict.py` ha de funcionar només amb el que es pot pujar (codi, `priors.json`, `letter_bias.json`). Si falta un fitxer (`index.db`, `train.jsonl`), salta l'etapa, mai peta.
-- Format: el de `prepare_m3kang.py` (mateix OCR de les opcions, camp `level`, ids `lvl-X_ANY_N`).
-- Idiomes: de moment treballem amb `eng` i `cat`. La resta queda aparcada fins que tinguem més informació.
-- Xifres agregades: es pugen (decisió del 14 nov). Pistes amb un model gran fora de la placa: confirmat (Marc).
-- **Per decidir com a equip:** el lliurament del dashboard Tukey, i si fem servir (i publiquem) un model ajustat amb el train de M3Kang.
+- 20 problemes nous d'estil Cangur (no són de M3Kang), nivells 0–7, cadascun en un sol idioma (anglès o català), 4 amb figura. Mateix format que M3Kang: id `lvl-<nivell>_2026_<número>`, text `"<número>. <enunciat>"`, opcions només a la imatge.
+- S'executa amb el nostre `predict.py` **a la nostra placa** després del *last call* de les 12:00: màxim 60 s per problema, sense xarxa. Per tant, l'índex del RAG i `letter_bias.json` de la placa sí que es fan servir.
+- Conjunt de pràctica: 50 problemes nous en anglès i català (100 files), amb les respostes. **És el nostre conjunt de test**: no hi triem configuracions, només hi confirmem la triada.
+- No suposem lletres equilibrades al test final.
 
 ## Validació contra els requisits
 
