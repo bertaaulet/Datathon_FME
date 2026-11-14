@@ -4,8 +4,9 @@ The classifier is a plain keyword count, so it's fast, the same every time,
 and easy to explain in the write-up. It's also rough: check it by hand on 50
 problems (prep/build_tutor_db.py --show-topics) before you trust a table by topic.
 
-Each topic has a Catalan name and two or three method hints written by the
-team. They are general problem-solving advice, not derived from any M3Kang
+Each topic has a Catalan name and three method hints written by the team:
+actionable, in the second person, under 120 characters, and never pointing at a
+value or an option. They are general problem-solving advice, not derived from any M3Kang
 problem, so they can be published.
 """
 import re
@@ -40,15 +41,15 @@ TOPICS = [
     ], [
         "Prova amb exemples petits i busca què tenen en comú.",
         "Fixa't en l'última xifra o en si el nombre és parell o senar.",
-        "Descompon els nombres en factors.",
+        "Descompon els nombres en factors primers i compara'ls.",
     ]),
     ("fraccions", "Fraccions, percentatges i proporcions", [
         "fraction", "percent", "%", "half ", "third ", "quarter", "ratio", "proportion",
         "twice", "fracci", "per cent", "meitat", "terç", "quart ", "doble", "proporci",
     ], [
-        "Tria un total fàcil, com 100 o 12, i calcula amb aquest.",
+        "Si no et diuen el total, inventa't un total fàcil i calcula amb aquest.",
         "Escriu totes les parts amb la mateixa unitat abans de comparar-les.",
-        "Pregunta't: quina part del total és cada tros?",
+        "Pregunta't quina part del total és cada tros.",
     ]),
     ("temps", "Temps i calendari", [
         "clock", "hour", "minute", "o'clock", "day", "week", "month", "year", "calendar",
@@ -75,7 +76,7 @@ TOPICS = [
     ], [
         "Suposa que una afirmació és certa i mira si porta a una contradicció.",
         "Fes una taula amb totes les possibilitats i ves descartant.",
-        "Comença per la dada que deixa menys opcions.",
+        "Comença per la dada que deixa menys possibilitats.",
     ]),
     ("probabilitat", "Probabilitat", [
         "probability", "chance", "dice", "die ", "coin", "random", "probabilitat",
@@ -83,6 +84,7 @@ TOPICS = [
     ], [
         "Compta tots els casos possibles i quants t'interessen.",
         "Fes una llista o un arbre amb tots els resultats.",
+        "Comprova que tots els casos que comptes tenen la mateixa probabilitat.",
     ]),
     ("patrons", "Patrons i àlgebra", [
         "sequence", "pattern", "equation", "unknown", "expression", "next number",
@@ -98,7 +100,7 @@ TOPICS = [
     ], [
         "Escriu què saps i què et demanen abans de calcular.",
         "Fes el càlcul per parts i comprova cada pas.",
-        "Estima primer el resultat: quines opcions no poden ser?",
+        "Abans de calcular, estima més o menys quant ha de sortir.",
     ]),
 ]
 
