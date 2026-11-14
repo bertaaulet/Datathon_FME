@@ -106,8 +106,8 @@ TOPICS = [
 
 # The same method hints in the other languages of the plan (M3Kang codes), for the
 # language bridge: same order as the Catalan list, one translation per hint.
-# Checked by back-translation into Catalan; no native speaker has reviewed them,
-# least of all arb (Modern Standard Arabic) and zho (Simplified Chinese).
+# Reviewed by back-translation into Catalan; no native speaker has reviewed them.
+# arb is Modern Standard Arabic and zho Simplified Chinese, for students aged 10-16.
 TRANSLATIONS = {
     "geometria": {
         "eng": ["Make a drawing and write on it every measurement you know.",
