@@ -24,6 +24,8 @@ LANG = CONFIG.get("TUTOR_LANG", "cat")          # the classroom language
 MODEL_LANG = CONFIG.get("MODEL_LANG", "eng")    # the language the model reads
 NEUTRAL_HINT = "Think carefully."               # the reference: a hint that says nothing
 MAX_TRIES = int(CONFIG.get("HINT_MAX_TRIES", 3))
+HINT_MAX_CHARS = int(CONFIG.get("HINT_MAX_CHARS", 200))
+LANG_NAMES = {"cat": "català", "eng": "anglès", "esp": "castellà", "fra": "francès"}
 PROMOTE_AFTER = 4     # right answers in a row to move to the next language stage
 # Answers per language before the language gap is shown. With simulated students
 # (sim/students.py), 15 per language still underestimates a real gap by about a
@@ -182,16 +184,22 @@ class Tutor:
             shown, counts_for = self._presentation()
             origin = self.student["lang_origen"] if self._has_origin() else None
             if problem_id is None:
-                candidates = self.store.candidates(1, origin if shown != "cat" else None)
+                # Only problems that exist in the classroom language: never switch to the
+                # model's language without telling the student
+                candidates = self.store.candidates(1, origin if shown != "cat" else LANG)
                 if not candidates and shown != "cat":
                     shown, counts_for = "cat", "cat"
-                    candidates = self.store.candidates(1)
+                    candidates = self.store.candidates(1, LANG)
                 rating = self.student["elo_origen" if counts_for == "origen" else "elo_cat"]
                 chosen = elo.pick(candidates, rating, topic=self.failed_topic)
                 if not chosen:
                     self.phase, self.current = "empty", None
                     self.messages = []
-                    self._say("sistema", "No queden problemes per fer. Has acabat el banc!")
+                    if self.store.candidates(1):
+                        self._say("sistema", f"No queden problemes en {LANG_NAMES.get(LANG, LANG)}. "
+                                             "Cal preparar el banc en aquesta llengua.")
+                    else:
+                        self._say("sistema", "No queden problemes per fer. Has acabat el banc!")
                     return self.view()
                 problem_id = chosen[0]
             row = self.store.problem(problem_id)
@@ -543,6 +551,20 @@ class Tutor:
             self._say("sistema", DISCLAIMER, "avis")
             self._show(led.text(result["answer"]))
 
+    def leave_teaching(self):
+        """The student solved the problem and doesn't want to teach the Kangaroo (any more).
+
+        Solving is the goal, so the student may leave this stage at any time. Not while the
+        Kangaroo is thinking: _teach would find another problem and never clear `busy`.
+        The exit is stored, so we can see how many students give up on the Kangaroo, and when.
+        """
+        with self.lock:
+            current = self.current
+            if self.phase != "teach" or self.busy or not current:
+                return self.view()
+            self.store.add_teach_exit(current["id"], 1, current["tries"])
+            return self.next()
+
     # ------------------------------------------------------------------ what the page shows
 
     def _messages(self):
@@ -563,7 +585,8 @@ class Tutor:
             student = self.student
             view = {"phase": self.phase, "busy": self.busy, "messages": self._messages(),
                     "student": None, "problem": None, "outside": None,
-                    "languages": self.store.languages(), "classroom_lang": LANG}
+                    "languages": self.store.languages(), "classroom_lang": LANG,
+                    "hint_max_chars": HINT_MAX_CHARS}
             if student:
                 view["student"] = {
                     "name": student["name"], "lang_origen": student["lang_origen"],
