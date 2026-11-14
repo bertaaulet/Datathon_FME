@@ -39,11 +39,31 @@ def letter_bias():
 
 
 def file_bias():
-    """data/letter_bias.json, or None."""
+    """data/letter_bias.json, made robust (robust()), or None."""
     bias = _read(BIAS_PATH)
     if not isinstance(bias, dict) or not all(letter in bias for letter in "ABCDE"):
         return None
-    return bias
+    return robust(bias)
+
+
+def robust(bias):
+    """No letter below BIAS_FLOOR, then shares that add up to 1.
+
+    When the server doesn't list a letter among its top tokens, that letter gets a
+    tiny probability. Averaged, its bias can end near zero (C = 0.005 on the board),
+    and dividing by it made C win almost every problem. The floor caps how much one
+    letter can be boosted (at most 1/BIAS_FLOOR times).
+    """
+    floor = float(CONFIG.get("BIAS_FLOOR", 0.05) or 0)
+    if all(float(bias[letter]) >= floor for letter in "ABCDE"):
+        return dict(bias)   # nothing to fix: keep the measured numbers as they are
+    raw = {letter: max(float(bias[letter]), floor) for letter in "ABCDE"}
+    total = sum(raw.values())
+    fixed = {letter: value / total for letter, value in raw.items()}
+    for key in ("n", "n_full"):
+        if key in bias:
+            fixed[key] = bias[key]
+    return fixed
 
 
 _LEVEL_IN_ID = re.compile(r"^lvl-(\d+)_")
@@ -71,10 +91,14 @@ def batch_bias(results):
     turned back into positions (what the model saw as A, B, ...), and the
     probabilities are averaged over every pass of every problem with five options.
     """
+    usable = [r for r in results if r.get("full") and r.get("passes")]
+    # Problems where the server listed all five letters measure the bias best: use only
+    # those when there are enough of them
+    complete = [r for r in usable if r.get("letters_found", 5) >= 5]
+    if len(complete) >= int(CONFIG.get("PREDICT_BATCH_MIN", 20) or 0):
+        usable = complete
     totals, count = dict.fromkeys("ABCDE", 0.0), 0
-    for result in results:
-        if not result.get("full"):
-            continue
+    for result in usable:
         for order, probs in result.get("passes", []):
             for position, letter in enumerate("ABCDE"):
                 totals[letter] += probs[order[position]]
@@ -83,7 +107,7 @@ def batch_bias(results):
         return None
     bias = {letter: total / count for letter, total in totals.items()}
     bias["n"] = count
-    return bias
+    return robust(bias)
 
 
 def end_of_run_bias(results):

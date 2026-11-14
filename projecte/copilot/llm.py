@@ -1,6 +1,7 @@
 """Ask the small language model about a problem: one letter, or a probability per letter."""
 import math
 import re
+import urllib.error
 
 from .config import CONFIG
 from .client import post
@@ -53,16 +54,40 @@ def format_problem(problem, sees_image=False, order=None):
     return "\n".join(lines)
 
 
+def correct_value(example):
+    """The text of a solved problem's right option, or None when OCR didn't read it."""
+    _question, options = split_problem(example)
+    value = options.get(example.get("label", ""))
+    return " ".join(str(value).split()) if value not in (None, "") else None
+
+
+def solved_example(example):
+    """A retrieved problem as a worked example: its question and the right VALUE, no options.
+
+    The letter of another problem says nothing about this one, and the four wrong
+    options only cost reading time.
+    """
+    question, _options = split_problem(example)
+    return f"Similar solved problem:\n{question}\nCorrect answer: {correct_value(example)}\n\n"
+
+
 def build_messages(problem, examples=(), image_b64=None, order=None, hint=None):
     """image_b64 is a PNG as base64 text. Only a server started with --mmproj can see it.
 
     hint goes after the problem, so the cached start of the prompt is reused.
+    Examples (RAG) follow PREDICT_RAG_FORMAT: "answer" (default) puts each solved
+    problem's question and right value before the new problem, in the same message;
+    "letter" is the organizers' format (full problem, then its letter as a reply).
     """
     messages = [{"role": "system", "content": SYSTEM}]
-    for ex in examples:  # solved problems retrieved with RAG, if any
-        messages.append({"role": "user", "content": format_problem(ex) + "\nAnswer:"})
-        messages.append({"role": "assistant", "content": ex["label"]})
-    text = format_problem(problem, sees_image=bool(image_b64), order=order)
+    lead = ""
+    if CONFIG.get("PREDICT_RAG_FORMAT", "answer").lower() == "letter":
+        for ex in examples:
+            messages.append({"role": "user", "content": format_problem(ex) + "\nAnswer:"})
+            messages.append({"role": "assistant", "content": ex["label"]})
+    elif examples:
+        lead = "".join(solved_example(ex) for ex in examples) + "Now solve this problem.\n"
+    text = lead + format_problem(problem, sees_image=bool(image_b64), order=order)
     if hint:
         text += "\nHint from a classmate: " + " ".join(hint.split())
     text += "\nAnswer:"
@@ -193,7 +218,14 @@ def letter_probs(problem, examples=(), timeout=60, image_b64=None, url=URL, orde
         "top_logprobs": top,
         "n_probs": top,
     }
-    response = post(url, payload, timeout=timeout)
+    try:
+        response = post(url, payload, timeout=timeout)
+    except urllib.error.HTTPError as error:
+        # A server that refuses this many top tokens (4xx): ask again with the old 64
+        if not 400 <= error.code < 500 or top <= 64:
+            raise
+        payload.update(top_logprobs=64, n_probs=64)
+        response = post(url, payload, timeout=timeout)
     generated = response["choices"][0]["message"]["content"].strip()
     by_position, found = parse_letter_probs(response, generated)
     if bias:

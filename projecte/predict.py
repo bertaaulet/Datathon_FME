@@ -22,7 +22,7 @@ import re
 import sys
 
 from copilot.calib import end_of_run_bias
-from copilot.config import CONFIG
+from copilot.config import CONFIG, ROOT
 from copilot.pipeline import FALLBACK, rescore, solve
 
 FIELDS = ["id", "language", "answer", "seconds", "status"]
@@ -62,12 +62,15 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--input", required=True)
     p.add_argument("--output", required=True)
-    p.add_argument("--rag", type=int, default=0, metavar="K", help="add K similar solved problems")
-    p.add_argument("--index", default="data/index.db")
+    p.add_argument("--rag", type=int, default=None, metavar="K",
+                   help="add K similar solved problems (default: PREDICT_RAG_K in config.env)")
+    p.add_argument("--index", default=None, help="default: PREDICT_RAG_INDEX in config.env")
     args = p.parse_args()
 
+    rag_k = args.rag if args.rag is not None else int(CONFIG.get("PREDICT_RAG_K", 0) or 0)
+    args.index = args.index or os.path.join(ROOT, CONFIG.get("PREDICT_RAG_INDEX", "data/index.db"))
     index = None
-    if args.rag:
+    if rag_k:
         try:
             if not os.path.exists(args.index):
                 raise FileNotFoundError(args.index)
@@ -89,7 +92,7 @@ def main():
             if problem.get("_broken"):
                 result = {"answer": FALLBACK, "seconds": 0.0, "status": "error: bad input line"}
             else:
-                result = solve(problem, index=index, k=args.rag if index else 0)
+                result = solve(problem, index=index, k=rag_k if index else 0)
             row = [str(problem.get("id", "")), str(problem.get("language", "") or ""),
                    result["answer"], result["seconds"], result["status"]]
             rows.append(row)
