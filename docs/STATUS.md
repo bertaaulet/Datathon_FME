@@ -20,7 +20,7 @@ Tot el codi de la v1 és a `projecte/`, però **no hi ha cap resultat real**: no
 ## Qui fa què
 | Línia | Persona | Primera tasca | Estat |
 | --- | --- | --- | --- |
-| A · Millorar `predict.py` (harness) | | Fitxers de calibració al repo, nivell tret de l'`id`, llama.cpp al portàtil | ⬜ |
+| A · Millorar `predict.py` (harness) | Berta | Fitxers de calibració al repo, nivell tret de l'`id`, llama.cpp al portàtil | 🟡 Fet a `berta/predict-calib`: excepcions al `.gitignore` (també `ablations.csv`), nivell de l'`id`, `eval.py` amb columna `machine` i `--debias batch` (38 proves OK). Falta: llama.cpp al portàtil (WSL) i esperar `data/` de B |
 | B · Dades, agent i pistes | | `prepare_m3kang.py --languages eng,cat` i passar `data/` a la resta (fora de Git) | ⬜ |
 | C · Placa Arduino | | Passos 0–8 de `projecte/docs/SETUP.md` i `prep/check_model.py` | ⬜ |
 | Sense assignar | | Tutor (problemes externs, integrar pistes generades), dashboard, README, Project Hub, pitch | ⬜ |
