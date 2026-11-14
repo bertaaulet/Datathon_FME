@@ -1162,5 +1162,87 @@ class HintSource(unittest.TestCase):
         self.assertEqual(store.best_hint("t1")["source"], "agent")   # the fallback for rung 3
 
 
+class OcrPass2(unittest.TestCase):
+    """laptop/ocr_pass2.py: the pure parts, without images or OCR."""
+
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, os.path.join(ROOT, "laptop"))
+        import ocr_pass2
+        cls.o = ocr_pass2
+
+    @staticmethod
+    def box(x0, y0, x1, y1, text):
+        return ([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], text, 0.9)
+
+    def test_fraction_joined(self):
+        b = self.box
+        boxes = [b(0, 15, 20, 35, "A)"), b(30, 0, 45, 20, "1"), b(30, 28, 45, 48, "2"),
+                 b(100, 15, 120, 35, "B)"), b(130, 15, 145, 35, "3"),
+                 b(200, 15, 220, 35, "C)"), b(230, 15, 245, 35, "4"),
+                 b(300, 15, 320, 35, "D)"), b(330, 15, 345, 35, "5"),
+                 b(400, 15, 420, 35, "E)"), b(430, 15, 445, 35, "6")]
+        opts = self.o.parse_options(self.o.merge_fractions(boxes))
+        self.assertEqual(opts, {"A": "1/2", "B": "3", "C": "4", "D": "5", "E": "6"})
+
+    def test_two_rows_of_options_not_joined(self):
+        b = self.box
+        # A) 12 above D) 15: each number has its marker on its own line.
+        boxes = [b(0, 0, 20, 20, "A)"), b(30, 0, 50, 20, "12"),
+                 b(0, 26, 20, 46, "D)"), b(30, 26, 50, 46, "15")]
+        texts = sorted(t for _, t, _ in self.o.merge_fractions(boxes))
+        self.assertEqual(texts, ["12", "15", "A)", "D)"])
+
+    def test_norm_value(self):
+        n = self.o.norm_value
+        self.assertEqual(n("2,5"), n("2.5"))
+        self.assertEqual(n("6 x5 +6 × 2"), n("6×5+6×2"))
+        self.assertEqual(n("−3"), n("-3"))
+        self.assertNotEqual(n("1 17"), n("17"))
+
+    def rows(self, eng, cat, text_only=True):
+        return {("p", "eng"): {"id": "p", "language": "eng", "text_only": text_only, "options": eng},
+                ("p", "cat"): {"id": "p", "language": "cat", "text_only": text_only, "options": cat}}
+
+    def test_targets(self):
+        good = dict(zip("ABCDE", "12345"))
+        other = dict(zip("ABCDE", "12346"))
+        t = self.o.classify_targets
+        self.assertEqual(set(t(self.rows(good, good)).values()), {"recheck"})
+        self.assertEqual(set(t(self.rows(good, other)).values()), {"disagree"})
+        self.assertEqual(t(self.rows({}, good)), {("p", "eng"): "other_has"})
+        self.assertEqual(t(self.rows({}, {}, text_only=False)), {})
+        self.assertEqual(len(t(self.rows({}, {}, text_only=True))), 2)
+
+    def test_recheck_needs_both_languages(self):
+        old = {"A": "4", "B": "5", "C": "16", "D": "1 17", "E": "21"}
+        fixed = {"A": "4", "B": "5", "C": "16", "D": "17", "E": "21"}
+        rows = self.rows(old, old)
+        targets = self.o.classify_targets(rows)
+        both = self.o.decide(rows, targets, {("p", "eng"): (fixed, "ocr_crop"), ("p", "cat"): (fixed, "ocr_crop")})
+        self.assertEqual(both[("p", "eng")]["options"]["D"], "17")
+        one = self.o.decide(rows, targets, {("p", "eng"): (fixed, "ocr_crop"), ("p", "cat"): (old, "ocr_crop")})
+        self.assertEqual(one[("p", "eng")]["options"]["D"], "1 17")
+        self.assertEqual(one[("p", "eng")]["options_source"], "ocr")
+
+    def test_empty_filled_or_copied(self):
+        good = dict(zip("ABCDE", "12345"))
+        rows = self.rows({}, good)
+        targets = self.o.classify_targets(rows)
+        out = self.o.decide(rows, targets, {("p", "eng"): ({}, "none")})
+        self.assertEqual(out[("p", "eng")]["options"], good)
+        self.assertEqual(out[("p", "eng")]["options_source"], "copied_cat")
+        self.assertEqual(out[("p", "eng")]["options_check"], "single")
+        out = self.o.decide(rows, targets, {("p", "eng"): (dict(good, E="9"), "ocr_crop")})
+        self.assertEqual(out[("p", "eng")]["options_check"], "disagree")
+        self.assertTrue(out[("p", "eng")]["options_suspect"])
+
+    def test_duplicates_suspect(self):
+        dup = dict(zip("ABCDE", ["1", "2", "2", "4", "5"]))
+        rows = self.rows(dup, dup)
+        out = self.o.decide(rows, self.o.classify_targets(rows), {})
+        self.assertTrue(out[("p", "cat")]["options_suspect"])
+
+
 if __name__ == "__main__":
     unittest.main()
