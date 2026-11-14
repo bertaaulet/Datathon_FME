@@ -1,6 +1,6 @@
 # Estat actual
 
-_Última actualització: 2026-11-14 16:50 — Berta (amb Claude)_
+_Última actualització: 2026-11-14 19:25 — Berta (amb Claude)_
 
 ## Fase
 Tot el codi de la v1 és a `projecte/`, però **no hi ha cap resultat real**: només s'ha provat contra un model simulat. El pla d'execució és a [`docs/PLA.md`](PLA.md) (harness de `predict.py`, pistes amb agent i model, problemes externs amb el mateix recorregut, què va al portàtil i què a la placa). Comencem a treballar en paral·lel en tres línies.
@@ -14,19 +14,20 @@ Tot el codi de la v1 és a `projecte/`, però **no hi ha cap resultat real**: no
 | Alumnes simulats (`sim/`) | Sí | Sí (no cal el model) | — |
 | Dashboard Tukey (`dashboard/`) | Sí | Sí, amb dades de prova | — |
 | App de la matriu LED (`applab/`) | Sí | No | No |
-| Harness de `predict.py` (etapes 1–4, 6–7) | No | — | — |
+| Harness de `predict.py`: guardrails, biaix per lot, expressió + Python (etapa 3) | Sí | Sí | No |
+| Harness de `predict.py`: etapes 1, 2, 4, 6 i 7 | No | — | — |
 | Banc de l'agent i pistes generades pel model | No | — | — |
 
 ## Qui fa què
 | Línia | Persona | Primera tasca | Estat |
 | --- | --- | --- | --- |
-| A · Millorar `predict.py` (harness) | Berta | Fitxers de calibració al repo, nivell tret de l'`id`, llama.cpp al portàtil | 🟡 Fusionat: calibració al repo, nivell de l'`id`, `machine` i `--debias batch` a `eval.py`. A `berta/harness`: guardrails (entrada trencada, índex absent, problemes massa llargs escurçats, temps planificat abans de cada crida) i `PREDICT_DEBIAS=batch` a `predict.py` (44 proves OK). Següent: etapa de l'expressió. Esperant `data/` de B i les respostes dels organitzadors (on s'executa el test, idiomes) |
+| A · Millorar `predict.py` (harness) | Berta | Fitxers de calibració al repo, nivell tret de l'`id`, llama.cpp al portàtil | 🟡 A `main` (PR #1 i #3): calibració al repo, nivell de l'`id`, `eval.py` amb `machine`, guardrails, `PREDICT_DEBIAS=batch` i l'etapa de l'expressió (`PREDICT_EXPRESSION`, desactivada fins mesurar-la). 71 proves OK. **Esperant:** la Irene comprova a la placa la gramàtica de l'expressió i els temps; amb les dades, `priors`, `baseline-org`, `baseline`, `letter_bias` a la placa i les comparacions de biaix i expressió |
 | B · Dades, agent i pistes | | `prepare_m3kang.py --languages eng,cat` i passar `data/` a la resta (fora de Git) | ⬜ |
 | C · Placa Arduino | Irene | Passos 0–8 de `projecte/docs/SETUP.md` i `prep/check_model.py` | ✅ passos 0–8, D1 i comparació placa-portàtil. Següent: tutor i matriu LED |
 | Sense assignar | | Tutor (problemes externs, integrar pistes generades), dashboard, README, Project Hub, pitch | ⬜ |
 
 ## Placa
-- Passos 0–8 de `projecte/docs/SETUP.md`: ✅ llama.cpp `2cbe0ec` compilat, serveis `math-llm` (8081) i `math-embed` (8082) actius i arrencant amb la placa. Lectura 10,8 tok/s, escriptura 5,8 tok/s. `predict.py` amb `sample_problems.jsonl`: 5/5 `ok`, com a màxim 6,8 s, però **respon A a tots cinc** (0/5 encerts). Ho ha de mirar A.
+- Passos 0–8 de `projecte/docs/SETUP.md`: ✅ llama.cpp `2cbe0ec` compilat, serveis `math-llm` (8081) i `math-embed` (8082) actius i arrencant amb la placa. Lectura 10,8 tok/s, escriptura 5,8 tok/s. `predict.py` amb `sample_problems.jsonl`: 5/5 `ok`, com a màxim 6,8 s, però **respon A a tots cinc** (0/5 encerts): falta `letter_bias.json` (`PROBLEMES.md` 1).
 - RAM amb els dos serveis en marxa: 874 MB usats, 2.795 MB disponibles.
 - **Placa contra portàtil, 50 problemes** (`compare50.jsonl`: 50 problemes en anglès, 39 amb opcions, la majoria del train. Només serveix per comparar, no per mesurar l'encert): **47/50 lletres iguals** (36/39 de les que fan servir el model). Difereixen en `lvl-0_2016_9`, `lvl-0_2019_1` i `lvl-0_2019_10`. Conclusió: el portàtil (x86, GCC 13) va bé per explorar, però **els números finals s'han de mesurar a la placa**, i el text de les pistes generades al portàtil s'ha de comprovar a la placa. La placa només ha respost D (41) i A (9), un biaix fort. Temps a la placa amb opcions: mitjana 8,1 s, màxim 11,8 s.
 - Repo a la placa: còpia dels fitxers (sense token) a `~/Datathon_FME/projecte`, commit `0751155`.
@@ -46,12 +47,13 @@ Tot el codi de la v1 és a `projecte/`, però **no hi ha cap resultat real**: no
 | baseline (organitzadors) | 22,5% | 40 | 8,7 s |
 
 ## Bloquejos / dubtes oberts
-- **Preguntes per als organitzadors** (llista a `docs/PLA.md`): on s'executa el test ocult, si porta opcions i `level`, si es poden publicar xifres agregades i un model ajustat amb M3Kang, i com i quan es lliura el dashboard.
+- **No podem preguntar als organitzadors.** Treballem amb els supòsits de `docs/PLA.md` (el jurat carrega el nostre repo; `eng` i `cat`; format de `prepare_m3kang.py`). L'idioma del test queda aparcat fins que tinguem més informació.
+- **Una sola placa:** les proves de C i els experiments d'A amb el model s'han de fer un darrere l'altre.
 - **Per decidir com a equip:** validació (15% a l'atzar o `--val-years 2023,2024`), llengües, les tres propostes de Claude a `DECISIONS.md`, el llindar de D4, l'idioma del README i el nom a la `LICENSE`.
-- L'app de la matriu LED pot no arribar al tutor per `127.0.0.1` si App Lab l'executa en un contenidor.
 
 ## Resolt
 - Importar el repo base: còpia sense historial a `projecte/` (commit `d6e3f1b` dels organitzadors).
 - Idea final: Teach ("Ensenya el Cangur") amb `predict.py` millorat com a part del projecte.
 - Pla d'execució escrit a `docs/PLA.md`.
+- La matriu LED arriba al tutor si aquest escolta a `0.0.0.0` (`172.17.0.1:8090`, vegeu Placa).
 - Es poden preparar pistes i els altres lots amb un model gran fora de la placa (confirmat per Marc, 14 nov).

@@ -14,21 +14,24 @@ Memòria compartida de l'equip (4 persones). Es carrega a cada sessió de Claude
 - A la placa: **només llibreria estàndard de Python**, sense pip.
 - Codi de Teach separat (p. ex. `copilot/tutor.py`): no ha d'alterar l'execució oficial.
 - Qualsevol excepció a `solve()` ha d'acabar en lletra per defecte, mai en crash.
-- Pressupost: temps ≈ tokens_prompt/11 + tokens_generats/6 ≤ 57 s. RAM lliure ≈ 2,5 GB.
+- Pressupost (mesurat a la placa): temps ≈ tokens_prompt/10,8 + tokens_generats/5,8 ≤ 57 s. **La caché no es reaprofita** si el prompt canvia: cada crida paga la lectura sencera (~8–10 s), i hi caben unes 5 crides per problema. RAM disponible ≈ 2,8 GB amb els dos models.
+- `predict.py` ha de funcionar només amb el que es pot pujar al repo (supòsit: el jurat el carrega). Si falta `index.db`, `train.jsonl` o un altre fitxer no pujable, l'etapa se salta, mai peta.
 - **Llicència M3Kang: només recerca.** Mai pujar `train.jsonl`, `val.jsonl`, `data/images/`, `index.db` ni text de problemes (tampoc a l'historial).
 - Placa: apagar sempre amb `sudo poweroff`.
 - Tutor: el model només escriu **pistes d'una frase**, que sempre passen pel filtre de fuites (si es rebutgen, surt una pista de mètode). Les frases del Cangur són plantilles. **No es dona la resposta** abans que l'alumne resolgui o demani la solució.
 - Problemes externs: **mateix recorregut** que els del banc, amb la resposta del harness i l'avís sempre visible: "No podem assegurar les respostes per a problemes externs. Confirma la solució en fonts oficials o amb el teu professor."
 - Mai pujar res que contingui **text de M3Kang ni les etiquetes per problema**: `tutor.db`, sortides de l'agent, pistes generades, `results/eval-*.csv`. Sí es poden pujar xifres agregades (`letter_bias.json`, `priors.json`, `ablations.csv`).
-- **Mai reportar un número mesurat contra el servidor simulat** (`tests/fake_llama.py`) ni amb els problemes inventats.
+- **Mai reportar un número mesurat contra el servidor simulat** (`tests/fake_llama.py`) ni amb els problemes inventats. Els números i temps finals es mesuren **a la placa**; el portàtil només serveix per explorar (47/50 lletres iguals).
 
 ## On és cada cosa
 - `docs/STATUS.md` — estat actual, qui fa què, bloquejos. **Llegir a l'inici de cada sessió.**
 - `docs/DECISIONS.md` — registre de decisions (append-only).
+- `docs/PROBLEMES.md` — problemes trobats a la placa, amb causa, arreglo i responsable.
 - `pla_projecte.md` — el pla del projecte "Ensenya el Cangur" (Teach + predict + pont d'idioma + dashboard).
 - `docs/PLA.md` — **pla d'execució actual**: harness de `predict.py`, pistes (agent + model), què va al portàtil i què a la placa, pendents, riscos. Mana sobre `pla_projecte.md` on es contradiuen.
 - `projecte/` — **tot el codi** (còpia del repo base, commit `d6e3f1b`, més el nostre). Les comandes s'executen des d'aquí.
   - `projecte/README.md` — què fa i els passos per replicar-ho. `projecte/docs/SETUP.md` — la guia dels organitzadors.
+  - Harness de `predict.py`: `copilot/pipeline.py` (etapes i guardrails), `calib.py` (biaix i lletra per nivell), `mathexpr.py` (expressió + Python). Cada etapa s'activa amb `PREDICT_*` a `config.env` i es prova amb `eval.py`.
   - `projecte/results/ablations.csv` — font única de veritat dels experiments (la genera `eval.py`).
   - `projecte/.skills/` — skills del repo base, ampliades (`ln -s ../projecte/.skills .claude/skills`).
   - Proves sense placa: `python -m unittest discover -s tests`.
