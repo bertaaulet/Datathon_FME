@@ -378,7 +378,10 @@ class Tutor:
                 if peer:
                     current["hint_n"] = peer["n"]
                     self.store.hint_shown(peer["n"])
-                    self._say("sistema", f"Una pista d'un company: «{peer['text']}»", "pista")
+                    # Only a student's hint is "from a classmate"; the agent's bank is not.
+                    lead = ("Una pista d'un company" if peer.get("source", "student") == "student"
+                            else "Una pista")
+                    self._say("sistema", f"{lead}: «{peer['text']}»", "pista")
                 else:
                     self._say("sistema", topics.method_hint(topic, 1), "pista")
             elif rung == 4:

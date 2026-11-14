@@ -48,10 +48,15 @@ CREATE TABLE IF NOT EXISTS hints (
     delta REAL,             -- how far the hint moved the Kangaroo's margin (NULL: not measured)
     convinced INTEGER,
     shown INTEGER DEFAULT 0, solved_after INTEGER DEFAULT 0,
-    ts REAL
+    ts REAL,
+    source TEXT DEFAULT 'student'   -- who wrote it: 'student', 'seed' or 'agent'
 );
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 """
+
+# Who wrote a hint: a student teaching the Kangaroo, a hint shipped with the
+# database, or the agent's hint bank (prep/import_hints.py).
+HINT_SOURCES = ("student", "seed", "agent")
 
 
 def default_path():
@@ -69,7 +74,15 @@ class Store:
         self.lock = threading.RLock()
         with self.lock:
             self.db.executescript(SCHEMA)
+            self._migrate()
             self.db.commit()
+
+    def _migrate(self):
+        """Bring a database made by an older version up to date, keeping its rows."""
+        columns = {row[1] for row in self.db.execute("PRAGMA table_info(hints)")}
+        if "source" not in columns:
+            self.db.execute("ALTER TABLE hints ADD COLUMN source TEXT DEFAULT 'student'")
+            self.db.execute("UPDATE hints SET source = 'student' WHERE source IS NULL")
 
     def run(self, sql, args=()):
         with self.lock:
@@ -157,10 +170,20 @@ class Store:
 
     # --- hints -------------------------------------------------------------
 
-    def add_hint(self, problem_id, student_id, text, delta, convinced):
-        self.run("INSERT INTO hints (problem_id, student, text, delta, convinced, ts) "
-                 "VALUES (?, ?, ?, ?, ?, ?)",
-                 (problem_id, student_id, text, delta, int(bool(convinced)), time.time()))
+    def add_hint(self, problem_id, student_id, text, delta, convinced, source="student"):
+        if source not in HINT_SOURCES:
+            raise ValueError(f"unknown hint source {source!r}, expected one of {HINT_SOURCES}")
+        return self.run("INSERT INTO hints (problem_id, student, text, delta, convinced, ts, "
+                        "source) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (problem_id, student_id, text, delta, int(bool(convinced)), time.time(),
+                         source)).lastrowid
+
+    def has_hint(self, problem_id, text, source=None):
+        sql, args = "SELECT 1 FROM hints WHERE problem_id = ? AND text = ?", [problem_id, text]
+        if source:
+            sql += " AND source = ?"
+            args.append(source)
+        return self.one(sql + " LIMIT 1", args) is not None
 
     def best_hint(self, problem_id):
         """The hint to show another student: the one that helped people most, then the model."""
