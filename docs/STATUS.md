@@ -1,6 +1,6 @@
 # Estat actual
 
-_Última actualització: 2026-11-14 22:40 — Berta (amb Claude)_
+_Última actualització: 2026-11-14 23:05 — Irene (amb Claude)_
 
 ## Fase
 Codi de la v1, harness de `predict.py` i arreglos del tutor a `main` (76 proves OK). La placa està a punt i el harness s'hi ha provat (temps i gramàtica). **Encara no hi ha cap encert mesurat amb M3Kang**: s'està mesurant ara. La presentació és **diumenge**. El pla és a [`PLA.md`](PLA.md), i els problemes trobats a la placa a [`PROBLEMES.md`](PROBLEMES.md).
@@ -22,7 +22,7 @@ Les tasques s'assignen en veu alta a l'equip; aquí només hi ha què queda i de
 | A · Millorar `predict.py` (harness) | Berta | Fitxers de calibració al repo, nivell tret de l'`id`, llama.cpp al portàtil | 🟡 A `main` (PR #1 i #3): calibració al repo, nivell de l'`id`, `eval.py` amb `machine`, guardrails, `PREDICT_DEBIAS=batch` i l'etapa de l'expressió (`PREDICT_EXPRESSION`, desactivada fins mesurar-la). 71 proves OK. **Esperant:** la Irene comprova a la placa la gramàtica de l'expressió i els temps; amb les dades, `priors`, `baseline-org`, `baseline`, `letter_bias` a la placa i les comparacions de biaix i expressió |
 | B · Dades, agent i pistes | | `prepare_m3kang.py --languages eng,cat` i passar `data/` a la resta (fora de Git) | ⬜ |
 | C · Placa Arduino | Irene | Passos 0–8 de `projecte/docs/SETUP.md` i `prep/check_model.py` | ✅ passos 0–8, D1, comparació placa-portàtil, matriu LED, `tutor.db` real, servei del tutor, reinici de prova, mesures definitives i experiments d'A a la placa |
-| Tutor: Elo i problemes externs | Berta | Elo dels problemes fix; problemes externs pel mateix recorregut amb el harness, l'avís i els intents marcats a part | 🟡 PR #12 (`berta/elo-problemes-fixos`), 90 proves OK amb el simulador. Falta provar-ho a la placa amb un problema inventat (temps de `solve()` + crida de referència) |
+| Tutor: Elo i problemes externs | Berta | Elo dels problemes fix; problemes externs pel mateix recorregut amb el harness, l'avís i els intents marcats a part | ✅ PR #12 a `main`. **Provat a la placa** (`main` `c647382`, 90 proves OK): recorregut, avís, filtre estricte, intents a part i Elo quiet, tot bé. Temps a Placa; problemes nous 12–14 a `PROBLEMES.md` |
 | Sense assignar | | Tutor (integrar pistes generades), dashboard, README (resultats), Project Hub, pitch | ⬜ |
 
 ## Placa
@@ -65,6 +65,18 @@ Les tasques s'assignen en veu alta a l'equip; aquí només hi ha què queda i de
 - **`predict.py` a la placa** (`compare50.jsonl`, problemes del train o inventats, **sense encerts**): sense biaix corregit respon gairebé sempre D o A. Per defecte, mitjana 8,4 s i màxim 12,0 s. `PREDICT_DEBIAS=batch` reparteix les lletres (A 6 · B 6 · C 5 · D 12 · E 10) sense cost. `PREDICT_EXPRESSION=on`: la gramàtica funciona, mitjana 25 s i màxim 34,6 s amb opcions, cap per sobre de 57 s.
 - **Tutor i matriu LED:** la matriu arriba al tutor si escolta a `0.0.0.0` (`172.17.0.1:8090`). L'app és l'app per defecte i arrenca amb la placa. Servei del tutor escrit (`board/06_install_tutor_service.sh`, cal `TUTOR_HOST=0.0.0.0` i `sudo`) però no instal·lat: espera `tutor.db`.
 - **Mesures provisionals del tutor** (amb `tutor-test.db`, s'han de repetir): ~10 s per crida del Cangur (màxim 16,7 s); els graons d'ajuda són instantanis.
+- **Problemes externs a la placa** (2026-11-14, `main` `c647382`, que inclou els PR #12, #14 i #15; 90 proves OK a la placa). Proves amb l'API i al navegador, **només amb problemes inventats** (multiplicació, fracció, percentatge, àrea, perímetre i un sense opcions). **Són temps, no encerts:** no es reporta cap encert d'aquests problemes.
+  | Pas | n | Mitjana | Màxim |
+  | --- | --- | --- | --- |
+  | `solve()` del harness (de `POST /api/external` a `busy=false`) | 5 | 7,2 s | 8,8 s |
+  | Crida de referència del Cangur (de l'encert a `busy=false`, responent de seguida) | 4 | 8,1 s | 9,8 s |
+  | El Cangur llegeix una pista neta | 5 | 9,5 s | 11,8 s |
+  - Enquesta cada 0,5 s: els temps poden anar fins a 0,5 s llargs. La referència comença sola quan acaba `solve()`: si l'alumne triga més que això a encertar (al navegador, sí), la fase d'ensenyar s'obre a l'instant.
+  - **Funciona:** `phase=solving` i `problem.warning` amb l'avís des del primer moment; l'avís és sempre a sobre del problema; les opcions estan desactivades mentre calcula; "No coincideix amb la resposta que hem calculat" a cada error; "Crec que és la B" es rebutja sempre (filtre estricte, encara que la B no sigui l'etiqueta); les pistes netes arriben al Cangur. A `tutor.db`: +4 intents amb `external=1`, `elo_cat` i `elo_origen` de l'alumne **sense cap canvi**, i `GET /api/teacher` els compta a `external_attempts` (+4).
+  - **Sense `data/index.db`** ("outside problems without neighbours (no index)"): cap problema semblant i nivell `?`. El problema sense opcions només mostra el tema.
+  - **Matriu LED:** ✗ en cada error, `?` mentre el Cangur pensa, barra després de cada pista. El ✓ no es veu si la referència ja ha acabat (problema 13).
+  - **RAM** durant les proves (51 mostres, cada 2 s): 978 MB usats, com a mínim **2.691 MB disponibles**, sense moviment.
+  - Errors: cap al diari del tutor. Problemes nous: 12, 13 i 14 de [`PROBLEMES.md`](PROBLEMES.md). Còpia de seguretat a `data/tutor.db.bak` abans de començar, i restaurada al final perquè la demo no tingui els intents de prova. Comprovat: les mateixes files que la còpia (27 intents, mateix alumne). El hash canvia perquè el tutor afegeix la columna `attempts.external` en arrencar.
 
 
 ## Millor resultat fins ara
