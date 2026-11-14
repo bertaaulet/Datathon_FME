@@ -7,7 +7,9 @@ They use invented problems (tests/demo_data.py) and a stand-in for the model
 servers (tests/fake_llama.py). They check that the code does what it says:
 they say nothing about how well the real model answers.
 """
+import contextlib
 import csv
+import io
 import json
 import os
 import subprocess
@@ -498,6 +500,309 @@ class Scripts(WithServers):
             finally:
                 server.shutdown()
                 store.close()
+
+
+# --- agent batches: check_agent_output, the hints' source column, import_hints ---
+
+sys.path.insert(0, os.path.join(ROOT, "prep"))
+import agent_lots  # noqa: E402
+import check_agent_output  # noqa: E402
+import importlib.util  # noqa: E402
+import import_hints  # noqa: E402
+
+_spec = importlib.util.spec_from_file_location(
+    "export_batch", os.path.join(ROOT, "prep", "agent", "export_batch.py"))
+export_batch = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(export_batch)
+
+AGENT_TRAIN = [
+    {"id": "t1", "language": "eng", "level": 0, "year": 2020, "text_only": True,
+     "text": SAMPLE["text"], "options": SAMPLE["options"], "label": "C"},
+    {"id": "t1", "language": "cat", "level": 0, "year": 2020, "text_only": True,
+     "text": "L'Anna té 3 bosses amb 4 pomes a cada bossa. Es menja 2 pomes. Quantes en queden?",
+     "options": SAMPLE["options"], "label": "C"},
+    {"id": "t2", "language": "eng", "level": 2, "year": 2021, "text_only": False,
+     "text": "Which figure in the picture is shaded?", "options": {}, "label": "B"},
+]
+AGENT_VAL = [{"id": "v1", "language": "eng", "level": 2, "year": 2022, "text_only": True,
+              "text": "What is the value of 2 + 3 x 4?",
+              "options": {"A": "20", "B": "14", "C": "24", "D": "9", "E": "10"}, "label": "B"}]
+GOOD_HINT = "Compta primer quantes pomes hi ha en total i després treu les que es menja."
+
+
+def agent_line(kind, problem_id, **fields):
+    return {"id": problem_id, "kind": kind, "source": "agent", **fields}
+
+
+class AgentBatches(unittest.TestCase):
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.dir = folder.name
+        self.train = self.write("train.jsonl", AGENT_TRAIN)
+        self.val = self.write("val.jsonl", AGENT_VAL)
+
+    def write(self, name, rows, raw=()):
+        path = os.path.join(self.dir, name)
+        with open(path, "w", encoding="utf-8") as f:
+            for row in rows:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+            for line in raw:
+                f.write(line + "\n")
+        return path
+
+    def check(self, kind, rows, raw=(), data=True):
+        """Run the checker as the command line does: (exit code, kept rows, printed text)."""
+        path = self.write(f"{kind}_out.jsonl", rows, raw)
+        args = [path, "--kind", kind, "--db", os.path.join(self.dir, "none.db")]
+        args += ["--data", self.train, self.val] if data else ["--no-data"]
+        printed = io.StringIO()
+        with contextlib.redirect_stdout(printed):
+            code = check_agent_output.main(args)
+        with open(check_agent_output.default_ok_path(path), encoding="utf-8") as f:
+            kept = [json.loads(line) for line in f if line.strip()]
+        return code, kept, printed.getvalue()
+
+    def test_hint_bank(self):
+        code, kept, printed = self.check("hint_bank", [
+            agent_line("hint_bank", "t1", lang="cat", hint=GOOD_HINT),
+            agent_line("hint_bank", "t1", lang="cat", hint="Fixa't en la resposta C, és la bona."),
+            agent_line("hint_bank", "t1", lang="cat", hint="Multiplica les bosses per les pomes de cada bossa."),
+            agent_line("hint_bank", "t1", lang="cat", hint="Fes un dibuix de les bosses i les pomes."),
+            agent_line("hint_bank", "t1", lang="cat", hint=GOOD_HINT),
+            agent_line("hint_bank", "zz", lang="cat", hint=GOOD_HINT),
+            agent_line("hint_bank", "t2", lang="cat", hint="Mira bé quina figura està pintada."),
+            agent_line("hint_bank", "t1", lang="eng", hint="Count the apples first."),
+            agent_line("hint_bank", "t1", lang="cat", hint="Compta les pomes. Després resta."),
+        ], raw=["{not json"])
+        self.assertEqual(code, 1)
+        self.assertEqual([row["hint"] for row in kept],
+                         [GOOD_HINT, "Multiplica les bosses per les pomes de cada bossa."])
+        for expected in ("line 2 (t1): rejected by copilot.leak (lletra)", "already two hints",
+                         "unknown problem id 'zz'", "isn't eligible", "lang must be 'cat'",
+                         "one sentence", "not valid JSON"):
+            self.assertIn(expected, printed)
+        self.assertNotIn(SAMPLE["text"], printed)   # errors never show the problem text
+
+    def test_value_leak_in_another_language_is_caught(self):
+        code, kept, printed = self.check("hint_bank", [
+            agent_line("hint_bank", "t1", lang="cat", hint="Al final en queden deu, compta-les.")])
+        self.assertEqual((code, kept), (2, []))
+        self.assertIn("(valor)", printed)
+
+    def test_schema(self):
+        code, kept, printed = self.check("hint_bank", [
+            {"id": "t1", "kind": "hint_bank", "source": "human", "lang": "cat", "hint": GOOD_HINT},
+            agent_line("hint_bank", "t1", lang="cat", hint=GOOD_HINT, extra=1),
+            agent_line("solutions", "t1", lang="cat", hint=GOOD_HINT),
+            agent_line("hint_bank", "t1", lang="cat"),
+            agent_line("hint_bank", "t1", lang="cat", hint=7),
+        ])
+        self.assertEqual((code, kept), (2, []))
+        for expected in ("expected 'agent'", "unknown field 'extra'", "expected 'hint_bank'",
+                         "missing field 'hint'", "'hint' should be a string"):
+            self.assertIn(expected, printed)
+
+    def test_without_data_it_checks_schema_and_rules(self):
+        code, kept, printed = self.check("hint_bank", [
+            agent_line("hint_bank", "anything", lang="cat", hint=GOOD_HINT, label="C"),
+            agent_line("hint_bank", "other", lang="cat", hint=GOOD_HINT)], data=False)
+        self.assertEqual(code, 1)
+        self.assertEqual(len(kept), 1)
+        self.assertIn("no label to check against", printed)
+
+    def test_hint_experiment(self):
+        row = agent_line("hint_experiment", "t1", good=GOOD_HINT,
+                         bad="Pensa en el teu color preferit i en com et fa sentir avui.",
+                         leak="La resposta és la C.")
+        code, kept, printed = self.check("hint_experiment", [
+            row,
+            agent_line("hint_experiment", "t1", good=GOOD_HINT, bad=row["bad"], leak="Ja ho tens."),
+            agent_line("hint_experiment", "v1", good="Fes primer la multiplicació.",
+                       bad="Pensa en el teu color preferit i en com et fa sentir avui.",
+                       leak="Són 14."),
+            agent_line("hint_experiment", "v1", good="Fes primer la multiplicació i després suma.",
+                       bad="Pensa en el teu color preferit.", leak="La B."),
+        ])
+        self.assertEqual(code, 1)
+        self.assertEqual(len(kept), 2)
+        self.assertEqual(kept[0]["label"], "C")
+        self.assertEqual(kept[0]["text"], AGENT_TRAIN[1]["text"])   # the Catalan text, for TUTOR_LANG
+        self.assertEqual(kept[0]["options"], SAMPLE["options"])
+        self.assertIn("already has hints", printed)
+        self.assertIn("about as long as good", printed)
+        # what hint_experiment.py reads: id, label, options, text, good, bad, leak
+        self.assertLessEqual({"id", "label", "options", "text", "good", "bad", "leak"}, set(kept[0]))
+
+    def test_solutions(self):
+        code, kept, printed = self.check("solutions", [
+            agent_line("solutions", "t1", solution="12 apples, minus 2, leaves 10.", answer="C",
+                       expression="3 * 4 - 2"),
+            agent_line("solutions", "v1", solution="2 + 12 = 14", answer="B"),
+            agent_line("solutions", "t2", solution="Look at it.", answer="A"),
+            agent_line("solutions", "t2", solution="The shaded one.", answer="B",
+                       expression="__import__('os')"),
+            agent_line("solutions", "t2", solution="The shaded one.", answer="B", type="visual"),
+            agent_line("solutions", "t1", solution="Again.", answer="C"),
+        ])
+        self.assertEqual(code, 1)
+        self.assertEqual([row["id"] for row in kept], ["t1"])
+        for expected in ("training problems only", "doesn't match the label",
+                         "may only use numbers", "unknown field 'type'", "already in the file"):
+            self.assertIn(expected, printed)
+        _code, _kept, printed = self.check("solutions", [
+            agent_line("solutions", "t1", solution="Ten.", answer="C", expression="3 * 4")])
+        self.assertIn("expression gives 12, the correct option is 10", printed)
+
+    def test_problem_types(self):
+        code, kept, printed = self.check("problem_types", [
+            agent_line("problem_types", "t1", type="arithmetic", topic="aritmetica",
+                       python_solvable=True),
+            agent_line("problem_types", "v1", type="arithmetic"),
+            agent_line("problem_types", "t2", type="algebra"),
+            agent_line("problem_types", "t2", type="visual", python_solvable="no"),
+            agent_line("problem_types", "t2", type="visual", answer="B"),
+        ])
+        self.assertEqual(code, 1)
+        self.assertEqual([row["id"] for row in kept], ["t1", "v1"])
+        for expected in ("type must be one of", "'python_solvable' should be true or false",
+                         "unknown field 'answer'", "types: arithmetic 2"):
+            self.assertIn(expected, printed)
+
+    def test_export_never_gives_validation_labels(self):
+        out = os.path.join(self.dir, "types_in.jsonl")
+        for kind, split, n in (("problem_types", None, 0), ("hint_bank", None, 0),
+                               ("leak_cases", "all", 0)):
+            args = ["--kind", kind, "--n", str(n), "--out", out, "--data", self.train, self.val,
+                    "--db", os.path.join(self.dir, "none.db")] + (["--split", split] if split else [])
+            with contextlib.redirect_stdout(io.StringIO()):
+                export_batch.main(args)
+            with open(out, encoding="utf-8") as f:
+                rows = [json.loads(line) for line in f]
+            for row in rows:
+                self.assertEqual("label" in row, kind != "problem_types" and row["split"] == "train")
+            if kind == "hint_bank":   # eligible training problems only
+                self.assertEqual([row["id"] for row in rows], ["t1"])
+                self.assertEqual(list(rows[0]["texts"]), ["eng", "cat"])
+        with self.assertRaises(SystemExit):
+            export_batch.main(["--kind", "solutions", "--split", "all", "--out", out,
+                               "--data", self.train, self.val, "--db", "none.db"])
+
+    def test_leak_cases_feed_the_filter_evaluation(self):
+        code, kept, _printed = self.check("leak_cases", [
+            agent_line("leak_cases", "t1", hint="La resposta és la C.", label="C", leak=True,
+                       category="lletra"),
+            agent_line("leak_cases", "t1", hint=GOOD_HINT, label="C", leak=False, category="neta"),
+            agent_line("leak_cases", "inv-001", hint="Són 17.", label="B", leak=True,
+                       options={"A": "15", "B": "17", "C": "18", "D": "20", "E": "23"},
+                       text="4 caixes de 5 llapis i en regala 3."),
+            agent_line("leak_cases", "inv-002", hint="Són 17.", label="B", leak=True),
+            agent_line("leak_cases", "t1", hint="Hi ha deu pomes.", label="C", leak=False,
+                       category="valor"),
+        ])
+        self.assertEqual(code, 1)
+        self.assertEqual(len(kept), 3)
+        self.assertEqual(kept[0]["options"], SAMPLE["options"])
+        report = leak.evaluate(kept)
+        self.assertEqual((report["leaks"], report["clean"]), (2, 1))
+
+    def test_topics_reference(self):
+        code, kept, printed = self.check("topics_reference", [
+            agent_line("topics_reference", "t1", topic="aritmetica", alt=None),
+            agent_line("topics_reference", "v1", topic="algebra"),
+            agent_line("topics_reference", "t2", topic="geometria", alt="geometria"),
+        ])
+        self.assertEqual(code, 1)
+        self.assertEqual(len(kept), 1)
+        self.assertIn("topics.py agrees on 1/1", printed)
+        self.assertEqual(set(agent_lots.TOPIC_KEYS), set(topics.NAMES))
+
+    def test_invented_problems(self):
+        options = {"A": "15", "B": "17", "C": "18", "D": "20", "E": "23"}
+        text = "La Laia té 4 caixes amb 5 llapis cadascuna i en regala 3. Quants llapis li queden?"
+        code, kept, printed = self.check("invented_problems", [
+            agent_line("invented_problems", "inv-001", language="cat", level=0, text=text,
+                       options=options, label="B", topic="aritmetica"),
+            agent_line("invented_problems", "inv-002", language="eng", level=0,
+                       text=SAMPLE["text"], options=SAMPLE["options"], label="C"),
+            agent_line("invented_problems", "t1", language="eng", level=0, text="New text here.",
+                       options=options, label="B"),
+            agent_line("invented_problems", "inv-003", language="eng", level=9, text="Another one?",
+                       options=options, label="B"),
+            agent_line("invented_problems", "new-004", language="eng", level=1, text="One more?",
+                       options=options, label="B"),
+            agent_line("invented_problems", "inv-005", language="eng", level=1, text="Last one?",
+                       options={**options, "E": "15"}, label="B"),
+        ])
+        self.assertEqual(code, 1)
+        self.assertEqual([row["id"] for row in kept], ["inv-001"])
+        self.assertLessEqual({"id", "language", "level", "text", "options", "label"}, set(kept[0]))
+        self.assertIn("too close to the M3Kang problem t1", printed)
+        self.assertIn("ids start with 'inv-'", printed)
+        self.assertIn("level must be between 0 and 7", printed)
+        self.assertIn("can't reuse an M3Kang id", printed)
+        self.assertIn("two options have the same value", printed)
+
+    def test_expression_is_safe_arithmetic(self):
+        self.assertEqual(check_agent_output.evaluate_expression("(12 + 3) * 4 / 5"), 12)
+        for bad in ("open('x')", "2 ** 1000", "1 / 0", "x + 1"):
+            with self.assertRaises(check_agent_output.LineError):
+                check_agent_output.evaluate_expression(bad)
+
+
+class HintSource(unittest.TestCase):
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.path = os.path.join(folder.name, "tutor.db")
+
+    def test_old_database_gets_the_column(self):
+        import sqlite3
+        old = sqlite3.connect(self.path)
+        old.execute("CREATE TABLE hints (n INTEGER PRIMARY KEY AUTOINCREMENT, problem_id TEXT, "
+                    "student INTEGER, text TEXT, delta REAL, convinced INTEGER, "
+                    "shown INTEGER DEFAULT 0, solved_after INTEGER DEFAULT 0, ts REAL)")
+        old.execute("INSERT INTO hints (problem_id, student, text, delta, convinced, ts) "
+                    "VALUES ('p1', 1, 'old hint', 0.5, 1, 0)")
+        old.commit()
+        old.close()
+        for _ in range(2):   # opening it twice must not fail on the second ALTER
+            store = Store(self.path)
+            self.assertEqual(store.hints()[0]["source"], "student")
+            store.close()
+
+    def test_add_hint_source(self):
+        store = Store(self.path)
+        self.addCleanup(store.close)
+        store.add_hint("p1", 1, "from a student", 0.3, True)
+        store.add_hint("p1", None, "from the bank", None, False, source="agent")
+        self.assertEqual([h["source"] for h in store.hints()], ["student", "agent"])
+        self.assertTrue(store.has_hint("p1", "from the bank", "agent"))
+        self.assertFalse(store.has_hint("p1", "from the bank", "student"))
+        with self.assertRaises(ValueError):
+            store.add_hint("p1", 1, "x", None, False, source="teacher")
+
+    def test_import_hints_is_idempotent(self):
+        store = Store(self.path)
+        store.run("INSERT INTO problems (id, label, eligible) VALUES ('t1', 'C', 1)")
+        store.close()
+        rows = [agent_line("hint_bank", "t1", lang="cat", hint=GOOD_HINT),
+                agent_line("hint_bank", "t1", lang="cat", hint="Multiplica abans de restar."),
+                agent_line("hint_bank", "zz", lang="cat", hint=GOOD_HINT)]
+        path = os.path.join(os.path.dirname(self.path), "agent_hints.jsonl")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows))
+        for added in (2, 0):
+            printed = io.StringIO()
+            with contextlib.redirect_stdout(printed):
+                self.assertEqual(import_hints.main([path, "--db", self.path]), 0)
+            self.assertIn(f"Added {added} hints", printed.getvalue())
+        store = Store(self.path)
+        self.addCleanup(store.close)
+        hints = store.hints()
+        self.assertEqual(len(hints), 2)
+        self.assertEqual({h["source"] for h in hints}, {"agent"})
+        self.assertEqual(store.best_hint("t1")["source"], "agent")   # the fallback for rung 3
 
 
 if __name__ == "__main__":
