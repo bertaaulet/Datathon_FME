@@ -25,7 +25,7 @@ sys.path.insert(0, HERE)
 
 import demo_data  # noqa: E402
 import fake_llama  # noqa: E402
-from copilot import elo, hintsim, led, leak, llm, pipeline, topics  # noqa: E402
+from copilot import calib, elo, hintsim, led, leak, llm, pipeline, topics  # noqa: E402
 from copilot.config import CONFIG  # noqa: E402
 from copilot.store import Store  # noqa: E402
 from copilot.tutor import Tutor, bar_value, kangaroo  # noqa: E402
@@ -185,6 +185,49 @@ class Solver(WithServers):
         self.ask(SAMPLE, hint="Count all the apples first.")
         first, second = self.model.calls[-2:]
         self.assertLess(second["prompt_n"], 20)
+
+
+class Calibration(unittest.TestCase):
+    def test_level_from_the_field_or_the_id(self):
+        self.assertEqual(calib.problem_level({"id": "x", "level": 3}), 3)
+        self.assertEqual(calib.problem_level({"id": "lvl-5_2019_7"}), 5)
+        self.assertEqual(calib.problem_level({"id": "lvl-5_2019_7", "level": None}), 5)
+        self.assertEqual(calib.problem_level({"id": "lvl-12_2019_7", "level": ""}), 12)
+        self.assertIsNone(calib.problem_level({"id": "sample-1"}))
+        self.assertIsNone(calib.problem_level({}))
+
+    def test_prior_by_level_when_level_is_missing(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "priors.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"global": "D", "by_level": {"2": "B"}}, f)
+            saved, calib.PRIORS_PATH = calib.PRIORS_PATH, path
+            try:
+                self.assertEqual(calib.prior_letter({"id": "lvl-2_2015_3"}), "B")
+                self.assertEqual(calib.prior_letter({"id": "lvl-4_2015_3"}), "D")
+                self.assertEqual(calib.prior_letter({"id": "outside"}), "D")
+            finally:
+                calib.PRIORS_PATH = saved
+
+    def test_batch_bias_and_rescore(self):
+        # A model that loves position A: two problems, the second seen rotated
+        loves_a = {"A": 0.6, "B": 0.1, "C": 0.1, "D": 0.1, "E": 0.1}
+        order = pipeline.rotation(2)
+        rotated = {order[i]: loves_a[l] for i, l in enumerate("ABCDE")}
+        results = [{"full": True, "passes": [("ABCDE", dict(loves_a))]},
+                   {"full": True, "passes": [(order, rotated)]},
+                   {"full": False, "passes": [("ABCDE", {"A": 0, "B": 0, "C": 0, "D": 0, "E": 1})]}]
+        bias = calib.batch_bias(results)
+        self.assertEqual(bias["n"], 2)
+        self.assertAlmostEqual(bias["A"], 0.6)
+        self.assertIsNone(calib.batch_bias([{"full": False, "passes": []}]))
+        # Here the bias is the whole answer, so after the correction every letter ties
+        fixed = pipeline.rescore(dict(results[0]), bias)
+        self.assertAlmostEqual(fixed["probs"]["A"], 0.2)
+        self.assertEqual(fixed["answer"], "A")  # ties go to the earlier letter
+        leaning = {"full": True, "passes": [("ABCDE", {"A": 0.5, "B": 0.3, "C": 0.1, "D": 0.05,
+                                                      "E": 0.05})]}
+        self.assertEqual(pipeline.rescore(leaning, bias)["answer"], "B")
 
 
 class Leaks(unittest.TestCase):
@@ -571,6 +614,20 @@ class Scripts(WithServers):
                 log = list(csv.DictReader(f))
             self.assertEqual((log[0]["name"], log[0]["n"]), ("test", "12"))
             self.assertIn("rotations=1", log[0]["settings"])
+            self.assertTrue(log[0]["machine"])
+
+            done = self.run_script(os.path.join(ROOT, "eval.py"), "--input", data, "--limit", "12",
+                                   "--rotations", "1", "--debias", "batch", "--name", "batch",
+                                   cwd=folder)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            self.assertIn("Batch letter bias", done.stdout)
+            with open(os.path.join(folder, "results", "ablations.csv"), encoding="utf-8") as f:
+                log = list(csv.DictReader(f))
+            self.assertIn("debias=batch", log[1]["settings"])
+            with open(os.path.join(folder, log[1]["details"]), encoding="utf-8") as f:
+                details = list(csv.DictReader(f))
+            self.assertEqual(len(details), 12)
+            self.assertTrue(all(r["answer"] in tuple("ABCDE") for r in details))
 
     def test_web_server_endpoints(self):
         from app.server import make_handler

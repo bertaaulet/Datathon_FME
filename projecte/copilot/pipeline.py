@@ -46,6 +46,25 @@ def best_letter(probs):
     return max(LETTERS, key=lambda letter: (probs[letter], -LETTERS.index(letter)))
 
 
+def rescore(result, bias):
+    """Apply a letter bias after the fact, to a result solved without one (eval.py --debias batch).
+
+    Changes result["probs"] and result["answer"] in place. No model call.
+    """
+    if not bias or not result.get("full") or not result.get("passes"):
+        return result
+    fixed = []
+    for order, probs in result["passes"]:
+        # probabilities by position (what the model saw), divided by the bias, then back
+        by_position = {LETTERS[i]: probs[order[i]] / max(float(bias.get(LETTERS[i], 0.2)), 1e-6)
+                       for i in range(5)}
+        total = sum(by_position.values())
+        fixed.append({order[i]: by_position[LETTERS[i]] / total for i in range(5)})
+    result["probs"] = combine(fixed)
+    result["answer"] = best_letter(result["probs"])
+    return result
+
+
 def solve(problem, index=None, k=0, exclude_id=None, image_b64=None, llm_url=URL,
           time_limit=TIME_LIMIT):
     """Return {"answer", "seconds", "status", "probs", "calls", ...} for one problem.
@@ -56,7 +75,8 @@ def solve(problem, index=None, k=0, exclude_id=None, image_b64=None, llm_url=URL
     """
     start = time.perf_counter()
     result = {"answer": FALLBACK, "status": "ok", "prompt_tokens": 0, "retrieved": "",
-              "examples": [], "probs": {}, "calls": 0, "letters_found": 0}
+              "examples": [], "probs": {}, "calls": 0, "letters_found": 0,
+              "passes": [], "full": False}
     try:
         result["answer"] = prior_letter(problem)
         _solve(problem, result, start, index, k, exclude_id, image_b64, llm_url, time_limit)
@@ -81,6 +101,7 @@ def _solve(problem, result, start, index, k, exclude_id, image_b64, llm_url, tim
 
     _question, options = split_problem(problem)
     full = all(letter in options for letter in LETTERS)
+    result["full"] = full
     blind = not options and not image_b64
     if blind and CONFIG.get("PREDICT_NO_OPTIONS", "prior").lower() == "prior":
         return  # the letters mean nothing to the model: keep the most common one
@@ -98,6 +119,7 @@ def _solve(problem, result, start, index, k, exclude_id, image_b64, llm_url, tim
                          url=llm_url, bias=bias)
     slowest = time.perf_counter() - began
     passes = [first["probs"]]
+    result["passes"].append((LETTERS, first["probs"]))
     result.update(calls=1, letters_found=first["found"],
                   prompt_tokens=first["timings"].get("prompt_n", 0),
                   probs=first["probs"], answer=best_letter(first["probs"]))
@@ -117,6 +139,7 @@ def _solve(problem, result, start, index, k, exclude_id, image_b64, llm_url, tim
         took = time.perf_counter() - began
         slowest = took if result["calls"] == 1 else max(slowest, took)
         passes.append(extra["probs"])
+        result["passes"].append((rotation(shift), extra["probs"]))
         result["calls"] += 1
         result["probs"] = combine(passes)
         result["answer"] = best_letter(result["probs"])
