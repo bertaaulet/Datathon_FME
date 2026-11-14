@@ -524,6 +524,28 @@ class TutorFlow(WithServers):
         if hint["convinced"]:
             self.assertEqual(view["phase"], "done")
 
+    def test_precomputed_kangaroo_does_not_call_the_model(self):
+        # Wrong-leaning probabilities for every problem, as prep/kangaroo_baseline.py stores them
+        self.store.run("UPDATE problems SET k_probs = ?",
+                       (json.dumps({"A": 0.4, "B": 0.3, "C": 0.1, "D": 0.1, "E": 0.1}),))
+        self.tutor.start("Test", "", 1)
+        calls = len(self.model.calls)
+        self.tutor.next()
+        current = self.tutor.current
+        self.assertEqual(len(self.model.calls), calls)               # no reference call
+        self.assertTrue(current["ref_done"])
+        self.assertIsNotNone(current["ref"])
+        view = self.tutor.answer(current["label"])
+        self.assertFalse(view["busy"])                               # nothing to wait for
+        self.assertEqual(len(self.model.calls), calls)
+
+    def test_kangaroo_is_asked_when_nothing_was_precomputed(self):
+        self.tutor.start("Test", "", 1)
+        calls = len(self.model.calls)
+        self.tutor.next()
+        self.assertEqual(len(self.model.calls), calls + 1)           # one reference call
+        self.assertTrue(self.tutor.current["ref_done"])
+
     def test_nonsense_hint_does_not_convince(self):
         self.tutor.start("Test", "", 1)
         self.teachable()
