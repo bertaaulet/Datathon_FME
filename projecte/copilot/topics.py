@@ -26,7 +26,7 @@ TOPICS = [
     ]),
     ("comptar", "Comptar i combinar", [
         "how many ways", "how many different", "in how many", "arrange", "combination",
-        "possibilit", "choose", "different ways", "order ", "de quantes maneres",
+        "possibilit", "choose", "different ways", "de quantes maneres",
         "quantes maneres", "combinaci", "ordenar",
     ], [
         "Fes una llista ordenada de tots els casos, sense saltar-te'n cap.",
@@ -71,8 +71,7 @@ TOPICS = [
     ]),
     ("logica", "Lògica", [
         "true", "false", "lie ", "liar", "truth", "statement", "says ", "exactly one",
-        "always", "never", "cert ", "fals", "menteix", "mentider", "veritat", "afirmaci",
-        "sempre", "mai ",
+        "cert ", "fals", "menteix", "mentider", "veritat", "afirmaci",
     ], [
         "Suposa que una afirmació és certa i mira si porta a una contradicció.",
         "Fes una taula amb totes les possibilitats i ves descartant.",
@@ -94,8 +93,8 @@ TOPICS = [
         "Prova de treballar cap enrere, des del final fins a l'inici.",
     ]),
     ("aritmetica", "Càlcul i problemes amb nombres", [
-        "sum ", "total ", "altogether", "costs", "price", "euro", "calculate", "value of",
-        "product", "difference", "suma", "preu", "calcula", "valor", "producte", "diferència",
+        "sum ", "total ", "altogether", "costs", "price", "euro",
+        "product", "difference", "suma", "preu", "producte", "diferència",
     ], [
         "Escriu què saps i què et demanen abans de calcular.",
         "Fes el càlcul per parts i comprova cada pas.",
