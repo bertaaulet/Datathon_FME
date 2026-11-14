@@ -330,6 +330,8 @@ class Tutor:
             if not reason and current["model"]["options"] != current["options"]:
                 reason = leak.check(text, current["label"], current["model"]["options"], statements)
             if reason:
+                # Kept as data (how often students give the answer away), never shown to anyone
+                self.store.add_hint(current["id"], 1, text, None, False, rejected=reason)
                 self._say("sistema", leak.MESSAGES[reason], "fuita")
                 return self.view()
             current["tries"] += 1

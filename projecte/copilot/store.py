@@ -52,7 +52,8 @@ CREATE TABLE IF NOT EXISTS hints (
     source TEXT DEFAULT 'student',  -- who wrote it: 'student', 'seed' or 'agent'
     relevance REAL,         -- cosine similarity to the problem's references (NULL: not measured)
     dups INTEGER DEFAULT 0, -- how many later hints were near copies of this one
-    vec BLOB                -- the hint's embedding, float32 (NULL: not embedded)
+    vec BLOB,               -- the hint's embedding, float32 (NULL: not embedded)
+    rejected TEXT           -- why the leak filter refused it (NULL: it passed); never shown
 );
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 -- Embeddings of the texts a student's hint is compared with, made on the laptop
@@ -70,6 +71,7 @@ MIGRATIONS = [
     ("hints", "relevance", "REAL"),
     ("hints", "dups", "INTEGER DEFAULT 0"),
     ("hints", "vec", "BLOB"),
+    ("hints", "rejected", "TEXT"),
 ]
 
 # The order of the hints another student may see: what helped people most, then the
@@ -196,13 +198,16 @@ class Store:
     # --- hints -------------------------------------------------------------
 
     def add_hint(self, problem_id, student_id, text, delta, convinced, source="student",
-                 relevance=None, vec=None):
+                 relevance=None, vec=None, rejected=None):
+        """Store a hint. rejected: the leak filter's reason, for a hint kept only as data."""
         if source not in HINT_SOURCES:
             raise ValueError(f"unknown hint source {source!r}, expected one of {HINT_SOURCES}")
+        if rejected:
+            delta, convinced, relevance, vec = None, False, None, None
         return self.run("INSERT INTO hints (problem_id, student, text, delta, convinced, ts, "
-                        "source, relevance, vec) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        "source, relevance, vec, rejected) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (problem_id, student_id, text, delta, int(bool(convinced)), time.time(),
-                         source, relevance, vec)).lastrowid
+                         source, relevance, vec, rejected or None)).lastrowid
 
     def hint_duplicate(self, n, convinced=False):
         """A near copy of hint n arrived: count it, and keep the better verdict of the two."""
@@ -211,7 +216,8 @@ class Store:
 
     def hint_vectors(self, problem_id, source=None):
         """[(n, source, vec blob)] for the embedded hints of a problem."""
-        sql = "SELECT n, source, vec FROM hints WHERE problem_id = ? AND vec IS NOT NULL"
+        sql = ("SELECT n, source, vec FROM hints WHERE problem_id = ? AND vec IS NOT NULL "
+               "AND rejected IS NULL")
         args = [problem_id]
         if source:
             sql += " AND source = ?"
@@ -254,11 +260,11 @@ class Store:
         relevant, args = "", [problem_id]
         if min_relevance is not None:
             relevant, args = " AND (relevance IS NULL OR relevance >= ?)", [problem_id, min_relevance]
-        found = self.one("SELECT * FROM hints WHERE problem_id = ? AND source != 'agent' AND "
-                         "(convinced = 1 OR (source = 'seed' AND delta IS NULL))"
+        found = self.one("SELECT * FROM hints WHERE problem_id = ? AND rejected IS NULL AND "
+                         "source != 'agent' AND (convinced = 1 OR (source = 'seed' AND delta IS NULL))"
                          f"{relevant} {HINT_ORDER} LIMIT 1", args)
-        return found or self.one("SELECT * FROM hints WHERE problem_id = ? AND source = 'agent' "
-                                 f"{HINT_ORDER} LIMIT 1", (problem_id,))
+        return found or self.one("SELECT * FROM hints WHERE problem_id = ? AND rejected IS NULL "
+                                 f"AND source = 'agent' {HINT_ORDER} LIMIT 1", (problem_id,))
 
     def best_neighbour_hint(self, neighbour_ids, min_relevance=None):
         """The best hint of a similar problem: a student's first, then the agent's.
