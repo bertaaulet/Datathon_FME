@@ -82,17 +82,26 @@ def text(chars):
     return grid
 
 
-def bar(fraction):
-    """A bar from left to right: how sure the Kangaroo is of the right answer.
+def bar(fraction, previous=None):
+    """One road that lights up from left to right: how sure the Kangaroo is of the right answer.
 
-    The middle column is marked, because half way is where it changes its mind.
+    The same picture the web page draws (13 lamps). A little arrow above the road
+    points at the last lit lamp, which is where the Kangaroo stands. A faint dot
+    marks where it stood before the last hint, so the picture shows how far it moved
+    (nothing blinks: a picture stays until the next one).
     """
     fraction = min(1.0, max(0.0, float(fraction)))
-    filled = int(round(fraction * COLS))
+    pos = int(round(fraction * (COLS - 1)))
     grid = blank()
     for c in range(COLS):
-        for r in range(2, 6):
-            grid[r][c] = ON if c < filled else DIM
-    for r in (0, 7):
-        grid[r][COLS // 2] = 3
+        for r in (3, 4):
+            grid[r][c] = ON if c <= pos else DIM
+    if previous is not None:
+        was = int(round(min(1.0, max(0.0, float(previous))) * (COLS - 1)))
+        if was != pos:
+            grid[2][was] = 2
+    grid[2][pos] = ON
+    for c in (pos - 1, pos, pos + 1):
+        if 0 <= c < COLS:
+            grid[1][c] = ON
     return grid

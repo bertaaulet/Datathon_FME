@@ -375,8 +375,9 @@ class Tutor:
                 self.store.add_hint(current["id"], 1, text, delta, convinced,
                                     relevance=(signals or {}).get("relevance"),
                                     vec=(signals or {}).get("vec"))
+            previous = current.get("bar")
             current["bar"] = bar_value(state["margin"])
-            self._show(led.bar(current["bar"]))
+            self._show(led.bar(current["bar"], previous))
             if convinced:
                 current["taught"] = True
                 self.phase = "done"
@@ -634,7 +635,9 @@ class Tutor:
             student = self.student
             attempts = self.store.attempts()
             summary = {"student": student, "attempts": len(attempts), "by_topic": [],
-                       "gap": None, "hints": self.store.hints(), "tau": self._tau()}
+                       "gap": None, "tau": self._tau(),
+                       # the embedding (bytes) is not JSON and the teacher does not need it
+                       "hints": [{k: v for k, v in h.items() if k != "vec"} for h in self.store.hints()]}
             groups = {}
             for attempt in attempts:
                 groups.setdefault(attempt["topic"] or topics.DEFAULT, []).append(attempt["correct"])
