@@ -1,6 +1,6 @@
 # Estat actual
 
-_Última actualització: 2026-11-14 20:25 — Berta (amb Claude)_
+_Última actualització: 2026-11-14 21:05 — Berta (amb Claude)_
 
 ## Fase
 Codi de la v1, harness de `predict.py` i arreglos del tutor a `main` (76 proves OK). La placa està a punt i el harness s'hi ha provat (temps i gramàtica). **Encara no hi ha cap encert mesurat amb M3Kang**: s'està mesurant ara. La presentació és **diumenge**. El pla és a [`PLA.md`](PLA.md), i els problemes trobats a la placa a [`PROBLEMES.md`](PROBLEMES.md).
@@ -13,14 +13,15 @@ Codi de la v1, harness de `predict.py` i arreglos del tutor a `main` (76 proves 
 
 **Aparcat fins que acabin:** tot el que depèn dels resultats o de les dades noves (anàlisi d'errors, configuració final de `predict.py`, `index.db`, `tutor.db`). Si l'OCR canvia `val.jsonl`, els resultats d'abans i de després **no es poden comparar**: cal fixar quina validació és la definitiva.
 
-## Qui fa què
-| Línia | Persona | Ara | Estat |
+## Línies de feina
+Les tasques s'assignen en veu alta a l'equip; aquí només hi ha què queda i de què depèn. La llista completa és a `PLA.md`.
+
+| Línia | Fet | Pendent | Depèn de |
 | --- | --- | --- | --- |
-| A · `predict.py` | Berta | Revisar com funcionen la similitud, la generació i l'avaluació de pistes | Harness a `main`: calibració, guardrails, biaix per lot, expressió (desactivada fins mesurar). Etapa 1 descartada (`DECISIONS.md`). Esperant els experiments |
-| B · Dades, agent i pistes | | Generar el banc de pistes amb l'agent | Dades `eng`/`cat` fetes. Infraestructura de pistes a `main` (lots, validació, importació, rànquing, pistes de mètode en 6 llengües) |
-| C · Placa i experiència del Teach | Irene | Millorar la visualització i l'experiència del tutor | Placa a punt; arreglos del tutor (problemes 3, 8, 9, 10) a `main` |
-| D · Puntuacions i pont d'idioma | | Revisar l'Elo (doble Elo, K, tria del problema) i el pont d'idioma; verificar les xifres de PISA | Comença ara. El dashboard Tukey es farà més endavant |
-| Sense responsable | | README, `LICENSE`, Project Hub, pitch, vídeo de reserva de la demo | ⬜ |
+| `predict.py` | Calibració, guardrails, biaix per lot, expressió (desactivada fins mesurar). Etapa 1 descartada | Decidir el biaix i l'expressió; anàlisi d'errors; RAG des de `config.env`; problemes sense opcions; configuració final i `--limit 0` | Experiments i segona volta d'OCR |
+| Pistes | Infraestructura (lots, validació, importació, rànquing, similitud, pistes de mètode en 6 llengües) | Banc de pistes de l'agent; solucions breus i tipus de problema; τ (D2); revisar la similitud i l'escala d'ajuda; decidir les pistes generades pel model | `tutor.db` i la placa per a D2 |
+| Tutor (Teach) | Escala d'ajuda, Cangur, pont d'idioma, Elo, arreglos de la placa | Visualització i experiència; revisar l'Elo i el pont d'idioma; problemes externs; `tutor.db`; servei i recorregut a la placa | Dades definitives i la placa |
+| Lliuraments | — | README, `LICENSE`, xifres de PISA, pitch, vídeo de reserva, Project Hub, dashboard Tukey (més endavant) | Resultats per als números |
 
 ## Placa
 - **Muntatge:** passos 0–8 fets. llama.cpp `2cbe0ec`, serveis `math-llm` (8081) i `math-embed` (8082) que arrenquen amb la placa. Accés per `adb shell` (USB). Repo a la placa: còpia dels fitxers a `~/Datathon_FME/projecte`, sense token.
@@ -38,7 +39,7 @@ Codi de la v1, harness de `predict.py` i arreglos del tutor a `main` (76 proves 
 | Lletra més freqüent per nivell (`priors.json`, sense model) | 24,6% | 281 | 0 s |
 
 ## Bloquejos i riscos
-- **Lliuraments sense responsable:** README (7 `TODO`, i diu que no s'ha executat res), `LICENSE` sense noms, Project Hub, pitch i vídeo de reserva.
+- **Lliuraments sense començar:** README (7 `TODO`, i diu que no s'ha executat res), `LICENSE` sense noms, Project Hub, pitch i vídeo de reserva.
 - **Una sola placa:** experiments de `predict.py`, `build_index.py`, `tutor.db`, la línia base del Cangur i la mesura final amb `--limit 0` (hores, si porta l'expressió) l'han de compartir. Cal acordar-ne l'ordre.
 - **`tutor.db` no existeix:** sense ell no hi ha demo amb el banc real. Depèn de les dades i dels embeddings de la placa.
 - **Abast:** `PLA.md` té ~55 tasques obertes. Cal decidir què es fa per diumenge i què s'explica com a "no fet".
@@ -46,7 +47,7 @@ Codi de la v1, harness de `predict.py` i arreglos del tutor a `main` (76 proves 
 
 ## Per decidir com a equip
 - Què entra per diumenge i què s'aparca (pistes generades pel model, ajust fi, imatge, problemes externs complets…).
-- Qui porta README, `LICENSE`, Project Hub, pitch i vídeo, i quan es fa el dashboard Tukey.
+- Quan es fa el dashboard Tukey.
 - L'ordre d'ús de la placa fins a la presentació.
 - Quina validació és la definitiva si la segona volta d'OCR canvia `val.jsonl`.
 - Les tres propostes de Claude a `DECISIONS.md` (port 8090, temes per paraules clau, K de l'Elo), el llindar de D4, l'idioma del README.
