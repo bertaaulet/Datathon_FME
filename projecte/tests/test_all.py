@@ -30,6 +30,17 @@ from copilot.config import CONFIG  # noqa: E402
 from copilot.store import Store  # noqa: E402
 from copilot.tutor import NEUTRAL_HINT, Tutor, bar_value, kangaroo  # noqa: E402
 
+# The tests don't depend on the machine translations of the phrases (phrases_mt.json):
+# every phrase and topic gets a stand-in "translation", the Catalan text with a language tag.
+REAL_PHRASES, REAL_TOPICS = phrases.load()
+for _key, _by_lang in phrases.PHRASES.items():
+    for _lang in phrases.LANGS:
+        if _lang != "cat":
+            _by_lang[_lang] = f"‹{_lang}› {_by_lang['cat']}"
+phrases.TOPIC_NAMES.clear()
+phrases.TOPIC_NAMES.update({_key: {_lang: f"‹{_lang}› {_name}" for _lang in phrases.LANGS if _lang != "cat"}
+                            for _key, _name in topics.NAMES.items()})
+
 TRAIN, VAL = demo_data.make(90)
 SAMPLE = {"id": "s1", "level": 0,
           "text": "Anna has 3 bags with 4 apples in each bag. She eats 2 apples. How many are left?",
@@ -535,14 +546,39 @@ class Phrases(unittest.TestCase):
         self.assertTrue(all(code in langs.NAMES and code in langs.ISO1 for code in langs.BRIDGE))
 
     def test_falls_back_to_catalan(self):
-        self.assertEqual(phrases.phrase("correcte", "fra"), "Correct !")
+        self.assertEqual(phrases.phrase("correcte", "fra"), "‹fra› Correcte!")
         self.assertEqual(phrases.phrase("correcte", "deu"), "Correcte!")           # no German
         self.assertEqual(phrases.phrase("solucio", "esp", label="C", value="10"),
-                         "La respuesta es la C) 10.")
+                         "‹esp› La resposta és la C) 10.")
         self.assertEqual(phrases.phrase("solucio", "esp"), phrases.PHRASES["solucio"]["cat"])
-        self.assertEqual(phrases.topic_name("logica", "zho"), "逻辑")
+        self.assertEqual(phrases.topic_name("logica", "zho"), "‹zho› Lògica")
         self.assertEqual(phrases.topic_name("logica", "deu"), topics.name("logica"))
         self.assertEqual(phrases.phrase("avis_extern"), phrases.EXTERNAL_WARNING)
+
+    def test_machine_translations_file(self):
+        # A translation is only used with the same {markers} as its Catalan template
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "mt.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"phrases": {"solucio": {"fra": "La réponse est {label}) {value}.",
+                                                   "esp": "La respuesta es la {label}.",   # lost one
+                                                   "deu": "x {label} {value}", "arb": "  "},
+                                       "nope": {"fra": "x"}, "correcte": "broken"},
+                           "topics": {"logica": {"fra": "Logique"}, "nope": {"fra": "x"}},
+                           "failed": [["solucio", "zho"]]}, f)
+            found, names = phrases.load(path)
+            self.assertEqual(found, {"solucio": {"fra": "La réponse est {label}) {value}."}})
+            self.assertEqual(names, {"logica": {"fra": "Logique"}})
+            self.assertEqual(phrases.load(path + ".missing"), ({}, {}))
+        # The real file, when it is there: no phrase gives an option away before the answer
+        allowed = (phrases.AFTER_SOLVING | phrases.STUDENT_VOICE | phrases.OTHER_PROBLEM
+                   | {"extern_sense_opcions"})
+        for key, by_lang in REAL_PHRASES.items():
+            for lang, template in by_lang.items():
+                text = template.format(**self.values(lang))
+                if key not in allowed:
+                    self.assertNotIn(leak.check_strict(text, self.OPTIONS, self.TEXT),
+                                     ("lletra", "valor", "posicio"), (key, lang))
 
     def test_no_phrase_leaks_in_any_language(self):
         # Every template, filled in, goes through the leak filter in its six versions.
@@ -851,7 +887,7 @@ class TutorFlow(WithServers):
             view = self.tutor.help()
         solution = view["messages"][-1]
         self.assertIn(f"{label}) {self.tutor.current['options'][label]}", solution["text"])
-        self.assertEqual(solution["origen"]["text"], f"La respuesta es la {label}) {words[label]}.")
+        self.assertEqual(solution["origen"]["text"], f"‹esp› La resposta és la {label}) {words[label]}.")
         self.tutor.student["etapa"] = 2
         seen = set()
         for _ in range(6):                                          # stage 2
@@ -1144,7 +1180,7 @@ class TutorFlow(WithServers):
         self.assertIn(topics.method_hint(topic, 0), message["text"])
         self.assertEqual(message["origen"]["lang"], "esp")
         self.assertEqual(message["origen"]["text"],                # the lead is translated too
-                         "Es un problema de «" + phrases.topic_name(topic, "esp") + "». "
+                         "‹esp› És un problema de «" + phrases.topic_name(topic, "esp") + "». "
                          + topics.method_hint(topic, 0, "esp"))
 
         self.tutor.student["etapa"] = 2                            # stage 2: behind the button

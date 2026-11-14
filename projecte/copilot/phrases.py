@@ -117,7 +117,9 @@ def load(path=MT_PATH):
     """Read the machine translations: ({key: {lang: text}}, {topic: {lang: name}}).
 
     Only what can be used: a known key, a bridge language, some text, and the same
-    {markers} as the Catalan template. No file, or a broken one, gives nothing.
+    {markers} as the Catalan template. A machine translation that the leak filter reads
+    as naming an option (a stray letter A-E) is left out too, unless the phrase is one
+    that names a letter on purpose. No file, or a broken one, gives nothing.
     """
     try:
         with open(path, encoding="utf-8") as f:
@@ -127,17 +129,25 @@ def load(path=MT_PATH):
     if not isinstance(data, dict):
         return {}, {}
 
-    def usable(table, reference):
+    names_a_letter = AFTER_SOLVING | STUDENT_VOICE | OTHER_PROBLEM | {"extern_sense_opcions"}
+
+    def stray_letter(key, text):
+        bare = string.Formatter().vformat(text, (), dict.fromkeys(fields(text), ""))
+        return key not in names_a_letter and any(leak.says_letter(bare, letter, [])
+                                                 for letter in leak.LETTERS)
+
+    def usable(table, reference, check=lambda key, text: False):
         out = {}
         for key, by_lang in (table or {}).items():
             if key not in reference or not isinstance(by_lang, dict):
                 continue
             for lang, text in by_lang.items():
                 if lang in LANGS and lang != REFERENCE and isinstance(text, str) and text.strip() \
-                        and fields(text) == fields(reference[key]):
+                        and fields(text) == fields(reference[key]) and not check(key, text):
                     out.setdefault(key, {})[lang] = text.strip()
         return out
-    return usable(data.get("phrases"), CATALAN), usable(data.get("topics"), topics.NAMES)
+    return (usable(data.get("phrases"), CATALAN, stray_letter),
+            usable(data.get("topics"), topics.NAMES))
 
 
 _translated, TOPIC_NAMES = load()
