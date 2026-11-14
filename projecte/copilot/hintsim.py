@@ -7,8 +7,9 @@ server), and three signals come out of the cosine similarity:
 
   relevance   the highest similarity to the problem's references and its topic's
               method hints. Stored with the hint and used to break ties.
-  duplicate   a hint of the same problem at least HINT_DUP_SIM similar: the new
-              one is not stored again, the old one counts a duplicate.
+  duplicate   another student's hint of the same problem at least HINT_DUP_SIM
+              similar: the new one is not stored again, the old one counts a
+              duplicate. The agent's hints never make a duplicate.
   (reuse)     the tutor shows a similar problem's hint when a problem has none;
               that uses the stored neighbours, not a new embedding.
 
@@ -86,7 +87,11 @@ def assess(store, problem_id, topic, text, embedder, timeout=10):
     scores = [s for s in scores if s is not None]
     duplicate_of, closest = None, None
     threshold = dup_threshold()
-    for n, _source, blob in store.hint_vectors(problem_id):
+    # Duplicates are other students' hints only. A hint close to the agent's bank is still
+    # stored: its human signal and delta are data we want, and relevance records the match.
+    for n, source, blob in store.hint_vectors(problem_id):
+        if source == "agent":
+            continue
         score = cosine(vector, from_blob(blob))
         if score is not None and (closest is None or score > closest):
             closest = score

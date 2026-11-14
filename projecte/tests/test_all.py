@@ -925,8 +925,11 @@ class HintSource(unittest.TestCase):
         self.assertEqual(counts, {"agent_hints": 1, "method": 3 * len(topics.NAMES), "solutions": 1})
         self.assertEqual(embed_refs.run(store, fake_embedder, solutions)["agent_hints"], 0)
         result = hintsim.assess(store, "p1", "geometria", "Fes un dibuix del quadrat!", fake_embedder)
-        self.assertAlmostEqual(result["relevance"], 1.0, places=5)
-        self.assertIsNotNone(result["duplicate_of"])                # same words as the bank hint
+        self.assertAlmostEqual(result["relevance"], 1.0, places=5)  # same words as the bank hint
+        self.assertIsNone(result["duplicate_of"])                   # but the bank never duplicates
+        first = store.add_hint("p1", 1, "Fes un dibuix del quadrat!", 1.0, True, vec=result["vec"])
+        again = hintsim.assess(store, "p1", "geometria", "Fes un dibuix del quadrat.", fake_embedder)
+        self.assertEqual(again["duplicate_of"], first)               # another student's hint does
         other = hintsim.assess(store, "p1", "geometria", "Pensa en els angles rectes.", fake_embedder)
         self.assertIsNone(other["duplicate_of"])
         self.assertLess(other["relevance"], 1.0)
