@@ -324,6 +324,72 @@ class Expressions(WithServers):
         self.assertEqual(plain["status"], "ok")
 
 
+class Retrieval(WithServers):
+    class FakeIndex:
+        def __init__(self, hits, fail=False):
+            self.hits, self.fail = hits, fail
+
+        def search(self, problem, k=1, exclude_id=None):
+            if self.fail:
+                raise OSError("embedding server down")
+            return [h for h in self.hits if h[1]["id"] != exclude_id][:k]
+
+    def solved(self, pid, value="10", options=True):
+        opts = {"A": "8", "B": "9", "C": value, "D": "12", "E": "14"} if options else {}
+        return {"id": pid, "language": "eng", "text": f"Problem {pid}: how many?",
+                "options": opts, "label": "C"}
+
+    def test_answer_format_shows_question_and_value_only(self):
+        CONFIG["PREDICT_RAG_FORMAT"] = "answer"
+        messages = llm.build_messages(SAMPLE, [self.solved("x1", "77")])
+        self.assertEqual(len(messages), 2)   # system + one user message, no fake replies
+        text = messages[1]["content"]
+        self.assertIn("Problem x1: how many?\nCorrect answer: 77", text)
+        self.assertNotIn("D) 12\nAnswer: C", text)
+        self.assertTrue(text.endswith("Answer:"))
+        self.assertIn("A) 8", text)        # the new problem keeps its options
+        CONFIG["PREDICT_RAG_FORMAT"] = "letter"
+        self.assertEqual(len(llm.build_messages(SAMPLE, [self.solved("x1")])), 4)
+
+    def test_retrieve_skips_same_problem_copies_and_unknown_values(self):
+        CONFIG["PREDICT_RAG_FORMAT"] = "answer"
+        hits = [(0.99, self.solved("copy")), (0.95, self.solved("s1")),
+                (0.90, self.solved("noopt", options=False)), (0.85, self.solved("s2")),
+                (0.80, dict(self.solved("s1"), language="cat"))]
+        index = self.FakeIndex(hits)
+        got = pipeline.retrieve(index, {"id": "s1", "text": "q"}, 2)
+        self.assertEqual([p["id"] for _s, p in got], ["s2"])  # not itself, not a copy, not without options
+        got = pipeline.retrieve(index, {"id": "new", "text": "q"}, 2)
+        self.assertEqual([p["id"] for _s, p in got], ["s1", "s2"])
+        self.assertEqual(pipeline.retrieve(self.FakeIndex(hits, fail=True), SAMPLE, 1), [])
+        self.assertEqual(pipeline.retrieve(None, SAMPLE, 1), [])
+
+    def test_solve_with_examples_and_a_broken_index(self):
+        index = self.FakeIndex([(0.9, self.solved("s9"))])
+        result = pipeline.solve(SAMPLE, index=index, k=1, llm_url=self.url)
+        self.assertEqual((result["status"], result["retrieved"]), ("ok", "s9:0.90"))
+        broken = pipeline.solve(SAMPLE, index=self.FakeIndex([], fail=True), k=1, llm_url=self.url)
+        self.assertEqual((broken["status"], broken["calls"]), ("ok", 1))
+
+    def test_robust_bias_has_a_floor(self):
+        bias = calib.robust({"A": 0.26, "B": 0.095, "C": 0.005, "D": 0.55, "E": 0.088, "n": 60})
+        self.assertAlmostEqual(sum(bias[l] for l in "ABCDE"), 1.0)
+        self.assertGreater(bias["C"], 0.04)
+        self.assertEqual(bias["n"], 60)
+
+    def test_split_is_by_id_level_and_repeatable(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("split_data", os.path.join(ROOT, "prep", "split_data.py"))
+        split_data = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(split_data)
+        levels = {f"lvl-{l}_20{y:02d}_{n}": l for l in range(4) for y in range(10) for n in range(5)}
+        first = split_data.split_ids(levels, 0.15, 0.15, "42")
+        self.assertEqual(first, split_data.split_ids(levels, 0.15, 0.15, "42"))
+        for level in range(4):
+            names = [first[i] for i, l in levels.items() if l == level]
+            self.assertEqual((names.count("val"), names.count("test")), (8, 8))  # 15% of 50, rounded
+
+
 class Leaks(unittest.TestCase):
     TEXT = [SAMPLE["text"]]
 

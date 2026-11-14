@@ -60,6 +60,7 @@ def main():
 
     chosen = common.sample([r for r in rows if common.has_options(r)], args.limit)
     totals = {letter: 0.0 for letter in LETTERS}
+    full_totals, full_done = {letter: 0.0 for letter in LETTERS}, 0
     picked, done, missing = Counter(), 0, 0
     for n, problem in enumerate(chosen, 1):
         try:
@@ -70,13 +71,23 @@ def main():
         missing += answer["found"] < 5
         for letter in LETTERS:
             totals[letter] += answer["probs"][letter]
+        if answer["found"] >= 5:  # the server listed every letter: a clean measurement
+            full_done += 1
+            for letter in LETTERS:
+                full_totals[letter] += answer["probs"][letter]
         picked[answer["letter"]] += 1
         done += 1
         print(f"\r{n}/{len(chosen)} problems", end="", flush=True)
     print()
     if not done:
         raise SystemExit("The model answered no problem. Is the service running?")
-    bias = {letter: totals[letter] / done for letter in LETTERS}
+    # Only problems with all five letters when there are enough; a missing letter's
+    # tiny floor would drag its average towards zero (calib.robust() also caps it)
+    if full_done >= max(20, done // 3):
+        bias = {letter: full_totals[letter] / full_done for letter in LETTERS}
+    else:
+        bias = {letter: totals[letter] / done for letter in LETTERS}
+    bias["n_full"] = full_done
     bias["n"] = done
     with open(BIAS_PATH, "w", encoding="utf-8") as f:
         json.dump(bias, f, indent=1)

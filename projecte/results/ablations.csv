@@ -1,0 +1,6 @@
+time,name,commit,machine,input,languages,n,rag_k,accuracy,mean_s,worst_s,over_limit,settings,details
+20261114-190347,baseline-org,,espacIAl (aarch64),data/val.jsonl,all,50,0,20.0,9.6,15.4,0,rotations=0 debias=off no_options=model expression=off,results/eval-20261114-190347-baseline-org.csv
+20261114-191149,baseline,,espacIAl (aarch64),data/val.jsonl,all,50,0,30.0,5.3,12.4,0,rotations=0 debias=auto no_options=prior expression=off,results/eval-20261114-191149-baseline.csv
+20261114-192448,debias,,espacIAl (aarch64),data/val.jsonl,all,50,0,32.0,5.3,12.4,0,rotations=0 debias=auto no_options=prior expression=off,results/eval-20261114-192448-debias.csv
+20261114-192916,debias-batch,,espacIAl (aarch64),data/val.jsonl,all,50,0,34.0,5.3,12.4,0,rotations=0 debias=batch no_options=prior expression=off bias_from=batch bias=0.254/0.169/0.062/0.366/0.149,results/eval-20261114-192916-debias-batch.csv
+20261114-193343,expr-override,,espacIAl (aarch64),data/val.jsonl,all,50,0,30.0,14.2,35.0,0,rotations=0 debias=auto no_options=prior expression=on/override,results/eval-20261114-193343-expr-override.csv

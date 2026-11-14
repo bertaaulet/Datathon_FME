@@ -28,7 +28,7 @@ from copilot.pipeline import TIME_LIMIT, rescore, solve
 
 DETAIL_FIELDS = ["id", "language", "level", "has_options", "label", "answer", "correct", "seconds",
                  "status", "prompt_tokens", "retrieved", "topic", "calls", "raw_answer", "stage",
-                 "shortened", "expr", "expr_value", "expr_letter"]
+                 "shortened", "expr", "expr_value", "expr_letter", "letters_found"]
 LOG_FIELDS = ["time", "name", "commit", "machine", "input", "languages", "n", "rag_k", "accuracy",
               "mean_s", "worst_s", "over_limit", "settings", "details"]
 
@@ -61,7 +61,8 @@ def detail_row(row):
             row["answer"], int(row["correct"]), row["seconds"], row["status"], row["prompt_tokens"],
             row["retrieved"], row["topic"], row["calls"], row["raw_answer"], row.get("stage", ""),
             int(bool(row.get("shortened"))), row.get("expr", ""),
-            "" if row.get("expr_value") is None else f"{row['expr_value']:g}", row.get("expr_letter", "")]
+            "" if row.get("expr_value") is None else f"{row['expr_value']:g}", row.get("expr_letter", ""),
+            row.get("letters_found", "")]
 
 
 def table(title, groups):
@@ -78,8 +79,14 @@ def main():
     p.add_argument("--input", default="data/val.jsonl")
     p.add_argument("--limit", type=int, default=50, help="0 means every problem")
     p.add_argument("--languages", default="", help="e.g. eng,cat")
-    p.add_argument("--rag", type=int, default=0, metavar="K")
-    p.add_argument("--index", default="data/index.db")
+    p.add_argument("--only-with-options", action="store_true",
+                   help="only problems with all five options: the ones where settings can differ. "
+                        "For deciding, never for the number you publish")
+    p.add_argument("--rag", type=int, default=None, metavar="K",
+                   help="similar training problems as examples (default: PREDICT_RAG_K)")
+    p.add_argument("--rag-format", choices=["answer", "letter"], default=None,
+                   help="answer: question + right value; letter: organizers' format (PREDICT_RAG_FORMAT)")
+    p.add_argument("--index", default=None, help="default: PREDICT_RAG_INDEX")
     p.add_argument("--name", default="", help="a label for this experiment in ablations.csv")
     p.add_argument("--rotations", type=int, default=None, metavar="N",
                    help="extra passes with the options rotated (overrides PREDICT_ROTATIONS)")
@@ -108,9 +115,16 @@ def main():
         CONFIG["PREDICT_EXPRESSION"] = args.expression
     if args.expr_mode is not None:
         CONFIG["PREDICT_EXPR_MODE"] = args.expr_mode
+    if args.rag is None:
+        args.rag = int(CONFIG.get("PREDICT_RAG_K", 0) or 0)
+    if args.rag_format is not None:
+        CONFIG["PREDICT_RAG_FORMAT"] = args.rag_format
+    args.index = args.index or CONFIG.get("PREDICT_RAG_INDEX", "data/index.db")
     settings = (f"rotations={CONFIG.get('PREDICT_ROTATIONS', 0)} "
                 f"debias={'batch' if batch else CONFIG.get('PREDICT_DEBIAS', 'auto')} "
                 f"no_options={CONFIG.get('PREDICT_NO_OPTIONS', 'prior')} "
+                + (f"rag={args.rag}/{CONFIG.get('PREDICT_RAG_FORMAT', 'answer')} " if args.rag else "")
+                + f"logprobs_top={CONFIG.get('LOGPROBS_TOP', 64)} "
                 f"expression={CONFIG.get('PREDICT_EXPRESSION', 'off')}"
                 + (f"/{CONFIG.get('PREDICT_EXPR_MODE', 'override')}"
                    if CONFIG.get('PREDICT_EXPRESSION', 'off') == 'on' else ""))
@@ -122,11 +136,15 @@ def main():
     languages = set(filter(None, args.languages.split(",")))
     if languages:
         problems = [x for x in problems if x["language"] in languages]
+    if args.only_with_options:
+        problems = [x for x in problems if len(x.get("options") or {}) == 5]
     random.Random(42).shuffle(problems)  # the same sample every run, so runs compare
     if args.limit:
         problems = problems[:args.limit]
 
     index = None
+    if args.rag and not os.path.exists(args.index):
+        raise SystemExit(f"{args.index} not found: build it with build_index.py, or run with --rag 0")
     if args.rag:
         from copilot.rag import Index
         index = Index(args.index)
@@ -222,7 +240,9 @@ def main():
         writer = csv.writer(f)
         if new:
             writer.writerow(LOG_FIELDS)
-        writer.writerow([stamp, name, git_commit(), machine_name(), args.input, args.languages or "all",
+        writer.writerow([stamp, name, git_commit(), machine_name(),
+                         args.input + (" (with options)" if args.only_with_options else ""),
+                         args.languages or "all",
                          len(rows), args.rag, f"{accuracy:.1f}", f"{statistics.mean(seconds):.1f}",
                          f"{max(seconds):.1f}", over, settings, detail_path])
     print(f"\nDetails: {detail_path}\nAblation log: {log}")

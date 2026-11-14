@@ -23,7 +23,7 @@ import urllib.error
 from . import mathexpr
 from .calib import letter_bias, prior_letter
 from .config import CONFIG
-from .llm import EXPR_MAX_TOKENS, LETTERS, URL, expression, letter_probs, split_problem
+from .llm import EXPR_MAX_TOKENS, LETTERS, URL, correct_value, expression, letter_probs, split_problem
 
 TIME_LIMIT = float(CONFIG["TIME_LIMIT_SECONDS"])
 FALLBACK = CONFIG["FALLBACK_ANSWER"]
@@ -86,6 +86,35 @@ def fit_text(question, options_chars, seconds):
         return None
     head = keep // 3
     return question[:head].rstrip() + " ... " + question[len(question) - (keep - head):].lstrip()
+
+
+def retrieve(index, problem, k, exclude_id=None):
+    """Up to k solved problems to show as examples: [(score, problem), ...].
+
+    Never the same problem (same id, in any language, or a near copy above
+    RAG_MAX_SIM): if the hidden test held a known problem, copying its answer
+    would be memory, not solving. In the "answer" format, only problems whose
+    right option OCR could read are useful. If the embedding server fails,
+    no examples: the model still answers.
+    """
+    if index is None or k <= 0:
+        return []
+    limit = float(CONFIG.get("RAG_MAX_SIM", 0.97))
+    need_value = CONFIG.get("PREDICT_RAG_FORMAT", "answer").lower() != "letter"
+    try:
+        hits = index.search(problem, k=k * 4 + 2, exclude_id=exclude_id or problem.get("id"))
+    except Exception:
+        return []
+    kept = []
+    for score, other in hits:
+        if other.get("id") == problem.get("id") or score >= limit:
+            continue
+        if need_value and correct_value(other) is None:
+            continue
+        kept.append((score, other))
+        if len(kept) == k:
+            break
+    return kept
 
 
 def best_letter(probs):
@@ -180,12 +209,10 @@ def _solve(problem, result, start, index, k, exclude_id, image_b64, llm_url, tim
     if blind and CONFIG.get("PREDICT_NO_OPTIONS", "prior").lower() == "prior":
         return  # the letters mean nothing to the model: keep the most common one
 
-    examples = []
-    if index is not None and k > 0:
-        hits = index.search(problem, k=k, exclude_id=exclude_id)
-        examples = [p for _score, p in hits]
-        result["examples"] = hits
-        result["retrieved"] = ";".join(f"{p['id']}:{s:.2f}" for s, p in hits)
+    hits = retrieve(index, problem, k, exclude_id)
+    examples = [p for _score, p in hits]
+    result["examples"] = hits
+    result["retrieved"] = ";".join(f"{p['id']}:{s:.2f}" for s, p in hits)
 
     # Plan the first call: if the problem can't be read in time, read a shorter version
     options_chars = sum(len(v) + 4 for v in options.values())
