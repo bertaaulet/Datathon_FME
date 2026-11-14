@@ -250,6 +250,17 @@ class Ratings(unittest.TestCase):
             self.assertTrue(all(0 <= v <= 7 for row in frame for v in row))
         self.assertEqual(sum(v == 7 for v in led.bar(1.0)[3]), 13)
 
+    def test_method_hints_in_every_language(self):
+        for key, by_lang in topics.HINTS.items():
+            self.assertEqual(set(by_lang), set(topics.HINT_LANGS), key)
+            self.assertEqual({len(hints) for hints in by_lang.values()}, {3}, key)
+            for hints in by_lang.values():
+                self.assertTrue(all(0 < len(hint) < 120 for hint in hints), key)
+        self.assertEqual(topics.method_hint("geometria", 1, "deu"), topics.method_hint("geometria", 1))
+        self.assertEqual(topics.method_hint("geometria", 1), topics.HINTS["geometria"]["cat"][1])
+        self.assertNotEqual(topics.method_hint("geometria", 1, "eng"), topics.method_hint("geometria", 1))
+        self.assertEqual(topics.method_hint("nothing", 0, "zho"), topics.HINTS[topics.DEFAULT]["zho"][0])
+
 
 def build_db(path, embed_port):
     """Run the real preparation script on the invented problems."""
@@ -408,6 +419,42 @@ class TutorFlow(WithServers):
         self.assertEqual((last["revealed"], last["lang"], last["shown"]), (1, "origen", "cat"))
         gap = self.tutor.teacher()["gap"]
         self.assertFalse(gap["ready"])                             # too few answers to say
+
+    def method_message(self, view):
+        return next(m for m in reversed(view["messages"]) if m["text"].startswith("És un problema de"))
+
+    def ask_for_method(self):
+        self.tutor.answer(self.wrong_letter())
+        for _ in range(2):   # rung 1 (a similar problem) is skipped when there is none
+            view = self.tutor.help()
+            if any(m["text"].startswith("És un problema de") for m in view["messages"]):
+                return view
+        self.fail("no method hint")
+
+    def test_method_hint_follows_the_language_stage(self):
+        self.tutor.start("Test", "esp", 1)                         # stage 1: both languages
+        self.tutor.next()
+        topic = self.tutor.current["row"]["topic"]
+        message = self.method_message(self.ask_for_method())
+        self.assertIn(topics.method_hint(topic, 0), message["text"])
+        self.assertEqual(message["origen"], {"lang": "esp", "text": topics.method_hint(topic, 0, "esp")})
+
+        self.tutor.student["etapa"] = 2                            # stage 2: behind the button
+        for _ in range(5):
+            view = self.tutor.next()
+            if view["problem"]["shown"] == "cat":
+                break
+            self.tutor.answer(self.wrong_letter())
+        self.assertEqual(view["problem"]["shown"], "cat")
+        view = self.ask_for_method()
+        self.assertNotIn("origen", self.method_message(view))
+        view = self.tutor.reveal()
+        self.assertEqual(self.method_message(view)["origen"]["lang"], "esp")
+        self.assertTrue(self.tutor.current["revealed"])            # the same counted click
+
+        self.tutor.start("Test", "", 1, reset=True)                # stage 3 / no other language
+        self.tutor.next()
+        self.assertNotIn("origen", self.method_message(self.ask_for_method()))
 
     def test_outside_problem_never_leads_with_an_answer(self):
         self.tutor.start("Test", "", 1)
