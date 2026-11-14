@@ -1275,6 +1275,18 @@ class OcrPass2(unittest.TestCase):
         self.assertEqual(one[("p", "eng")]["options"]["D"], "1 17")
         self.assertEqual(one[("p", "eng")]["options_source"], "ocr")
 
+    def test_skip_recheck_keeps_matching_problems(self):
+        old = {"A": "4", "B": "5", "C": "16", "D": "1 17", "E": "21"}
+        fixed = {"A": "4", "B": "5", "C": "16", "D": "17", "E": "21"}
+        rows = self.rows(old, old)
+        targets = self.o.drop_recheck(self.o.classify_targets(rows))
+        self.assertEqual(targets, {})
+        out = self.o.decide(rows, targets, {("p", "eng"): (fixed, "ocr_crop"), ("p", "cat"): (fixed, "ocr_crop")})
+        self.assertEqual(out[("p", "eng")]["options"]["D"], "1 17")
+        # Disagreeing problems are still targets.
+        other = dict(old, E="22")
+        self.assertEqual(set(self.o.drop_recheck(self.o.classify_targets(self.rows(old, other))).values()), {"disagree"})
+
     def test_empty_filled_or_copied(self):
         good = dict(zip("ABCDE", "12345"))
         rows = self.rows({}, good)
