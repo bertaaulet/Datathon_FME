@@ -47,6 +47,7 @@ def make_handler(tutor, images_dir):
         "/api/answer": lambda b: tutor.answer(b.get("letter", "")),
         "/api/help": lambda b: tutor.help(),
         "/api/hint": lambda b: tutor.hint(str(b.get("text", ""))[:1000]),
+        "/api/leave-teaching": lambda b: tutor.leave_teaching(),
         "/api/reveal": lambda b: tutor.reveal(),
         "/api/external": lambda b: tutor.external(str(b.get("text", ""))[:4000]),
         "/api/guess": lambda b: tutor.external_guess(),

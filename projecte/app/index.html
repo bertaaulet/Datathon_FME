@@ -61,6 +61,9 @@
   .msg.exemple { border-left: 4px solid var(--accent); }
   .thinking { color: var(--soft); font-style: italic; }
   form.hint { display: flex; gap: 8px; margin-top: 12px; }
+  .hintbox { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .count { align-self: flex-end; font-size: 13px; color: var(--soft); font-variant-numeric: tabular-nums; }
+  .count.full { color: var(--bad); font-weight: 600; }
   textarea, input, select { font: inherit; color: inherit; background: var(--card);
            border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; width: 100%; }
   textarea { resize: vertical; min-height: 64px; }
@@ -117,6 +120,7 @@
       <button id="btn-help">Demana una pista</button>
       <button id="btn-reveal" class="hidden">Veure en la meva llengua</button>
       <button id="btn-next" class="primary hidden">Problema següent</button>
+      <button id="btn-leave" class="hidden">Prou, següent problema</button>
     </div>
     <details style="margin-top:16px">
       <summary>Tinc un problema meu</summary>
@@ -130,7 +134,10 @@
     <section class="card">
       <div id="chat" aria-live="polite"></div>
       <form class="hint hidden" id="hint-form">
-        <textarea id="in-hint" maxlength="200" placeholder="Escriu una pista per al Cangur, sense dir-li la resposta"></textarea>
+        <div class="hintbox">
+          <textarea id="in-hint" maxlength="200" placeholder="Escriu una pista per al Cangur, sense dir-li la resposta"></textarea>
+          <small class="count" id="hint-count" aria-live="polite">0/200</small>
+        </div>
         <button class="primary" id="btn-hint">Envia</button>
       </form>
       <div id="outside" class="hidden">
@@ -243,6 +250,12 @@ function render(view) {
   const canNext = ["ready", "done"].includes(view.phase) && !view.busy;
   $("btn-next").classList.toggle("hidden", !canNext);
   $("btn-next").textContent = view.phase === "ready" ? "Primer problema" : "Problema següent";
+  // Teaching the Kangaroo is optional: the problem is already solved
+  $("btn-leave").classList.toggle("hidden", !(view.phase === "teach" && !view.busy));
+  if (view.hint_max_chars && $("in-hint").maxLength !== view.hint_max_chars) {
+    $("in-hint").maxLength = view.hint_max_chars;
+    countHint();
+  }
 
   const chat = $("chat");
   chat.replaceChildren();
@@ -318,6 +331,7 @@ async function teacher() {
 $("btn-start").onclick = () => act("/api/start", {name: $("in-name").value,
   level: Number($("in-level").value), lang: $("in-lang").value});
 $("btn-next").onclick = () => act("/api/next");
+$("btn-leave").onclick = () => { $("in-hint").value = ""; countHint(); act("/api/leave-teaching"); };
 $("btn-help").onclick = () => act("/api/help");
 $("btn-reveal").onclick = () => act("/api/reveal");
 $("btn-guess").onclick = () => act("/api/guess");
@@ -326,7 +340,13 @@ $("btn-ext").onclick = () => { const text = $("in-ext").value.trim();
   if (text) { act("/api/external", {text}); $("in-ext").value = ""; } };
 $("hint-form").onsubmit = event => { event.preventDefault();
   const text = $("in-hint").value.trim();
-  if (text) { act("/api/hint", {text}); $("in-hint").value = ""; } };
+  if (text) { act("/api/hint", {text}); $("in-hint").value = ""; countHint(); } };
+function countHint() {
+  const box = $("in-hint"), n = box.value.length, max = box.maxLength;
+  $("hint-count").textContent = n + "/" + max;
+  $("hint-count").classList.toggle("full", n >= max);
+}
+$("in-hint").oninput = countHint;
 $("in-hint").onkeydown = event => { if (event.key === "Enter" && !event.shiftKey) {
   event.preventDefault(); $("hint-form").requestSubmit(); } };
 $("btn-teacher").onclick = () => { const hidden = $("teacher").classList.toggle("hidden");

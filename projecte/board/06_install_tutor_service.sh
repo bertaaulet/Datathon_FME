@@ -12,6 +12,12 @@ TUTOR_PORT="${TUTOR_PORT:-8090}"
 TUTOR_HOST="${TUTOR_HOST:-127.0.0.1}"
 
 [ -f "$REPO_DIR/app/server.py" ] || die "app/server.py not found in $REPO_DIR."
+
+# Without problems the tutor exits at once, and systemd would restart it every 5 s
+TUTOR_DB_PATH="$REPO_DIR/${TUTOR_DB:-data/tutor.db}"
+problems="$(sqlite3 "$TUTOR_DB_PATH" "SELECT COUNT(*) FROM problems" 2>/dev/null || echo 0)"
+[ "${problems:-0}" -gt 0 ] || die "$TUTOR_DB_PATH has no problems. Build it first: python3 prep/build_tutor_db.py"
+ok "$TUTOR_DB_PATH has $problems problems"
 systemctl is-enabled --quiet math-llm 2>/dev/null || warn "math-llm is not installed yet. Run ./board/04_install_services.sh first."
 
 pid="$(pgrep -f -- "app/server.py" | head -1 || true)"
