@@ -246,6 +246,62 @@ class Guardrails(WithServers):
         self.assertIsNone(calib.letter_bias())
 
 
+class Expressions(WithServers):
+    def test_evaluate_is_safe_and_exact(self):
+        from copilot import mathexpr
+        self.assertEqual(mathexpr.evaluate("2 + 3 * 4"), 14)
+        self.assertEqual(mathexpr.evaluate("(1 + 2)^2 - -1"), 10)
+        for bad in ("10 / 0", "2^100", "__import__('os')", "2 +", "", None, "9" * 200, "1e400"):
+            self.assertIsNone(mathexpr.evaluate(bad), bad)
+
+    def test_option_values(self):
+        from copilot import mathexpr
+        cases = {"12": 12, "3,5": 3.5, "1/2": 0.5, "25%": 25, "12 cm\u00b2": 12, "\u22123": -3,
+                 "1 000": 1000, "10 \u20ac": 10}
+        for text, value in cases.items():
+            self.assertAlmostEqual(mathexpr.option_value(text), value, msg=text)
+        for text in ("3 and 4", "a triangle", "x + 1", "", None):
+            self.assertIsNone(mathexpr.option_value(text), text)
+        options = {"A": "8", "B": "9", "C": "10", "D": "12", "E": "1/2"}
+        self.assertTrue(mathexpr.numeric(options))
+        self.assertFalse(mathexpr.numeric({"A": "red", "B": "blue", "C": "1", "D": "2", "E": "3"}))
+        self.assertEqual(mathexpr.match(0.5, options), "E")
+        self.assertIsNone(mathexpr.match(11, options))
+        self.assertIsNone(mathexpr.match(8, {"A": "8", "B": "8.0"}))
+
+    def test_expression_stage(self):
+        CONFIG["PREDICT_EXPRESSION"] = "on"
+        result = pipeline.solve(SAMPLE, llm_url=self.url)
+        self.assertEqual(result["calls"], 2)
+        self.assertTrue(result["expr"])
+        if result["expr_letter"]:
+            self.assertEqual((result["answer"], result["stage"]), (result["expr_letter"], "expr"))
+        # Off by default: one call, as before
+        CONFIG["PREDICT_EXPRESSION"] = "off"
+        self.assertEqual(pipeline.solve(SAMPLE, llm_url=self.url)["calls"], 1)
+        # Options that aren't numbers: no expression call
+        CONFIG["PREDICT_EXPRESSION"] = "on"
+        words = dict(SAMPLE, options={l: w for l, w in zip("ABCDE", ("red", "blue", "green", "pink", "grey"))})
+        self.assertEqual(pipeline.solve(words, llm_url=self.url)["calls"], 1)
+
+    def test_vote_and_override(self):
+        result = {"probs": {"A": 0.5, "B": 0.2, "C": 0.1, "D": 0.1, "E": 0.1}, "answer": "A",
+                  "expr_letter": "B"}
+        CONFIG["PREDICT_EXPR_MODE"] = "override"
+        self.assertEqual(pipeline.apply_expression(dict(result))["answer"], "B")
+        CONFIG["PREDICT_EXPR_MODE"], CONFIG["PREDICT_EXPR_WEIGHT"] = "vote", "2"
+        self.assertEqual(pipeline.apply_expression(dict(result))["answer"], "A")   # 0.4 < 0.5
+        CONFIG["PREDICT_EXPR_WEIGHT"] = "4"
+        self.assertEqual(pipeline.apply_expression(dict(result))["answer"], "B")   # 0.8 > 0.5
+
+    def test_expression_failure_keeps_the_letter(self):
+        CONFIG["PREDICT_EXPRESSION"] = "on"
+        plain = pipeline.solve(dict(SAMPLE, id="e1"), llm_url=self.url)
+        self.model.fail_next = 0
+        self.assertIn(plain["answer"], tuple("ABCDE"))
+        self.assertEqual(plain["status"], "ok")
+
+
 class Leaks(unittest.TestCase):
     TEXT = [SAMPLE["text"]]
 
@@ -545,12 +601,14 @@ class Scripts(WithServers):
 
             done = self.run_script(os.path.join(ROOT, "eval.py"), "--input", data, "--limit", "12",
                                    "--rotations", "1", "--debias", "batch", "--name", "batch",
-                                   cwd=folder, PREDICT_BATCH_MIN="5")
+                                   "--expression", "on", cwd=folder, PREDICT_BATCH_MIN="5")
             self.assertEqual(done.returncode, 0, done.stderr)
             self.assertIn("Letter bias from batch", done.stdout)
+            self.assertIn("Expression stage: asked", done.stdout)
             with open(os.path.join(folder, "results", "ablations.csv"), encoding="utf-8") as f:
                 log = list(csv.DictReader(f))
             self.assertIn("debias=batch", log[1]["settings"])
+            self.assertIn("expression=on/override", log[1]["settings"])
             with open(os.path.join(folder, log[1]["details"]), encoding="utf-8") as f:
                 details = list(csv.DictReader(f))
             self.assertEqual(len(details), 12)

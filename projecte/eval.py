@@ -28,7 +28,7 @@ from copilot.pipeline import TIME_LIMIT, rescore, solve
 
 DETAIL_FIELDS = ["id", "language", "level", "has_options", "label", "answer", "correct", "seconds",
                  "status", "prompt_tokens", "retrieved", "topic", "calls", "raw_answer", "stage",
-                 "shortened"]
+                 "shortened", "expr", "expr_value", "expr_letter"]
 LOG_FIELDS = ["time", "name", "commit", "machine", "input", "languages", "n", "rag_k", "accuracy",
               "mean_s", "worst_s", "over_limit", "settings", "details"]
 
@@ -60,7 +60,8 @@ def detail_row(row):
     return [row["id"], row["language"], row.get("level", ""), row["has_options"], row["label"],
             row["answer"], int(row["correct"]), row["seconds"], row["status"], row["prompt_tokens"],
             row["retrieved"], row["topic"], row["calls"], row["raw_answer"], row.get("stage", ""),
-            int(bool(row.get("shortened")))]
+            int(bool(row.get("shortened"))), row.get("expr", ""),
+            "" if row.get("expr_value") is None else f"{row['expr_value']:g}", row.get("expr_letter", "")]
 
 
 def table(title, groups):
@@ -85,6 +86,10 @@ def main():
     p.add_argument("--debias", choices=["auto", "off", "batch"], default=None,
                    help="letter bias correction (overrides PREDICT_DEBIAS). batch measures the "
                         "bias on the problems of this run, without labels, and corrects at the end")
+    p.add_argument("--expression", choices=["on", "off"], default=None,
+                   help="model writes an expression, Python computes it (overrides PREDICT_EXPRESSION)")
+    p.add_argument("--expr-mode", choices=["override", "vote"], default=None,
+                   help="how the computed option is used (overrides PREDICT_EXPR_MODE)")
     p.add_argument("--no-options", choices=["prior", "model"], default=None,
                    help="what to do without readable options (overrides PREDICT_NO_OPTIONS)")
     args = p.parse_args()
@@ -99,9 +104,16 @@ def main():
     batch = CONFIG.get("PREDICT_DEBIAS", "auto").lower() == "batch"
     if args.no_options is not None:
         CONFIG["PREDICT_NO_OPTIONS"] = args.no_options
+    if args.expression is not None:
+        CONFIG["PREDICT_EXPRESSION"] = args.expression
+    if args.expr_mode is not None:
+        CONFIG["PREDICT_EXPR_MODE"] = args.expr_mode
     settings = (f"rotations={CONFIG.get('PREDICT_ROTATIONS', 0)} "
                 f"debias={'batch' if batch else CONFIG.get('PREDICT_DEBIAS', 'auto')} "
-                f"no_options={CONFIG.get('PREDICT_NO_OPTIONS', 'prior')}")
+                f"no_options={CONFIG.get('PREDICT_NO_OPTIONS', 'prior')} "
+                f"expression={CONFIG.get('PREDICT_EXPRESSION', 'off')}"
+                + (f"/{CONFIG.get('PREDICT_EXPR_MODE', 'override')}"
+                   if CONFIG.get('PREDICT_EXPRESSION', 'off') == 'on' else ""))
 
     with open(args.input, encoding="utf-8") as f:
         problems = [json.loads(line) for line in f if line.strip()]
@@ -190,6 +202,16 @@ def main():
         for r in rows:
             groups[r[field]].append(r["correct"])
         table(title, groups)
+
+    asked = [r for r in rows if r.get("expr")]
+    if asked:
+        matched = [r for r in asked if r.get("expr_letter")]
+        right = sum(r["expr_letter"] == r["label"] for r in matched)
+        letter_right = sum(r.get("model_answer") == r["label"] for r in matched)
+        print(f"\nExpression stage: asked {len(asked)}, matched one option {len(matched)}, "
+              f"right {right}/{len(matched)}"
+              + (f" ({100 * right / len(matched):.0f}%)" if matched else "")
+              + f"; on those, the letter call alone was right {letter_right}/{len(matched)}")
 
     predicted = Counter(r["answer"] for r in rows)
     truth = Counter(r["label"] for r in rows)

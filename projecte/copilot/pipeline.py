@@ -20,9 +20,10 @@ import socket
 import time
 import urllib.error
 
+from . import mathexpr
 from .calib import letter_bias, prior_letter
 from .config import CONFIG
-from .llm import LETTERS, URL, letter_probs, split_problem
+from .llm import EXPR_MAX_TOKENS, LETTERS, URL, expression, letter_probs, split_problem
 
 TIME_LIMIT = float(CONFIG["TIME_LIMIT_SECONDS"])
 FALLBACK = CONFIG["FALLBACK_ANSWER"]
@@ -108,7 +109,32 @@ def rescore(result, bias):
         fixed.append({order[i]: by_position[LETTERS[i]] / total for i in range(5)})
     result["probs"] = combine(fixed)
     result["answer"] = best_letter(result["probs"])
+    return apply_expression(result)
+
+
+def apply_expression(result):
+    """Use the letter Python computed from the model's expression, if there is one.
+
+    PREDICT_EXPR_MODE=override: that letter wins. vote: its probability is
+    multiplied by PREDICT_EXPR_WEIGHT, and the letter call can still overrule it.
+    """
+    letter = result.get("expr_letter")
+    if not letter:
+        return result
+    if CONFIG.get("PREDICT_EXPR_MODE", "override").lower() == "vote" and result.get("probs"):
+        weight = float(CONFIG.get("PREDICT_EXPR_WEIGHT", 4))
+        boosted = {l: p * (weight if l == letter else 1.0) for l, p in result["probs"].items()}
+        total = sum(boosted.values())
+        result["probs"] = {l: p / total for l, p in boosted.items()}
+        result["answer"] = best_letter(result["probs"])
+        result["stage"] = "expr-vote"
+    else:
+        result["answer"], result["stage"] = letter, "expr"
     return result
+
+
+def expression_on():
+    return CONFIG.get("PREDICT_EXPRESSION", "off").lower() == "on"
 
 
 def solve(problem, index=None, k=0, exclude_id=None, image_b64=None, llm_url=URL,
@@ -122,7 +148,8 @@ def solve(problem, index=None, k=0, exclude_id=None, image_b64=None, llm_url=URL
     start = time.perf_counter()
     result = {"answer": FALLBACK, "status": "ok", "prompt_tokens": 0, "retrieved": "",
               "examples": [], "probs": {}, "calls": 0, "letters_found": 0,
-              "passes": [], "full": False, "stage": "fallback", "shortened": False}
+              "passes": [], "full": False, "stage": "fallback", "shortened": False,
+              "expr": "", "expr_value": None, "expr_letter": ""}
     try:
         problem = clean_problem(problem)
         result["answer"], result["stage"] = prior_letter(problem), "prior"
@@ -187,6 +214,23 @@ def _solve(problem, result, start, index, k, exclude_id, image_b64, llm_url, tim
     result.update(calls=1, letters_found=first["found"],
                   prompt_tokens=first["timings"].get("prompt_n", 0),
                   probs=first["probs"], answer=best_letter(first["probs"]), stage="model")
+    result["model_answer"] = result["answer"]  # the letter call alone, before the expression
+
+    # The model writes an expression, Python computes it (only for numeric options)
+    if expression_on() and not image_b64 and mathexpr.numeric(options):
+        cost = estimate_seconds(len(problem.get("text", "")) + options_chars, generated=EXPR_MAX_TOKENS)
+        if left() >= cost:
+            try:
+                text, _timings = expression(problem, timeout=max(left(), 1.0), url=llm_url)
+                result["calls"] += 1
+                value = mathexpr.evaluate(text)
+                result.update(expr=text, expr_value=value,
+                              expr_letter=mathexpr.match(value, options) or "")
+            except Exception:  # no expression: keep the letter call's answer
+                pass
+            if result["expr_letter"] and CONFIG.get("PREDICT_EXPR_MODE", "override").lower() != "vote":
+                apply_expression(result)
+                return  # Python is sure: don't spend time on rotations
 
     wanted = int(CONFIG.get("PREDICT_ROTATIONS", 0) or 0) if full else 0
     for shift in SHIFTS[:max(wanted, 0)]:
@@ -206,3 +250,5 @@ def _solve(problem, result, start, index, k, exclude_id, image_b64, llm_url, tim
         result["probs"] = combine(passes)
         result["answer"] = best_letter(result["probs"])
         result["stage"] = "rotations"
+        result["model_answer"] = result["answer"]
+    apply_expression(result)  # once, on the final probabilities (vote mode)
