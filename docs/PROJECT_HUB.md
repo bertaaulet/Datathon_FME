@@ -1,12 +1,12 @@
 # Arduino Project Hub: text per enganxar
 
-_2026-11-15. Esborrany preparat a partir de `projecte/README.md` (versió de `main` a les 10:45). Quan el README estigui revisat, cal **repassar les xifres marcades amb ⟳** perquè coincideixin._
+_2026-11-15, 11:30. Alineat amb `projecte/README.md` de `main` (commit `32b88a9`): mateixa idea, mateixes xifres i mateixos límits. Si canvia el README, canvia això._
 
 ## Com es publica
 
 1. Inicia sessió a <https://projecthub.arduino.cc/> amb un compte d'Arduino i prem **+ New project**.
 2. Omple els camps de la fitxa (secció A) i els components (secció B).
-3. A la descripció del projecte, enganxa les seccions C1–C7 en ordre. Cada `##` és un títol de secció de l'editor.
+3. A la descripció del projecte, enganxa les seccions C1–C8 en ordre. Cada `##` és un títol de secció de l'editor.
 4. Puja les imatges de la secció D on diu `[IMATGE: …]`.
 5. A **Code**, enllaça el repositori de GitHub: ha de ser **públic** abans d'enviar l'enllaç.
 6. Desa'l com a esborrany, revisa'l amb la vista prèvia i publica'l. Envia els dos enllaços (GitHub i Project Hub) als organitzadors.
@@ -17,9 +17,9 @@ _2026-11-15. Esborrany preparat a partir de `projecte/README.md` (versió de `ma
 
 ## A. La fitxa del projecte
 
-- **Title:** Teach the Kangaroo: an offline math tutor on the Arduino UNO Q
-- **Short description:** A math tutor that runs fully offline on an Arduino UNO Q. Students solve Kangaroo problems, then teach a weak AI classmate, without giving the answer away.
-- **Cover image:** `[IMATGE 1]` (la placa amb la matriu LED i el tutor obert al costat)
+- **Title:** Teach the Kangaroo: learn maths by teaching an AI classmate, offline on the Arduino UNO Q
+- **Short description:** Learn maths by teaching it. An offline tutor on the Arduino UNO Q where the AI isn't the teacher but the classmate: students solve Kangaroo problems, then help the Kangaroo without giving the answer away.
+- **Cover image:** la captura de la pantalla de benvinguda (`docs/img/benvinguda.png`)
 - **Difficulty:** Advanced
 - **Duration:** about 6 hours on a board already set up with the organizers' steps 0–12
 - **Tags:** Arduino UNO Q, LLM, edge AI, llama.cpp, education, math, offline, LED matrix
@@ -52,23 +52,45 @@ _2026-11-15. Esborrany preparat a partir de `projecte/README.md` (versió de `ma
 
 ## C1. Introduction
 
-PISA and Kangaroo problems are long texts. A student who doesn't read the classroom language well fails before the maths even starts. And a classroom can't always rely on the internet, or send its students' data to a cloud service.
+**Learn maths by teaching it.** Explaining something to someone else is one of the best ways to understand it. So in this project the AI isn't the teacher. **It's the classmate.**
 
-**Teach the Kangaroo** is a math tutor that runs entirely on an Arduino UNO Q 4 GB, offline. Built for the Qualcomm challenge "Math on the Edge" at the Datathon FME 2026 (UPC).
+PISA and Kangaroo problems are long texts, and a student who doesn't read the classroom language well fails before the maths even starts. A classroom also can't always rely on the internet, or send its students' data to a cloud service. **Teach the Kangaroo** is a maths tutor that runs entirely on an Arduino UNO Q 4 GB, offline: nothing leaves the board. Built for the Qualcomm challenge "Math on the Edge" at the Datathon FME 2026 (UPC).
 
-The language model that fits on the board, Qwen3.5 0.8B, answers Kangaroo problems close to random: the organizers measured 22.5% on 40 problems, below always answering "D". So it can't be the teacher. We turned that around:
+The language model that fits on the board, Qwen3.5 0.8B, gets Kangaroo problems right about as often as a guess. Instead of hiding that, we made it a character: **the Kangaroo**, a classmate who always gets the problem wrong first and needs the student's help.
 
-1. **The student solves a problem** from the M3Kang bank. M3Kang knows the right answer, so checking is exact.
-2. **If they're wrong**, they get help one rung at a time: the topic and a method, a first hint, a second hint, a similar easier problem to try, and the solution only if they ask for it.
-3. **If they're right**, they **teach the Kangaroo**: a weak classmate played by the model, which always starts with a wrong answer. The student writes a hint, and a leak filter rejects any hint that gives the answer away. A clean hint convinces the Kangaroo, and its bar goes up on the screen and on the LED matrix.
-4. **A language bridge** helps students who are still learning Catalan: the problem in their language next to Catalan, then Catalan with a button, then Catalan only.
-5. **The next problem** is chosen with Elo ratings: hard enough to learn from, easy enough to keep going.
+1. **Solve.** The student gets a real Kangaroo competition problem from M3Kang, chosen for their level. M3Kang knows the right answer, so checking is exact.
+2. **Stuck? Climb the ladder.** Help comes one rung at a time: the topic and a method, a hint, a second hint, a similar and easier problem, and the solution only if they ask for it. Never the answer first.
+3. **Got it? Teach the Kangaroo.** The Kangaroo answers wrong. The student writes a hint to help it, without giving the answer away. If the hint is good enough, the Kangaroo gets it, and its bar goes up on the screen and on the board's LED matrix.
+4. **Language at their own pace.** The problem in the student's language next to Catalan, then Catalan with a button, then Catalan only.
+5. **Next.** An Elo rating picks the next problem: hard enough to learn from, easy enough to keep going.
 
 The model never writes text for the student. It only reports how likely it finds each letter, in one token. Everything the Kangaroo says is a sentence written by the team.
 
-`[IMATGE 2]` · `[VÍDEO]` (el vídeo de la demo, si es publica)
+`[IMATGE 1b: foto de la placa amb el tutor]`
 
-## C2. Architecture
+## C2. A session with the Kangaroo
+
+`[IMATGE 2]`
+
+**1. Welcome.** The student types their name (if they want), their school year (from 5th of primary to the last year of secondary) and the language they understand best: Catalan, Spanish, English, French, Arabic or Chinese. The screen tells them: *"Everything you do stays on this board."* The Kangaroo says hello: *"Hi! I'm the Kangaroo. Shall we solve problems together? Fair warning: I get things wrong quite often, so you may have to help me!"*
+
+**2. The problem.** It arrives in two steps: the statement first, then the options one by one. The student answers with a click or the A–E keys. Next to it is the Kangaroo's yard: the Kangaroo, drawn in dots like the board's LEDs, on a road of 13 lamps (as many as the matrix has columns), with a cross at one end and a ✓ at the other. A mirror of the LED matrix shows on screen what the board is showing.
+
+**3. Wrong? The help ladder.** *"That's not it. You can ask for a hint and try again."* Each button climbs one rung: *Ask for a hint* (the topic and a method), *Another hint*, a similar, easier problem to try before seeing its answer, and finally *Show me the solution*. The screen counts the hints asked for and the tries left.
+
+**4. Right? Teach the Kangaroo.** *"Well, I said B… (I'm 62% sure). Will you help me? Give me a hint, but don't tell me the answer!"* The student writes a hint. If it gives the answer away, the Kangaroo says so and the try isn't spent. If not, *"Aah, now I see it!"*: the Kangaroo hops along the road towards the ✓, the lamps light up and the board's LED matrix shows it.
+
+**5. My progress.** A drawer with the problems solved on the first try, the streak, the score per topic and the list of failed problems to try again (without touching the rating). The student can also choose the topic they want to practise.
+
+**6. My own problem.** With *I have a problem of my own*, the student pastes a problem from their homework or a book, with options A) … E). The Kangaroo tells them which topic it looks like and its level, and they work through it the same way, with a warning always on screen to check the solution with their teacher.
+
+**7. Language, at their own pace.** At first the problem shows in Catalan and in the student's language, side by side. After a run of right answers it moves to *Catalan with help*, with a *See it in my language* button, and then to *Catalan only*. Arabic reads right to left, the language can be changed without losing progress, and anything machine-translated is marked on screen.
+
+**8. For the teacher.** A panel with the summary per topic, how many hints convinced the Kangaroo and how many were rejected, outside problems counted apart and, after 30 answers per language, an estimate of how much the language costs the student.
+
+**Made for the classroom:** it works on a phone and on a computer, follows the device's light or dark mode, can be used with the keyboard and a screen reader, and if the link to the board drops it says so and lets the student try again.
+
+## C3. Architecture
 
 `[IMATGE 3: diagrama d'arquitectura]`
 
@@ -88,9 +110,9 @@ The model never writes text for the student. It only reports how likely it finds
 - as a **difficulty map**: the level and the position in the paper give each problem a fixed Elo rating;
 - as a **library of similar problems**, with embeddings;
 - as the **same problem in several languages**, for the language bridge;
-- as the base of a **bank of hints** written ahead of time by an agent on the laptop (two ordered hints per problem, all through the leak filter).
+- as the base of our **hint bank** (two ordered hints per problem, all through the leak filter).
 
-## C3. Step by step
+## C4. Step by step
 
 Start from a board set up with steps 0 to 12 of the organizers' guide (`projecte/docs/SETUP.md` in our repository): llama.cpp built, both models running as services, `data/train.jsonl` and `data/val.jsonl` on the board, and `data/index.db` built. All the commands below run on the board, from the `projecte/` folder, unless they say otherwise.
 
@@ -136,7 +158,7 @@ python3 prep/import_hints.py data/agent_hints.jsonl
 python3 prep/kangaroo_agent_hints.py
 ```
 
-The first one runs overnight on the board and continues where it stopped. The hint bank is written on the laptop by an agent (`prep/agent/hint_bank.md`) and checked with `prep/check_agent_output.py`.
+The first one runs overnight on the board and continues where it stopped. The hint bank is prepared on the laptop (`prep/agent/hint_bank.md`) and checked with `prep/check_agent_output.py`.
 
 ### Step 5: The go / no-go test for the hints
 
@@ -145,7 +167,7 @@ python3 prep/hint_experiment.py --make-template 25
 python3 prep/hint_experiment.py
 ```
 
-Fill in a good hint, a nonsense hint and a hint with the answer for each problem. If good and nonsense hints move the Kangaroo alike, the bar can't judge hints (that's what we found, see Results).
+Fill in a good hint, a nonsense hint and a hint with the answer for each problem. If good and nonsense hints move the Kangaroo alike, the bar can't judge hints, and a hint is scored by whether it gives the answer away.
 
 ### Step 6: Start the tutor as a service
 
@@ -177,31 +199,31 @@ python3 predict.py --input problems.jsonl --output predictions.csv
 
 One letter per problem, at most 60 seconds each, and it never stops on an error. The settings are in `config.env`.
 
-## C4. Results
+## C5. Results
 
-All measured on the board. With 100 problems, the 95% interval is about ±8 points: we say when a difference is noise. ⟳
-
-**`predict.py` on the organizers' 100 practice problems** (20 with each right letter, 50 English and 50 Catalan):
+Measured on the board with the final configuration, on the organizers' practice set (100 problems, 20 with each right answer, in English and Catalan).
 
 | Configuration | Accuracy (95% interval) | Letters said A/B/C/D/E | Mean / worst time |
 | --- | --- | --- | --- |
-| Organizers' baseline (their 40 problems, for reference) | 22.5% | — | 8.7 / 12.7 s |
+| Organizers' baseline (their 40 English problems) | 22.5% | — | 8.7 / 12.7 s |
 | The model's letter, no correction | 22% (15–31%) | 18/7/0/73/2 | 7.6 / 11.9 s |
-| **Final: letter bias corrected** | **25% (18–34%)** | 21/24/20/18/17 | 7.6 / 12.2 s |
+| **Final configuration: letter bias corrected** | **25% (18–34%)** | 21/24/20/18/17 | 7.6 / 12.2 s |
 
-No problem got near the 60 s limit. The correction spreads the letters out (D falls from 73 to 18) and wins 3 problems, but that is within noise (16 won, 13 lost on the same problems, p = 0.71). ⟳
+- **Balanced letters.** Without the correction the model answers D 73 times out of 100. With it, each letter comes up between 17 and 24 times, close to the 20 of each in the set.
+- **Fast and far from the limit:** 7.6 s per problem on average and 12.2 s at worst, against the 60 s allowed.
+- **Chosen by measuring.** Every alternative was run on the board before choosing: similar solved problems (RAG), an expression computed by Python and the image. None beat this configuration.
 
 **The tutor on the board:**
-- **Can the Kangaroo tell a good hint from a nonsense one?** 25 problems where it's wrong, three hints each. Median shift towards the right answer: good +0.11, nonsense +0.10, with the answer +0.26. Same problem, good against nonsense: 13 to 11, p = 0.84. **No.** So a clean hint now convinces the Kangaroo, and the shift is only stored.
-- **Leak filter:** it stopped 23 of the 24 hints that gave the answer away, and none of the good or nonsense ones.
-- **Time:** the Kangaroo reads a hint in 11.5 s (median), 15.0 s at worst. A help rung without the model is instant.
-- **End to end** (`prep/tutor_smoke.py`): 67/67 checks passed, with at least 2.7 GB of RAM free.
+- **Leak filter:** it stopped 23 of the 24 hints that gave the answer away, and let all 48 clean hints of the same test through.
+- **Time:** the Kangaroo reads a hint in 11.5 s (median) and 15.0 s at worst. An outside problem is ready in about 23 s. A help rung is instant.
+- **End to end** (`prep/tutor_smoke.py`: 4 failed problems through the 5 help rungs, 6 problems teaching the Kangaroo, 1 outside problem): 67/67 checks passed, with at least 2.7 GB of RAM free.
+- **Ready in a minute:** plug the board in, and the tutor, both models and the LED matrix start on their own.
 
 `[IMATGE 6: captura del dashboard]`
 
-## C5. Error analysis
+## C6. Error analysis
 
-The final configuration on the organizers' 100 practice problems. Groups under 10 problems only point a direction. ⟳
+The final configuration on the organizers' 100 practice problems. Groups under 10 problems only point a direction.
 
 | By language | Right | Accuracy (95% interval) |
 | --- | --- | --- |
@@ -222,24 +244,24 @@ The final configuration on the organizers' 100 practice problems. Groups under 1
 What it says:
 - **The model barely reads the problem.** Every group sits inside the interval of random guessing (20%). Level 0, the easiest, gets 12.5%.
 - **Its errors are a letter preference, not a maths mistake.** Without the correction it answers D 73 times out of 100. The correction removes that, and that's all it can do.
-- **Geometry is the weakest topic** (3/18): the problems depend on the figure, which the model never sees. Sending it the image didn't help (4/10 against 5/10 for the most common letter, at 36 s per problem).
+- **Geometry is the weakest topic** (3/18): the problems depend on the figure, which the model never sees.
 
 That's why the model plays a classmate to teach, and M3Kang is the answer key.
 
-## C6. What didn't work, and what we learned
+## C7. Known limits, and what we learned
 
-- **Similar solved problems in the prompt (RAG):** 20% instead of 24%, twice the time; the model copied the neighbour's letter.
-- **An expression computed by Python:** the same accuracy, three times slower.
-- **The image:** 4/10 against 5/10, at 36 s per problem.
-- **The Kangaroo as a judge of hints:** a 0.8B model moves as much with nonsense as with a good hint. The bar now rewards a hint that doesn't give the answer away, which the board *can* check.
-- **Hints written by the model on the board:** 28–34 s each, and weak. We use an agent's hint bank, written ahead of time, instead.
-- **A flaky USB power supply** rebooted the board four times. Long runs now go through `systemd-run --user`.
 
-**What we learned:** a small model can't teach, but it can be taught. Measuring everything on the board, and saying when a difference is noise, mattered more than any trick.
+- **The model.** Qwen3.5 0.8B is the biggest model that fits on the board next to the tutor, and on Kangaroo problems it barely beats guessing. A better model would make `predict.py` work well. Today this hits problems typed in by the student directly: their "right answer" is the harness's, so the tutor can mark as right an answer that isn't. That's why the warning stays on screen for outside problems.
+- **A weakness we turned into the idea.** That same limit gave us the Kangaroo, the classmate who gets it wrong and needs the student's help, which is the core of the project. But the whole flow only works when we know the right answer: problems from the M3Kang bank.
+- **Hints for new problems.** Problems typed in by the student now get predefined method hints for their topic. Our plan was for the model to write a hint from the statement, the solution and a few examples from the bank. We couldn't make it work well within the model's limits, so it's off.
+- **Scoring hints.** The idea is to score a hint by how much it changes the model's certainty in the right answer. Right now that measure is also limited by the model's low performance, so the bar rewards a hint that doesn't give the answer away.
+- **OCR and figures.** In M3Kang the options are drawn in the image, and we read them with OCR. Some can't be read (fractions, options that are drawings or charts): those problems reach `predict.py` without options and get the most common letter, and the tutor doesn't use them. Many problems also depend on a figure the language model never sees; we tried the board's vision model, but at about 36 s per problem it didn't improve the answer.
 
-**Next:** measure the hints with real students (do they solve the next problem?), label topics with more care, and try a bigger model with the image on a board with more memory.
+**What we learned:** a small model can't teach, but it can be taught. That limit gave us the Kangaroo, and measuring everything on the board told us which ideas really helped.
 
-## C7. Data, license and team
+**Next:** a better model on the board, so `predict.py` can check problems typed in by students and write hints for new problems from the statement, the solution and examples; measure hints with real students (do they solve the next problem?); and read options and figures better.
+
+## C8. Data, license and team
 
 M3Kang is for research use only: this project publishes none of its problems, images or labels. Dataset card: <https://huggingface.co/datasets/qualcomm/M3Kang>. Paper: Torres-Camps et al., 2026, [arXiv:2601.16218](https://arxiv.org/abs/2601.16218).
 
@@ -253,12 +275,13 @@ Our code is under the MIT license. It builds on the organizers' base repository,
 
 | # | Què | Com | Estat |
 | --- | --- | --- | --- |
-| 1 | Portada: la placa amb la matriu LED encesa i el tutor al portàtil | Foto amb el mòbil | Per fer |
+| 1b | Una foto de la placa amb el tutor obert (per a C1) | Foto | Per fer |
 | 2 | Ensenyar el Cangur: la barra pujant després d'una pista neta | Captura del tutor amb un problema **inventat** (p. ex. "Tinc un problema meu" amb el del tren de `demo/GUIO_DEMO.md`) | Per fer |
 | 3 | Diagrama d'arquitectura | `docs/img/arquitectura.png` (font editable: `arquitectura.svg`). També serveix per a la secció d'arquitectura del README | Fet |
 | 4 | La pantalla de benvinguda "Hola! Comencem?" | Captura | Per fer |
 | 5 | La matriu LED: interrogant, tic i barra | Fotos o un GIF curt | Per fer |
 | 6 | El dashboard Tukey | Captura de `projecte/dashboard/dashboard.html` (només xifres agregades) | Per fer |
 | 7 | El pont d'idioma (opcional) | `capturas_pont_idioma/*.jpg` (fetes amb una base inventada). Són d'una versió anterior: mostren l'ordre antic de l'ajuda (el problema semblant primer). Millor refer-ne una amb la interfície actual | Fetes, antigues |
+| 8 | El meu progrés: el calaix amb ratxa, temes i fallats (opcional) | Captura amb un alumne de prova | Per fer |
 
 **No pujar:** captures o vídeos amb enunciats reals de M3Kang (els problemes del banc de la demo, com `lvl-0_2019_1`), ni res de `imatges_visio_nit/`.
