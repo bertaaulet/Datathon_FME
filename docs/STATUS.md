@@ -1,12 +1,12 @@
 # Estat actual
 
-_Última actualització: 2026-11-15 10:00 — Elsa (amb Claude): auditoria del repo; corregides les contradiccions d'aquest fitxer (pas 4, branca de pistes, `letter_bias.json`), README d'`irene/readme-entrega` portat a la branca `elsa/arreglos-auditoria`. 09:20 — Irene (amb Claude): nit final a la placa (`NIT_FINAL.md`): pistes, pas 4 amb el conjunt de pràctica, configuració final + reinici, i experiment d'imatge; resultats a [`RESULTATS_NIT_FINAL.md`](RESULTATS_NIT_FINAL.md). 04:05 — Irene (amb Claude): proves B1 (D2) i B3 del paquet de la Berta a la placa (secció "Pont d'idioma i pistes"). 03:15 — Irene (amb Codex i Claude): banc de pistes de l'agent i desplegament del tutor a la placa (secció "Pont d'idioma i pistes"). 02:45 — Irene (amb Claude): segona ronda de `predict.py` a la placa amb `dev50` (resultats i incidència USB). Pont d'idioma: Irene (amb Codex). La resta, de les 01:45 (Berta)._
+_Última actualització: 2026-11-15 10:40 — Berta (amb Claude): dashboard Tukey fet (`projecte/dashboard/`, branca `berta/dashboard-tukey`), detall a [`DASHBOARD.md`](DASHBOARD.md). 10:00 — Elsa (amb Claude): auditoria del repo; corregides les contradiccions d'aquest fitxer (pas 4, branca de pistes, `letter_bias.json`), README d'`irene/readme-entrega` portat a la branca `elsa/arreglos-auditoria`. 09:20 — Irene (amb Claude): nit final a la placa (`NIT_FINAL.md`): pistes, pas 4 amb el conjunt de pràctica, configuració final + reinici, i experiment d'imatge; resultats a [`RESULTATS_NIT_FINAL.md`](RESULTATS_NIT_FINAL.md). 04:05 — Irene (amb Claude): proves B1 (D2) i B3 del paquet de la Berta a la placa (secció "Pont d'idioma i pistes"). 03:15 — Irene (amb Codex i Claude): banc de pistes de l'agent i desplegament del tutor a la placa (secció "Pont d'idioma i pistes"). 02:45 — Irene (amb Claude): segona ronda de `predict.py` a la placa amb `dev50` (resultats i incidència USB). Pont d'idioma: Irene (amb Codex). La resta, de les 01:45 (Berta)._
 
 ## Fase
 - **Tutor:** funciona a la placa amb el banc real (`tutor.db`, 601 problemes utilitzables, el Cangur precalculat), arrenca sol amb la placa i amb la matriu LED, i els problemes externs segueixen el mateix recorregut que els del banc (provat amb problemes inventats).
 - **`predict.py`:** primera ronda (validació antiga) i **segona ronda amb `dev50` feta a la placa** (taules de sota). Cap configuració surt del soroll; el RAG no ajuda i dobla el temps. **Pas 4 fet** (conjunt de pràctica, `data/demo.jsonl`: `demo-debias` 25/100) i **configuració final triada**: per defecte, debias amb `letter_bias.json`, sense RAG.
 - **Test final:** 20 problemes nous, executats amb el nostre `predict.py` **a la nostra placa** després del *last call* de les 12:00 (detall a `PLA.md`).
-- **Lliuraments** (README, `LICENSE`, pitch, vídeo, Project Hub, dashboard): sense començar.
+- **Lliuraments** (README, `LICENSE`, pitch, vídeo, Project Hub): sense començar. **Dashboard Tukey fet** (`python3 dashboard/build.py` → `dashboard/dashboard.html`, [`DASHBOARD.md`](DASHBOARD.md)).
 - La presentació és **diumenge**. El pla és a [`PLA.md`](PLA.md), i els problemes trobats a la placa a [`PROBLEMES.md`](PROBLEMES.md).
 
 ## Ara mateix
@@ -26,7 +26,7 @@ Les tasques s'assignen en veu alta a l'equip; aquí només hi ha què queda i de
 | `predict.py` | Calibració, guardrails, biaix per lot, expressió (descartada), RAG amb pregunta + valor correcte, biaix robust | Segona ronda d'experiments; triar la configuració de `config.env`; `letter_bias.json` bo a la placa; confirmar amb el conjunt de pràctica; anàlisi d'errors; placa a punt per al *last call* | La placa |
 | Pistes (Berta) | Flux nou a `main` i desplegat (616 problemes, 1.232 pistes de l'agent, Cangur en català). D2 a la placa: el 0.8B no distingeix pistes bones d'absurdes (13–11, p = 0,84) → **`KANGAROO_RULE=clean`** (qualsevol pista neta convenç) i **`HINTGEN=off`** (branca `berta/docs-pistes-main`) | Fet: `berta/docs-pistes-main` fusionada i última prova a la placa ([`PROVES_FINALS_PISTES.md`](PROVES_FINALS_PISTES.md), 67/67). Pendent: revisió humana d'una mostra de pistes | La placa lliure |
 | Tutor (Teach) | Escala d'ajuda, Cangur, pont d'idioma, Elo de l'alumne (el dels problemes és fix), problemes externs, interfície nova, servei i reinici | Problemes 11–14 de `PROBLEMES.md`; revisar l'Elo i el pont d'idioma; reconstruir `tutor.db` amb les dades noves de l'OCR (si es vol) | — |
-| Lliuraments | — | README, `LICENSE`, xifres de PISA, pitch, vídeo de reserva, Project Hub, dashboard Tukey | Resultats per als números |
+| Lliuraments | Dashboard Tukey (5 panells, registre de decisions, 16 comprovacions) | README, `LICENSE`, xifres de PISA, pitch, vídeo de reserva, Project Hub | — |
 
 ## Pont d'idioma i pistes (desplegat a la placa el 2026-11-15)
 - **Desplegat (03:01):** el servei `math-tutor` corre amb el codi de `c786d64` (pont d'idioma + flux nou de pistes; `main` només hi afegeix `prep/options_coverage.py` i documents) i la `tutor.db` nova. `api/state` respon 200. Instal·lat amb `install-pistes.sh` (verifica la base, atura el servei, canvia la carpeta i torna enrere sol si no arrenca). Còpia completa anterior a la placa: `~/Datathon_FME/projecte-backup-pistes-20261115-020117` (hora de la placa). S'hi han portat de l'oficial `data/` (train/val/dev/test, `priors.json` bo) i `results/`; el `priors.json` de git queda com `data/priors.json.from-git`.
@@ -122,11 +122,9 @@ Revisió humana de mostra (Berta, 20 línies de cada, triades a l'atzar amb llav
 ## Per decidir com a equip
 - Què entra per diumenge i què s'aparca (pistes generades pel model, ajust fi, imatge…). Imatge: mesurada a la placa, 4/10 contra 5/10 de la prior i ~36 s per problema (proposta: no entra).
 - **La barra del Cangur:** D2 diu que les pistes bones no el mouen més que les absurdes (13 a 11, p = 0,84). Treure-la, o deixar-la i explicar-ho com a limitació.
-- Quan es fa el dashboard Tukey.
 - L'ordre d'ús de la placa fins a la presentació.
 - Si es reconstrueix `tutor.db` amb les dades de la segona volta d'OCR.
-- Si es manté la taula per temes del dashboard: `topics.py` només coincideix amb la referència en 65/100 (C2).
-- Les tres propostes de Claude a `DECISIONS.md` (port 8090, temes per paraules clau, K de l'Elo), el llindar de D4, l'idioma del README.
+- Les dues propostes de Claude a `DECISIONS.md` que queden (port 8090, temes per paraules clau), el llindar de D4, l'idioma del README.
 
 ## Resolt
 - Repo base importat a `projecte/` (commit `d6e3f1b` dels organitzadors). Idea final: "Ensenya el Cangur" amb `predict.py` millorat.

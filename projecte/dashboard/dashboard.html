@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Ensenya el Cangur · com hem decidit</title>
+<style>
+/* Same look as the tutor on the board (app/index.html): paper-like, ink and slate blue,
+   terracotta only for the Kangaroo and the LEDs. No web fonts, no CDN: it works offline. */
+:root {
+  --bg: #f2f3f5;  --surface: #ffffff;  --ink: #15171c;  --soft: #5a6270;  --line: #dcdfe5;
+  --accent: #c8553a;  --accent-text: #2c4a7c;  --accent-bg: #e6ebf4;  --err: #a4402a;
+  --blue: #3d5a80;  --blue-bg: #e4ebf3;  --warn-bg: #f7efcf;  --gray: #b9bfc9;
+  --r-card: 10px;  --r-ctl: 8px;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --ease: cubic-bezier(.3,.7,.2,1);
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111215;  --surface: #1a1b1f;  --ink: #eceef2;  --soft: #9aa0ab;  --line: #2c2e34;
+    --accent: #e8826a;  --accent-text: #9db8e6;  --accent-bg: #232b3a;  --err: #f0987f;
+    --blue: #8fb0d8;  --blue-bg: #25303d;  --warn-bg: #3b3721;  --gray: #4a4f58;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 clamp(16px, 3vw, 32px) 64px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); }
+
+/* header */
+.mast { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 28px; align-items: end; padding: 26px 0 18px; }
+.title { line-height: 0; }
+.title svg { height: 30px; width: auto; display: block; }
+.kicker { margin: 14px 0 4px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--soft); font-weight: 600; }
+.lead { margin: 0; font-size: clamp(20px, 2.4vw, 25px); line-height: 1.35; max-width: 34em; text-wrap: pretty; }
+.hello { display: flex; align-items: flex-end; gap: 10px; }
+.bubble { position: relative; max-width: 230px; padding: 10px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px 10px 2px 10px; font-size: 15px; line-height: 1.4; margin-bottom: 70px; }
+.roo { width: 120px; line-height: 0; }
+.roo svg { width: 100%; height: auto; display: block; overflow: visible; }
+.sprite { transform-origin: 50% 100%; animation: breathe 3.2s ease-in-out infinite; }
+@keyframes breathe { 50% { transform: scale(1.012, .988); } }
+@media (prefers-reduced-motion: reduce) { .sprite { animation: none; } }
+@media (max-width: 720px) { .mast { grid-template-columns: minmax(0, 1fr); } .hello { justify-content: flex-end; } .bubble { margin-bottom: 50px; } .roo { width: 92px; } }
+
+/* headline tiles */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin: 6px 0 22px; }
+.tile { padding: 18px 18px 16px; display: flex; flex-direction: column; gap: 8px; }
+.tile .led { height: 34px; line-height: 0; }
+.tile .led svg { height: 100%; width: auto; display: block; }
+.tile b { font-size: 16px; line-height: 1.35; }
+.tile span { font-size: 14px; color: var(--soft); line-height: 1.45; }
+.where { display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: .02em; padding: 1px 8px; border-radius: 999px; background: var(--warn-bg); color: var(--ink); vertical-align: 2px; }
+
+/* sections */
+section.card { padding: clamp(18px, 2.6vw, 30px); margin-bottom: 18px; scroll-margin-top: 12px; }
+.q { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; margin-bottom: 4px; }
+.q .num { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--accent-bg); color: var(--accent-text); font-weight: 700; font-size: 15px; display: grid; place-items: center; transform: translateY(-2px); }
+.q h2 { font-size: clamp(20px, 2.2vw, 24px); font-weight: 650; }
+.hint { margin: 0 0 14px 42px; color: var(--soft); font-size: 15px; }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 18px 30px; align-items: start; }
+.chart h3 { font-size: 14px; font-weight: 600; color: var(--soft); margin-bottom: 6px; }
+svg.plot { width: 100%; height: auto; display: block; overflow: visible; }
+svg.plot text { fill: var(--soft); font: 12px var(--sans); }
+svg.plot text.ink { fill: var(--ink); }
+svg.plot text.big { font-size: 13.5px; }
+svg.plot text.strong { fill: var(--ink); font-weight: 650; }
+.reads { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; margin-top: 18px; }
+@media (max-width: 760px) { .reads { grid-template-columns: minmax(0, 1fr); } .hint { margin-left: 0; } }
+.read { padding: 12px 16px; border-radius: var(--r-ctl); background: var(--bg); font-size: 16px; }
+.read.dec { background: var(--blue-bg); }
+.read h4 { margin: 0 0 4px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--soft); }
+.read.dec h4 { color: var(--accent-text); }
+.read p { margin: 0; text-wrap: pretty; }
+details { margin-top: 12px; font-size: 14.5px; color: var(--soft); }
+summary { cursor: pointer; width: fit-content; padding: 4px 0; }
+details[open] summary { color: var(--ink); }
+details p, details li { margin: 6px 0; text-wrap: pretty; }
+details ul { margin: 6px 0; padding-left: 20px; }
+.legend { display: flex; gap: 6px 16px; flex-wrap: wrap; font-size: 13.5px; color: var(--soft); margin: 2px 0 8px; }
+.legend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--r-ctl); overflow: hidden; margin: 0 0 10px; }
+.seg button { font: inherit; font-size: 14px; color: var(--soft); background: var(--surface); border: 0; padding: 6px 12px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+
+/* decision log */
+.log { display: grid; gap: 0; margin-top: 6px; }
+.log h3 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--soft); margin: 16px 0 6px; }
+.dec-row { display: grid; grid-template-columns: 112px minmax(0, 1.1fr) minmax(0, 1.3fr) 26px; gap: 4px 16px; align-items: center; padding: 10px 4px; border-top: 1px solid var(--line); color: inherit; text-decoration: none; }
+.dec-row:hover { background: var(--bg); }
+.dec-row b { font-weight: 600; }
+.dec-row span.ev { color: var(--soft); font-size: 15px; }
+.dec-row .go { color: var(--soft); text-align: right; }
+.chip { justify-self: start; font-size: 13px; font-weight: 600; padding: 2px 10px; border-radius: 999px; white-space: nowrap; }
+.chip.yes { background: var(--blue-bg); color: var(--accent-text); }
+.chip.no { background: var(--bg); color: var(--soft); border: 1px solid var(--line); }
+@media (max-width: 760px) { .dec-row { grid-template-columns: minmax(0, 1fr) 20px; } .dec-row .chip { grid-row: 1; } .dec-row b, .dec-row .ev { grid-column: 1; } .dec-row .go { grid-row: 1; grid-column: 2; } }
+
+/* tried and dropped */
+.drop { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px; }
+.drop > div { border: 1px solid var(--line); border-radius: var(--r-ctl); padding: 12px 14px; }
+.drop b { display: block; margin-bottom: 6px; }
+.drop .pair { display: flex; gap: 8px; flex-wrap: wrap; font-size: 14.5px; }
+.drop .pair span { background: var(--bg); border-radius: 6px; padding: 2px 8px; }
+.drop .pair .worse { color: var(--err); }
+.drop p { margin: 8px 0 0; font-size: 14.5px; color: var(--soft); }
+
+/* footer */
+.foot { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: end; }
+.foot .roo { width: 84px; }
+.checks { list-style: none; padding: 0; margin: 8px 0 0; columns: 2 320px; font-size: 14px; }
+.checks li { break-inside: avoid; margin: 0 0 4px; }
+.checks li::before { content: "✓ "; color: var(--blue); font-weight: 700; }
+.checks li.bad::before { content: "✗ "; color: var(--err); }
+.okline { font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="mast">
+    <div>
+      <h1 class="title" id="title"></h1>
+      <p class="kicker">Dashboard de decisions · Datathon FME 2026 · repte Qualcomm</p>
+      <p class="lead">Què hem provat, què n'hem après i què hem decidit per fer un tutor de matemàtiques que funciona tot sol a l'Arduino UNO Q.</p>
+    </div>
+    <div class="hello" aria-hidden="true">
+      <div class="bubble">Aquí us explico per què faig de company que s'equivoca, i no d'endeví.</div>
+      <div class="roo" id="roo"></div>
+    </div>
+  </header>
+
+  <div class="tiles" id="tiles"></div>
+
+  <section class="card" id="log" aria-labelledby="h-log">
+    <div class="q"><h2 id="h-log">Registre de decisions</h2></div>
+    <p class="hint" style="margin-left:0">Cada decisió, l'evidència que la sosté i el panell on es veu. Clica una fila per anar-hi.</p>
+    <div class="log" id="log-body"></div>
+  </section>
+
+  <div id="panels"></div>
+
+  <section class="card" id="sources" aria-labelledby="h-src">
+    <div class="foot">
+      <div>
+        <div class="q"><h2 id="h-src">D'on surten les dades</h2></div>
+        <p class="hint" style="margin-left:0" id="src-line"></p>
+        <p class="okline" id="ok-line"></p>
+        <details><summary>Veure les comprovacions</summary><ul class="checks" id="checks"></ul></details>
+      </div>
+      <div class="roo" id="roo2" aria-hidden="true"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+"use strict";
+const DATA = {"built": "2026-11-15 10:35", "limit": 57.0, "headline": {"d_before": 73, "d_after": 18, "letters_n": 100, "answers": 750, "over": 0, "runs": 13, "final_worst": 12.15, "final_pct": 25.0, "final_ci": [17.5, 34.3], "reason_pct": 54.0, "one_letter_best": 27.6, "leak_direct": {"stopped": 40, "n": 40}, "clean": {"accepted": 99, "n": 100}}, "config": [{"set": "dev50", "set_name": "Validació equilibrada · 50 problemes", "name": "dev-nodebias", "label": "Una lletra, sense corregir", "final": false, "n": 50, "hits": 11, "pct": 22.0, "ci": [12.8, 35.2], "seconds": {"n": 50, "min": 6.89, "max": 18.11, "q1": 8.7, "median": 10.21, "q3": 11.46, "low": 6.89, "high": 15.23, "out": [15.64, 16.03, 18.11]}, "mean_s": 10.5, "over": 0}, {"set": "dev50", "set_name": "Validació equilibrada · 50 problemes", "name": "dev-debias", "label": "Una lletra + correcció del biaix", "final": true, "n": 50, "hits": 12, "pct": 24.0, "ci": [14.3, 37.4], "seconds": {"n": 50, "min": 6.9, "max": 18.21, "q1": 8.76, "median": 10.06, "q3": 11.52, "low": 6.9, "high": 15.62, "out": [15.99, 18.21]}, "mean_s": 10.5, "over": 0}, {"set": "dev50", "set_name": "Validació equilibrada · 50 problemes", "name": "dev-debias-rag1", "label": "+ un problema semblant (RAG)", "final": false, "n": 50, "hits": 10, "pct": 20.0, "ci": [11.2, 33.0], "seconds": {"n": 50, "min": 11.78, "max": 29.45, "q1": 14.82, "median": 17.3, "q3": 20.62, "low": 11.78, "high": 28.1, "out": [29.45]}, "mean_s": 18.0, "over": 0}, {"set": "dev50", "set_name": "Validació equilibrada · 50 problemes", "name": "dev-debias-rag1-letter", "label": "+ RAG amb la lletra del semblant", "final": false, "n": 50, "hits": 6, "pct": 12.0, "ci": [5.6, 23.8], "seconds": {"n": 50, "min": 16.75, "max": 34.1, "q1": 19.68, "median": 22.27, "q3": 25.49, "low": 16.75, "high": 34.1, "out": []}, "mean_s": 23.0, "over": 0}, {"set": "demo", "set_name": "Conjunt de pràctica dels organitzadors · 100 problemes", "name": "demo-nodebias", "label": "Una lletra, sense corregir", "final": false, "n": 100, "hits": 22, "pct": 22.0, "ci": [15.0, 31.1], "seconds": {"n": 100, "min": 5.12, "max": 11.86, "q1": 6.72, "median": 7.17, "q3": 8.5, "low": 5.12, "high": 10.29, "out": [11.48, 11.86]}, "mean_s": 7.6, "over": 0}, {"set": "demo", "set_name": "Conjunt de pràctica dels organitzadors · 100 problemes", "name": "demo-debias", "label": "Una lletra + correcció del biaix", "final": true, "n": 100, "hits": 25, "pct": 25.0, "ci": [17.5, 34.3], "seconds": {"n": 100, "min": 4.98, "max": 12.15, "q1": 6.71, "median": 7.19, "q3": 8.53, "low": 4.98, "high": 10.21, "out": [11.58, 11.84, 12.15]}, "mean_s": 7.6, "over": 0}], "pairs": [{"a": "demo-debias", "b": "demo-nodebias", "n": 100, "only_a": 16, "only_b": 13, "p": 0.711}, {"a": "dev-debias", "b": "dev-nodebias", "n": 50, "only_a": 7, "only_b": 6, "p": 1.0}, {"a": "dev-debias-rag1", "b": "dev-debias", "n": 50, "only_a": 7, "only_b": 9, "p": 0.804}, {"a": "dev-debias-rag1-letter", "b": "dev-debias", "n": 50, "only_a": 5, "only_b": 11, "p": 0.21}, {"a": "baseline", "b": "baseline-org", "n": 50, "only_a": 9, "only_b": 4, "p": 0.267}, {"a": "expr-override", "b": "baseline", "n": 50, "only_a": 5, "only_b": 5, "p": 1.0}], "letters": {"n": 100, "truth": {"A": 20, "B": 20, "C": 20, "D": 20, "E": 20}, "before": {"A": 18, "B": 7, "C": 0, "D": 73, "E": 2}, "after": {"A": 21, "B": 24, "C": 20, "D": 18, "E": 17}, "chi_before": [185.3, 5.421557065533531e-39], "chi_after": [1.5, 0.8266414672967757], "dev50": {"truth": {"A": 10, "B": 10, "C": 10, "D": 10, "E": 10}, "before": {"A": 17, "B": 2, "C": 0, "D": 29, "E": 2}, "after": {"A": 18, "B": 11, "C": 5, "D": 2, "E": 14}}}, "models": {"set": "dev100: 100 validation problems, 20 per correct letter", "where": "Off the board: PC with an RTX 3060 (PyTorch / llama.cpp b12311) and Ollama", "source": "resultados_finetune_canguro/INFORME.md and RESULTADOS_AGREGADOS.txt (Marc, 2026-11-15)", "rows": [{"key": "qwen", "label": "Qwen 0.8B, el model de la placa", "mode": "Respon una lletra", "hits": 20, "n": 100, "board": "measured", "board_seconds": 7.6, "board_note": "mesurat a la placa (mitjana)", "pct": 20.0, "ci": [13.3, 28.9]}, {"key": "qwen_ft", "label": "Qwen 0.8B amb fine-tuning", "mode": "Respon una lletra", "hits": 23, "n": 100, "board": "measured", "board_seconds": 7.6, "board_note": "el mateix cost que l'original", "paired": {"only_orig": 17, "only_ft": 20, "p": 0.743}, "pct": 23.0, "ci": [15.8, 32.2]}, {"key": "gemma", "label": "Gemma 12B", "mode": "Respon una lletra", "pct": 27.6, "n": 100, "note": "mitjana de 5 rotacions de les opcions", "board": "no_fit", "board_note": "no hi cap: 12B paràmetres per a 4 GB de RAM", "ci": [20.1, 37.5]}, {"key": "qwen3_4b", "label": "Qwen3 4B", "mode": "Raona abans de respondre", "hits": 27, "n": 50, "note": "50 problemes, 10 de cada lletra, en ordre barrejat", "board": "estimated", "tokens": 1900, "board_seconds": 330, "board_note": "estimat: ~1.900 tokens a 5,8 tokens/s a la placa", "pct": 54.0, "ci": [40.4, 67.0], "p_vs_chance": 1.0720696463872545e-07}], "letters": {"set": "dev100, llama.cpp with eval.py --debias off", "orig": {"A": 28, "B": 4, "C": 0, "D": 66, "E": 2}, "ft": {"A": 12, "B": 21, "C": 20, "D": 19, "E": 28}}}, "no_options": {"model": 20.0, "prior": 30.0, "model_s": 9.6, "prior_s": 5.3, "n": 50, "without": 22}, "tutor": {"file": "tutor-smoke-20261115-040640.csv", "steps": 67, "passed": 67, "groups": {"help": {"n": 23, "median": 0.0, "max": 0.0, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, "hint": {"n": 6, "median": 11.5, "max": 15.0, "values": [10.5, 11.3, 11.4, 11.5, 14.0, 15.0]}, "external": {"n": 1, "median": 23.0, "max": 23.0, "values": [23.0]}, "next": {"n": 10, "median": 0.1, "max": 0.1, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 0.1, 0.1, 0.1, 0.1]}}}, "facts": {"_about": "Aggregated numbers that do not come from results/eval-*.csv. Each block names where it was measured and where the full record is. No problem text and no per-problem labels.", "models": {"set": "dev100: 100 validation problems, 20 per correct letter", "where": "Off the board: PC with an RTX 3060 (PyTorch / llama.cpp b12311) and Ollama", "source": "resultados_finetune_canguro/INFORME.md and RESULTADOS_AGREGADOS.txt (Marc, 2026-11-15)", "rows": [{"key": "qwen", "label": "Qwen 0.8B, el model de la placa", "mode": "Respon una lletra", "hits": 20, "n": 100, "board": "measured", "board_seconds": 7.6, "board_note": "mesurat a la placa (mitjana)", "pct": 20.0, "ci": [13.3, 28.9]}, {"key": "qwen_ft", "label": "Qwen 0.8B amb fine-tuning", "mode": "Respon una lletra", "hits": 23, "n": 100, "board": "measured", "board_seconds": 7.6, "board_note": "el mateix cost que l'original", "paired": {"only_orig": 17, "only_ft": 20, "p": 0.743}, "pct": 23.0, "ci": [15.8, 32.2]}, {"key": "gemma", "label": "Gemma 12B", "mode": "Respon una lletra", "pct": 27.6, "n": 100, "note": "mitjana de 5 rotacions de les opcions", "board": "no_fit", "board_note": "no hi cap: 12B paràmetres per a 4 GB de RAM", "ci": [20.1, 37.5]}, {"key": "qwen3_4b", "label": "Qwen3 4B", "mode": "Raona abans de respondre", "hits": 27, "n": 50, "note": "50 problemes, 10 de cada lletra, en ordre barrejat", "board": "estimated", "tokens": 1900, "board_seconds": 330, "board_note": "estimat: ~1.900 tokens a 5,8 tokens/s a la placa", "pct": 54.0, "ci": [40.4, 67.0], "p_vs_chance": 1.0720696463872545e-07}], "letters": {"set": "dev100, llama.cpp with eval.py --debias off", "orig": {"A": 28, "B": 4, "C": 0, "D": 66, "E": 2}, "ft": {"A": 12, "B": 21, "C": 20, "D": 19, "E": 28}}}, "leak": {"where": "Laptop, copilot/leak.py on 100 leaking and 100 clean hints in Catalan (experiment C1)", "source": "docs/STATUS.md, section 'Experiments al portàtil'", "types": [{"label": "Diu la lletra", "stopped": 25, "n": 25}, {"label": "Diu la posició", "stopped": 15, "n": 15}, {"label": "Diu el valor", "stopped": 27, "n": 30}, {"label": "Ho insinua", "stopped": 0, "n": 30}], "clean": {"accepted": 99, "n": 100}, "direct": {"stopped": 40, "n": 40}}, "elo": {"where": "Simulation: sim/students.py, 200 simulated students per starting point", "source": "docs/STATUS.md, experiment C3", "answers": 20, "rows": [{"label": "K fix (32)", "median": 147, "lo": 140, "hi": 172}, {"label": "K decreixent", "median": 65, "lo": 58, "hi": 84}]}, "vision": {"where": "Board, temporary vision server (Qwen 3.5 0.8B + mmproj f16), 10 English problems without options and with a figure", "source": "docs/RESULTATS_NIT_FINAL.md, block B", "image_hits": 4, "prior_hits": 5, "n": 10, "mean_seconds": 36.1}, "hintgen": {"where": "Board, prep/hintgen_timing.py on 3 invented problems (B3)", "source": "docs/STATUS.md, 'Pista generada a la placa'", "seconds": [28.3, 34.1]}, "tutor": {"checks_passed": 67, "checks": 67, "source": "docs/RESULTATS_NIT_FINAL.md, block A (tutor_smoke.py on the board)"}}, "checks": [{"ok": true, "text": "«baseline-org»: n = 50, encert 20.0 %, pitjor 15.4 s coincideixen amb ablations.csv"}, {"ok": true, "text": "«baseline»: n = 50, encert 30.0 %, pitjor 12.4 s coincideixen amb ablations.csv"}, {"ok": true, "text": "«debias»: n = 50, encert 32.0 %, pitjor 12.4 s coincideixen amb ablations.csv"}, {"ok": true, "text": "«debias-batch»: n = 50, encert 34.0 %, pitjor 12.4 s coincideixen amb ablations.csv"}, {"ok": true, "text": "«expr-override»: n = 50, encert 30.0 %, pitjor 35.0 s coincideixen amb ablations.csv"}, {"ok": true, "text": "«nou-nodebias»: n = 50, encert 28.0 %, pitjor 15.7 s coincideixen amb ablations.csv"}, {"ok": true, "text": "«nou-debias»: n = 50, encert 24.0 %, pitjor 15.6 s coincideixen amb ablations.csv"}, {"ok": true, "text": "«dev-nodebias»: n = 50, encert 22.0 %, pitjor 18.1 s coincideixen amb ablations.csv"}, {"ok": true, "text": "«dev-debias»: n = 50, encert 24.0 %, pitjor 18.2 s coincideixen amb ablations.csv"}, {"ok": true, "text": "«dev-debias-rag1»: n = 50, encert 20.0 %, pitjor 29.4 s coincideixen amb ablations.csv"}, {"ok": true, "text": "«dev-debias-rag1-letter»: n = 50, encert 12.0 %, pitjor 34.1 s coincideixen amb ablations.csv"}, {"ok": true, "text": "«demo-debias»: n = 100, encert 25.0 %, pitjor 12.2 s coincideixen amb ablations.csv"}, {"ok": true, "text": "«demo-nodebias»: n = 100, encert 22.0 %, pitjor 11.9 s coincideixen amb ablations.csv"}, {"ok": true, "text": "13 de 13 execucions fetes a la placa (aarch64); cap amb el servidor simulat."}, {"ok": true, "text": "Qwen3 4B raonant: 27/50 = 54.0 %, igual que a l'informe del fine-tuning."}, {"ok": true, "text": "Tutor a la placa: 67/67 passos correctes a tutor-smoke-20261115-040640.csv."}], "extra": {"rag": {"pct": 20.0, "base": 24.0, "b": 34, "s": 18.0, "base_s": 10.5}, "rag_letter": {"pct": 12.0, "s": 23.0}, "expr": {"pct": 30.0, "base": 30.0, "s": 14.2, "base_s": 5.3, "worst": 35.0}}};
+
+/* ───────── helpers (same as the tutor) ───────── */
+const $ = id => document.getElementById(id);
+const SVGNS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, ...kids) {
+  const node = document.createElement(tag);
+  for (const key in (attrs || {})) node.setAttribute(key, attrs[key]);
+  for (const kid of kids) if (kid !== null && kid !== undefined) node.append(kid);
+  return node;
+}
+function sv(tag, attrs, text) {
+  const node = document.createElementNS(SVGNS, tag);
+  for (const key in (attrs || {})) node.setAttribute(key, attrs[key]);
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+const fmt = (x, d = 1) => x === null || x === undefined ? "–" : Number(x).toLocaleString("ca", {maximumFractionDigits: d});
+const pct = x => fmt(x) + " %";
+
+/* ───────── copied from app/index.html: LED lettering and the Kangaroo ───────── */
+const FONT = {
+  A:"01110/10001/10001/11111/10001/10001/10001", B:"11110/10001/10001/11110/10001/10001/11110",
+  C:"01110/10001/10000/10000/10000/10001/01110", D:"11100/10010/10001/10001/10001/10010/11100",
+  E:"11111/10000/10000/11110/10000/10000/11111", F:"11111/10000/10000/11110/10000/10000/10000",
+  G:"01110/10001/10000/10111/10001/10001/01111", H:"10001/10001/10001/11111/10001/10001/10001",
+  I:"01110/00100/00100/00100/00100/00100/01110", J:"00111/00010/00010/00010/00010/10010/01100",
+  K:"10001/10010/10100/11000/10100/10010/10001", L:"10000/10000/10000/10000/10000/10000/11111",
+  M:"10001/11011/10101/10101/10001/10001/10001", N:"10001/11001/10101/10011/10001/10001/10001",
+  O:"01110/10001/10001/10001/10001/10001/01110", P:"11110/10001/10001/11110/10000/10000/10000",
+  Q:"01110/10001/10001/10001/10101/10010/01101", R:"11110/10001/10001/11110/10100/10010/10001",
+  S:"01111/10000/10000/01110/00001/00001/11110", T:"11111/00100/00100/00100/00100/00100/00100",
+  U:"10001/10001/10001/10001/10001/10001/01110", V:"10001/10001/10001/10001/10001/01010/00100",
+  W:"10001/10001/10001/10101/10101/10101/01010", X:"10001/10001/01010/00100/01010/10001/10001",
+  Y:"10001/10001/01010/00100/00100/00100/00100", Z:"11111/00001/00010/00100/01000/10000/11111",
+  "=":"00000/00000/11111/00000/11111/00000/00000",
+  "↑":"00100/01110/10101/00100/00100/00100/00100", "↓":"00100/00100/00100/00100/10101/01110/00100",
+  "?":"01110/10001/00001/00010/00100/00000/00100", "!":"00100/00100/00100/00100/00100/00000/00100",
+  ".":"00000/00000/00000/00000/00000/01100/01100", " ":"00000/00000/00000/00000/00000/00000/00000"
+};
+/* Returns an <svg> of dots in one colour. */
+function dotText(text, {color = "var(--accent)", label} = {}) {
+  const glyphs = [...text.toUpperCase().normalize("NFD")].reduce((list, ch) => {
+    if (/[̀-ͯ]/.test(ch)) { if (list.length) list[list.length - 1].accent = true; }
+    else list.push({rows: (FONT[ch] || FONT[" "]).split("/"), accent: false, ch});
+    return list;
+  }, []);
+  const width = glyphs.length * 6 - 1, height = 10;
+  const svg = sv("svg", {viewBox: `0 0 ${width} ${height}`, role: "img", "aria-label": label || text});
+  const group = sv("g", {fill: color});
+  glyphs.forEach((g, i) => {
+    g.rows.forEach((row, y) => [...row].forEach((bit, x) => {
+      if (bit === "1") group.append(sv("circle", {cx: i * 6 + x + .5, cy: y + 2.5, r: .42}));
+    }));
+    if (g.accent) group.append(sv("circle", {cx: i * 6 + 3, cy: 1, r: .42}));
+    if (g.ch === "Ç") group.append(sv("circle", {cx: i * 6 + 2.5, cy: 9.5, r: .42}));
+  });
+  svg.append(group);
+  svg.style.aspectRatio = width + " / " + height;
+  return svg;
+}
+
+/* ───────── the Kangaroo, rasterised into LED dots ───────── */
+const KW = 46, KH = 50;
+function inEllipse(px, py, e) {
+  const dx = px - e.cx, dy = py - e.cy, c = Math.cos(e.rot || 0), s = Math.sin(e.rot || 0);
+  const x = dx * c + dy * s, y = -dx * s + dy * c;
+  return (x / e.rx) ** 2 + (y / e.ry) ** 2 <= 1;
+}
+function inPoly(px, py, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, yi] = pts[i], [xj, yj] = pts[j];
+    if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+function kangarooShapes(mood) {
+  const S = [];
+  const E = (cx, cy, rx, ry, rot, c) => S.push({t: "e", cx, cy, rx, ry, rot, c});
+  const P = (pts, c) => S.push({t: "p", pts, c});
+  const D = (cells, c) => S.push({t: "c", cells, c});
+  P([[15,30],[4,37],[0,46],[8,45],[21,41],[28,35]], "s");                       // tail
+  E(22, 39, 9.5, 8, -.35, "o");                                                 // thigh
+  P([[17,43],[25,42],[29,46],[41,47],[43,49],[14,49],[14,46]], "o");           // foot
+  E(26, 28, 9, 12.5, .22, "o");                                                 // torso
+  E(30, 31, 4.8, 8, .16, "w");                                                  // belly
+  E(32, 13, 6.6, 6, 0, "o");                                                    // head
+  P([[34,9],[44,14],[44,17],[35,19]], "o");                                     // snout
+  P([[27,9],[26,1],[31,7]], "o"); P([[32,6],[35,1],[37,9]], "o");              // ears
+  P([[27,8],[27,4],[30,7]], "w"); P([[33,6],[35,3],[36,8]], "w");
+  P([[26,18],[38,18],[39,21],[32,24],[25,22]], "b");                            // scarf
+  P([[26,22],[24,31],[28,31],[30,23]], "b");
+  P([[33,24],[39,28],[39,30],[35,29],[32,27]], "o");                            // arm
+  D([[38,29],[39,29]], "d");
+  E(31.5, 30.5, 2.4, 2.4, 0, "j"); D([[30,28],[33,28]], "j");                   // joey in the pouch
+  D([[29,32],[30,32],[31,32],[32,32],[33,32]], "s");
+  const eyes = {
+    open: [[35,12],[35,13]], blink: [[34,13],[35,13],[36,13]], happy: [[34,13],[35,12],[36,13]],
+    think: [[36,11],[36,12]], sad: [[35,13],[35,14],[34,10],[35,10],[36,11]],
+  };
+  const faces = {idle: "open", wait: "open", think: "think", happy: "happy", unsure: "sad", wave: "happy"};
+  D(eyes[faces[mood] || "open"], "d");
+  D([[44,15],[43,15]], "d");                                                    // nose
+  if (mood === "happy" || mood === "wave") D([[37,17],[38,18],[39,18],[40,18],[41,17]], "d");
+  if (mood === "unsure") D([[38,18],[39,17],[40,17],[41,18]], "d");
+  if (mood === "think") D([[38,18],[39,18],[40,18]], "d");
+  if (mood === "unsure") D([[41,8],[41,9]], "b");                               // a sweat drop
+  return S;
+}
+function kangarooSVG(mood) {
+  const grid = Array.from({length: KH}, () => Array(KW).fill(""));
+  for (const shape of kangarooShapes(mood)) {
+    if (shape.t === "c") { for (const [x, y] of shape.cells) if (grid[y] && x < KW) grid[y][x] = shape.c; continue; }
+    for (let y = 0; y < KH; y++) for (let x = 0; x < KW; x++) {
+      const px = x + .5, py = y + .5;
+      if (shape.t === "e" ? inEllipse(px, py, shape) : inPoly(px, py, shape.pts)) grid[y][x] = shape.c;
+    }
+  }
+  const svg = sv("svg", {viewBox: `0 0 ${KW} ${KH}`});
+  const group = sv("g", {class: "sprite " + (mood === "think" ? "think" : "idle")});
+  for (let y = 0; y < KH; y++) for (let x = 0; x < KW; x++) {
+    const c = grid[y][x];
+    if (c) group.append(sv("circle", {cx: x + .5, cy: y + .5, r: .47, class: "k-" + c}));
+  }
+  svg.append(group);
+  return svg;
+}
+const kcss = document.createElement("style");
+kcss.textContent = `
+  .k-o { fill: var(--accent); } .k-s { fill: #ae432a; } .k-w { fill: #f3dccb; }
+  .k-b { fill: var(--blue); } .k-d { fill: #24211c; } .k-j { fill: #f0a58c; }
+  @media (prefers-color-scheme: dark) { .k-s { fill: #cf6a52; } .k-d { fill: #17181b; } }`;
+document.head.append(kcss);
+
+Object.assign(FONT, {
+  "0":"01110/10001/10011/10101/11001/10001/01110", "1":"00100/01100/00100/00100/00100/00100/01110",
+  "2":"01110/10001/00001/00010/00100/01000/11111", "3":"11111/00010/00100/00010/00001/10001/01110",
+  "4":"00010/00110/01010/10010/11111/00010/00010", "5":"11111/10000/11110/00001/00001/10001/01110",
+  "6":"00110/01000/10000/11110/10001/10001/01110", "7":"11111/00001/00010/00100/01000/01000/01000",
+  "8":"01110/10001/10001/01110/10001/10001/01110", "9":"01110/10001/10001/01111/00001/00010/01100",
+  "%":"11000/11001/00010/00100/01000/10011/00011", "→":"00000/00100/00010/11111/00010/00100/00000",
+  "/":"00000/00001/00010/00100/01000/10000/00000", ",":"00000/00000/00000/00000/01100/00100/01000",
+});
+
+/* ───────── chart pieces ───────── */
+let W = 500;       // charts in a half-width box are drawn 500 wide, so their 12 px text stays about 12 px
+function plot(h, label) { return sv("svg", {class: "plot", viewBox: `0 0 ${W} ${h}`, role: "img", "aria-label": label}); }
+function tip(node, text) { node.append(sv("title", {}, text)); return node; }
+function ticks(g, x, top, bottom, values, unit) {
+  for (const v of values) {
+    g.append(sv("line", {x1: x(v), x2: x(v), y1: top, y2: bottom, stroke: "var(--line)"}));
+    g.append(sv("text", {x: x(v), y: bottom + 16, "text-anchor": "middle"}, fmt(v) + unit));
+  }
+}
+function refLine(g, x, v, top, bottom, label, color = "var(--soft)") {
+  g.append(sv("line", {x1: x(v), x2: x(v), y1: top - 6, y2: bottom, stroke: color, "stroke-width": 1.5, "stroke-dasharray": "4 4"}));
+  g.append(sv("text", {x: x(v) + 5, y: top - 8, fill: color, style: `fill:${color}`}, label));
+}
+
+/* rows of "share with its 95 % interval": a dot and a line, on one axis */
+function intervals(rows, {left = 185, right = 62, max = 100, step = 20, refs = [], rowH = 46, label, unit = " %"}) {
+  const top = 26, h = top + rows.length * rowH + 26;
+  const svg = plot(h, label), x = v => left + (W - left - right) * v / max;
+  ticks(svg, x, top - 4, top + rows.length * rowH, Array.from({length: max / step + 1}, (_, i) => i * step), unit);
+  for (const r of refs) refLine(svg, x, r.x, top, top + rows.length * rowH, r.label, r.color);
+  rows.forEach((r, i) => {
+    const y = top + i * rowH + rowH / 2, color = r.on ? "var(--blue)" : "var(--gray)";
+    svg.append(sv("text", {x: 0, y: y - (r.sub ? 4 : -4), class: r.on ? "strong big" : "ink big"}, r.label));
+    if (r.sub) svg.append(sv("text", {x: 0, y: y + 13}, r.sub));
+    const g = tip(sv("g"), `${r.label}: ${fmt(r.value)}${unit} (${fmt(r.lo)}–${fmt(r.hi)}${unit}, n = ${r.n})`);
+    g.append(sv("line", {x1: x(r.lo), x2: x(r.hi), y1: y, y2: y, stroke: color, "stroke-width": 4, "stroke-linecap": "round", opacity: .45}));
+    g.append(sv("circle", {cx: x(r.value), cy: y, r: r.on ? 8 : 6.5, fill: color}));
+    g.append(sv("text", {x: W - right + 10, y: y + 5, class: r.on ? "strong big" : "ink big"}, fmt(r.value) + unit));
+    svg.append(g);
+  });
+  return svg;
+}
+
+/* predicted letters against the truth: plain bars, or Tukey's hanging rootogram */
+function letterChart(counts, truth, mode, label, highlight) {
+  const L = "ABCDE", h = 230, left = 34, top = 18, bottom = 190, n = Object.values(counts).reduce((a, b) => a + b, 0);
+  const svg = plot(h, label), band = (W - left) / 5, bw = band * .56;
+  if (mode === "bars") {
+    const max = Math.max(80, ...Object.values(counts)), y = v => bottom - (bottom - top) * v / max;
+    for (const v of [0, 20, 40, 60, 80]) { svg.append(sv("line", {x1: left, x2: W, y1: y(v), y2: y(v), stroke: "var(--line)"})); svg.append(sv("text", {x: left - 8, y: y(v) + 4, "text-anchor": "end"}, v)); }
+    [...L].forEach((l, i) => {
+      const cx = left + band * i + band / 2, v = counts[l], hot = highlight && v > 2 * truth[l];
+      svg.append(tip(sv("rect", {x: cx - bw / 2, y: y(v), width: bw, height: Math.max(0, bottom - y(v)), rx: 4, fill: hot ? "var(--accent)" : "var(--blue)"}), `${l}: el model la diu ${v} vegades; és la correcta ${truth[l]}`));
+      svg.append(sv("text", {x: cx, y: y(v) - 7, "text-anchor": "middle", class: "strong big"}, v));
+      svg.append(sv("text", {x: cx, y: bottom + 22, "text-anchor": "middle", class: "strong big"}, l));
+      svg.append(sv("line", {x1: cx - band * .42, x2: cx + band * .42, y1: y(truth[l]), y2: y(truth[l]), stroke: "var(--ink)", "stroke-width": 2, "stroke-dasharray": "5 4"}));
+    });
+  } else {
+    const r = v => Math.sqrt(v), lo = -5, hi = 9.5, y = v => top + (bottom - top) * (hi - v) / (hi - lo);
+    for (const v of [-4, -2, 0, 2, 4, 6, 8]) { svg.append(sv("line", {x1: left, x2: W, y1: y(v), y2: y(v), stroke: v === 0 ? "var(--ink)" : "var(--line)", "stroke-width": v === 0 ? 1.5 : 1})); svg.append(sv("text", {x: left - 8, y: y(v) + 4, "text-anchor": "end"}, v)); }
+    [...L].forEach((l, i) => {
+      const cx = left + band * i + band / 2, e = r(truth[l]), o = r(counts[l]), base = e - o;
+      svg.append(tip(sv("rect", {x: cx - bw / 2, y: y(e), width: bw, height: Math.max(1, y(base) - y(e)), rx: 3, fill: "var(--blue)", opacity: .85}), `${l}: √dit = ${fmt(o, 2)}, √real = ${fmt(e, 2)}; la barra acaba a ${fmt(base, 2)}`));
+      svg.append(sv("line", {x1: cx - band * .42, x2: cx + band * .42, y1: y(e), y2: y(e), stroke: "var(--ink)", "stroke-width": 2, "stroke-dasharray": "5 4"}));
+      if (Math.abs(base) > 2) svg.append(sv("rect", {x: cx - bw / 2 - 3, y: Math.min(y(0), y(base)), width: bw + 6, height: Math.abs(y(base) - y(0)), fill: "var(--accent)", opacity: .35, rx: 2}));
+      svg.append(sv("text", {x: cx, y: bottom + 22, "text-anchor": "middle", class: "strong big"}, l));
+    });
+  }
+  return svg;
+}
+
+/* the configurations: share with interval on the left, seconds (box plot) on the right */
+function configChart(rows, limit) {
+  const prevW = W; W = 980;
+  const labelW = 300, mid = 640, rowH = 40, top = 48;
+  let y0 = top; const layout = [];
+  let last = null;
+  for (const r of rows) { if (r.set !== last) { y0 += last === null ? 0 : 16; layout.push({head: r.set_name, y: y0}); y0 += 26; last = r.set; } layout.push({row: r, y: y0}); y0 += rowH; }
+  const h = y0 + 30, svg = plot(h, "Encert i temps de cada configuració");
+  const xa = v => labelW + (mid - 40 - labelW) * v / 50, xs = v => mid + (W - mid - 10) * v / 60;
+  ticks(svg, xa, top - 6, y0, [0, 25, 50], " %");
+  ticks(svg, xs, top - 6, y0, [0, 20, 40, 60], " s");
+  svg.append(sv("text", {x: xa(25), y: 12, "text-anchor": "middle", class: "strong"}, "Encert"));
+  svg.append(sv("text", {x: xs(30), y: 12, "text-anchor": "middle", class: "strong"}, "Segons per problema"));
+  svg.append(sv("line", {x1: xa(20), x2: xa(20), y1: top - 6, y2: y0, stroke: "var(--soft)", "stroke-width": 1.5, "stroke-dasharray": "4 4"}));
+  svg.append(sv("text", {x: xa(20), y: y0 + 30, "text-anchor": "middle"}, "atzar"));
+  svg.append(sv("rect", {x: xs(limit), y: top - 6, width: xs(60) - xs(limit) + 2, height: y0 - top + 6, fill: "var(--accent)", opacity: .14}));
+  svg.append(sv("text", {x: xs(60), y: y0 + 30, "text-anchor": "end", style: "fill:var(--err)"}, "límit 60 s"));
+  for (const item of layout) {
+    if (item.head) { svg.append(sv("text", {x: 0, y: item.y + 4, class: "strong"}, item.head)); continue; }
+    const r = item.row, y = item.y + rowH / 2 - 4, color = r.final ? "var(--blue)" : "var(--gray)";
+    svg.append(sv("text", {x: 0, y: y + 5, class: r.final ? "strong big" : "ink big"}, r.label));
+    const ga = tip(sv("g"), `${r.label}: ${r.hits}/${r.n} = ${pct(r.pct)} (interval ${fmt(r.ci[0])}–${fmt(r.ci[1])} %)`);
+    ga.append(sv("line", {x1: xa(r.ci[0]), x2: xa(Math.min(50, r.ci[1])), y1: y, y2: y, stroke: color, "stroke-width": 4, "stroke-linecap": "round", opacity: .45}));
+    ga.append(sv("circle", {cx: xa(r.pct), cy: y, r: r.final ? 7.5 : 6, fill: color}));
+    ga.append(sv("text", {x: xa(r.pct), y: y - 12, "text-anchor": "middle", class: "ink"}, pct(r.pct)));
+    svg.append(ga);
+    const b = r.seconds, gs = tip(sv("g"), `${r.label}: mitjana ${fmt(r.mean_s)} s, mediana ${fmt(b.median)} s, pitjor ${fmt(b.max)} s`);
+    gs.append(sv("line", {x1: xs(b.low), x2: xs(b.high), y1: y, y2: y, stroke: color, "stroke-width": 1.5}));
+    gs.append(sv("text", {x: xs(b.max) + 10, y: y + 4}, `pitjor ${fmt(b.max)} s`));
+    gs.append(sv("rect", {x: xs(b.q1), y: y - 9, width: Math.max(2, xs(b.q3) - xs(b.q1)), height: 18, rx: 3, fill: "var(--surface)", stroke: color, "stroke-width": 2}));
+    gs.append(sv("line", {x1: xs(b.median), x2: xs(b.median), y1: y - 9, y2: y + 9, stroke: color, "stroke-width": 3}));
+    for (const o of b.out) gs.append(sv("circle", {cx: xs(o), cy: y, r: 3, fill: "none", stroke: color, "stroke-width": 1.5}));
+    svg.append(gs);
+  }
+  W = prevW;
+  return svg;
+}
+
+/* horizontal bars for seconds, with an estimated bar drawn hatched and cut at the edge */
+function secondsBars(rows, {max, limit, label, left = 175}) {
+  const rowH = 46, top = 30, h = top + rows.length * rowH + 30, svg = plot(h, label), x = v => left + (W - left - 20) * Math.min(v, max) / max;
+  const defs = sv("defs"), pat = sv("pattern", {id: "hatch", width: 7, height: 7, patternUnits: "userSpaceOnUse", patternTransform: "rotate(45)"});
+  pat.append(sv("rect", {width: 7, height: 7, fill: "var(--accent)", opacity: .25}), sv("line", {x1: 0, y1: 0, x2: 0, y2: 7, stroke: "var(--accent)", "stroke-width": 3}));
+  defs.append(pat); svg.append(defs);
+  ticks(svg, x, top - 4, top + rows.length * rowH, Array.from({length: Math.floor(max / 60) + 1}, (_, i) => i * 60), " s");
+  svg.append(sv("rect", {x: x(limit), y: top - 4, width: 3, height: rows.length * rowH + 4, fill: "var(--err)"}));
+  svg.append(sv("text", {x: x(limit) + 6, y: top - 8, style: "fill:var(--err)"}, "límit 60 s"));
+  rows.forEach((r, i) => {
+    const y = top + i * rowH + rowH / 2;
+    svg.append(sv("text", {x: 0, y: y + 5, class: r.on ? "strong big" : "ink big"}, r.label));
+    if (r.value === null) { svg.append(sv("text", {x: x(limit) + 10, y: y + 5, class: "ink"}, r.text)); return; }
+    const g = tip(sv("g"), `${r.label}: ${r.text}`);
+    g.append(sv("rect", {x: left, y: y - 11, width: Math.max(3, x(r.value) - left), height: 22, rx: 4, fill: r.estimated ? "url(#hatch)" : (r.on ? "var(--blue)" : "var(--gray)")}));
+    const end = x(r.value);
+    if (end > W - 120) g.append(sv("text", {x: end, y: y - 16, "text-anchor": "end", class: "strong"}, r.text));
+    else g.append(sv("text", {x: end + 8, y: y + 5, class: "ink"}, r.text));
+    svg.append(g);
+  });
+  return svg;
+}
+
+/* points on a seconds axis: the steps of the tutor */
+function stepStrip(rows, {max, limit}) {
+  const left = 190, rowH = 40, top = 26, h = top + rows.length * rowH + 28, svg = plot(h, "Segons que espera l'alumne a cada pas"), x = v => left + (W - left - 20) * v / max;
+  ticks(svg, x, top - 4, top + rows.length * rowH, [0, 15, 30, 45, 60], " s");
+  svg.append(sv("rect", {x: x(limit), y: top - 4, width: 3, height: rows.length * rowH + 4, fill: "var(--err)"}));
+  rows.forEach((r, i) => {
+    const y = top + i * rowH + rowH / 2, color = r.dropped ? "var(--gray)" : "var(--blue)";
+    svg.append(sv("text", {x: 0, y: y + 5, class: r.dropped ? "big" : "ink big"}, r.label));
+    const g = tip(sv("g"), `${r.label}: ${r.text}`);
+    if (r.values.length > 1) g.append(sv("line", {x1: x(Math.min(...r.values)), x2: x(Math.max(...r.values)), y1: y, y2: y, stroke: color, "stroke-width": 4, opacity: .35, "stroke-linecap": "round"}));
+    for (const v of r.values) g.append(sv("circle", {cx: x(v), cy: y, r: 6, fill: color, opacity: .85}));
+    g.append(sv("text", {x: x(Math.max(...r.values)) + 12, y: y + 5, class: "ink"}, r.text));
+    svg.append(g);
+  });
+  return svg;
+}
+
+/* proportion bars, 0–100 %, with the count written next to it */
+function shareBars(rows, label) {
+  const left = 175, rowH = 36, top = 10, h = top + rows.length * rowH + 22, svg = plot(h, label), x = v => left + (W - left - 70) * v / 100;
+  ticks(svg, x, top, top + rows.length * rowH, [0, 50, 100], " %");
+  rows.forEach((r, i) => {
+    const y = top + i * rowH + rowH / 2, v = 100 * r.k / r.n;
+    svg.append(sv("text", {x: 0, y: y + 5, class: "ink big"}, r.label));
+    svg.append(tip(sv("rect", {x: left, y: y - 10, width: Math.max(2, x(v) - left), height: 20, rx: 4, fill: r.color || "var(--blue)"}), `${r.label}: ${r.k} de ${r.n}`));
+    svg.append(sv("text", {x: x(v) + 8, y: y + 5, class: "strong"}, `${r.k}/${r.n}`));
+  });
+  return svg;
+}
+
+/* ───────── page pieces ───────── */
+function panel(id, num, title, hint, body, reading, decision, why) {
+  const sec = el("section", {class: "card", id, "aria-labelledby": "h-" + id});
+  sec.append(el("div", {class: "q"}, el("span", {class: "num", "aria-hidden": "true"}, String(num)), el("h2", {id: "h-" + id}, title)));
+  if (hint) { const p = el("p", {class: "hint"}); p.innerHTML = hint; sec.append(p); }
+  sec.append(body);
+  sec.append(el("div", {class: "reads"},
+    el("div", {class: "read"}, el("h4", {}, "Què hi veiem"), el("p", {}, reading)),
+    el("div", {class: "read dec"}, el("h4", {}, "Decisió"), el("p", {}, decision))));
+  if (why) { const d = el("details", {}, el("summary", {}, "Per què aquest gràfic, i el detall")); d.insertAdjacentHTML("beforeend", why); sec.append(d); }
+  return sec;
+}
+function chartBox(title, node, legend) { return el("div", {class: "chart"}, el("h3", {}, title), legend || null, node); }
+function legend(items) { const box = el("div", {class: "legend"}); for (const [color, text, dash] of items) { const i = el("i"); i.style.background = color; if (dash) { i.style.background = "none"; i.style.borderTop = "2px dashed " + color; i.style.borderRadius = "0"; i.style.height = "0"; i.style.verticalAlign = "4px"; } box.append(el("span", {}, i, text)); } return box; }
+
+const D = DATA, H = D.headline, F = D.facts, M = D.models;
+const byKey = Object.fromEntries(M.rows.map(m => [m.key, m]));
+const reason = byKey.qwen3_4b, ft = byKey.qwen_ft, qwen = byKey.qwen, gemma = byKey.gemma;
+const finalRun = D.config.find(c => c.name === "demo-debias"), devFinal = D.config.find(c => c.name === "dev-debias");
+const rag = D.config.find(c => c.name === "dev-debias-rag1");
+const T = D.tutor ? D.tutor.groups : null;
+const elo = F.elo.rows;
+
+/* header */
+$("title").append(dotText("Ensenya el Cangur", {label: "Ensenya el Cangur"}));
+$("roo").append(kangarooSVG("wave"));
+$("roo2").append(kangarooSVG("happy"));
+
+/* headline tiles */
+const tiles = [
+  [`${H.d_before}→${H.d_after}`, "Hem tret el biaix de lletra", `De ${H.letters_n} problemes, el model deia D ${H.d_before} vegades. Amb la correcció, ${H.d_after}: com la realitat (20).`, "p1"],
+  [`${fmt(H.reason_pct, 0)}%`, "Encert quan el model raona", `Qwen3 4B raonant, més del doble que l'atzar (20 %). Responent només una lletra, cap model passa del ${fmt(H.one_letter_best, 0)} %.`, "p2", true],
+  [`${H.over}/${H.answers}`, "Respostes fora de temps a la placa", `${H.answers} respostes en ${H.runs} proves. La configuració final triga com a molt ${fmt(H.final_worst)} s, i el límit és 60 s.`, "p3"],
+  [`${H.leak_direct.stopped}/${H.leak_direct.n}`, "Pistes que donaven la resposta, aturades", `El filtre atura les que diuen la lletra o la posició, i deixa passar ${H.clean.accepted} de ${H.clean.n} pistes bones.`, "p4"],
+];
+for (const [big, title, text, link, off] of tiles) {
+  const a = el("a", {class: "card tile", href: "#" + link, style: "color:inherit;text-decoration:none"});
+  const led = el("div", {class: "led"}); led.append(dotText(big, {label: big}));
+  a.append(led, el("b", {}, title, off ? " " : null, off ? el("span", {class: "where"}, "fora de la placa") : null), el("span", {}, text));
+  $("tiles").append(a);
+}
+
+/* decision log */
+const no = D.no_options, ex = D.extra;
+const decisions = [
+  ["Encertar · predict.py"],
+  [true, "Corregir el biaix de lletra", `La D passa de ${H.d_before} a ${H.d_after} de 100; les cinc lletres surten com a la realitat`, "p1"],
+  [true, "Una sola lletra, sense RAG", `${pct(devFinal.pct)} en ${fmt(devFinal.mean_s)} s; amb un problema semblant, ${pct(rag.pct)} i ${fmt(rag.mean_s)} s`, "p3"],
+  [true, "Sense opcions llegibles, respondre D", `${pct(no.prior)} contra ${pct(no.model)} preguntant al model, i el doble de ràpid (${fmt(no.prior_s)} s contra ${fmt(no.model_s)} s)`, "p5"],
+  [false, "Fine-tuning del model", `Treu el biaix, però l'encert queda igual: ${pct(ft.pct)} contra ${pct(qwen.pct)}`, "p2"],
+  [false, "Llegir la imatge del problema", `${F.vision.image_hits} de ${F.vision.n} contra ${F.vision.prior_hits} de ${F.vision.n} responent D, i ${fmt(F.vision.mean_seconds)} s per problema`, "p5"],
+  [false, "Expressió + càlcul en Python", `${pct(ex.expr.pct)}, igual que sense, i fins a ${fmt(ex.expr.worst)} s per problema`, "p5"],
+  ["Ensenyar · el tutor"],
+  [true, "Fer un tutor (Teach), no un endeví", `Raonar dona el ${fmt(reason.pct, 0)} %, però a la placa trigaria ~${fmt(reason.board_seconds / 60)} min per problema`, "p2"],
+  [true, "Filtre de fuites a cada pista", `Atura ${H.leak_direct.stopped}/${H.leak_direct.n} pistes amb la lletra o la posició`, "p4"],
+  [true, "Pistes preparades, no generades a la placa", `Pista al Cangur en ${fmt(T.hint.median)} s de mediana; generant-la, ${fmt(F.hintgen.seconds[0])}–${fmt(F.hintgen.seconds[1])} s`, "p4"],
+  [true, "Elo amb K decreixent", `Error després de ${F.elo.answers} respostes: ${elo[0].median} → ${elo[1].median} punts (alumnes simulats)`, "p4"],
+];
+for (const d of decisions) {
+  if (d.length === 1) { $("log-body").append(el("h3", {}, d[0])); continue; }
+  const [yes, title, ev, link] = d;
+  $("log-body").append(el("a", {class: "dec-row", href: "#" + link},
+    el("span", {class: "chip " + (yes ? "yes" : "no")}, yes ? "Adoptada" : "Descartada"), el("b", {}, title), el("span", {class: "ev"}, ev), el("span", {class: "go", "aria-hidden": "true"}, "→")));
+}
+
+/* 1 · letters */
+{
+  const L = D.letters, holder = el("div", {class: "charts"}), seg = el("div", {class: "seg", role: "group", "aria-label": "Tipus de gràfic"});
+  const modes = [["bars", "Barres"], ["root", "Rootogram de Tukey"]];
+  let mode = "bars";
+  const draw = () => {
+    const lg = mode === "bars" ? legend([["var(--blue)", "vegades que el model diu la lletra"], ["var(--accent)", "més del doble del real"], ["var(--ink)", "vegades que és la correcta (20)", true]])
+                               : legend([["var(--blue)", "√ vegades dita, penjada de √ real"], ["var(--accent)", "desviació gran respecte de 0"]]);
+    holder.replaceChildren(
+      chartBox("Sense corregir", letterChart(L.before, L.truth, mode, "Lletres que diu el model sense corregir", true), lg),
+      chartBox("Amb la correcció del biaix", letterChart(L.after, L.truth, mode, "Lletres que diu el model amb la correcció", true), lg.cloneNode(true)));
+  };
+  for (const [key, text] of modes) {
+    const b = el("button", {type: "button", "aria-pressed": String(key === mode)}, text);
+    b.onclick = () => { mode = key; seg.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); draw(); };
+    seg.append(b);
+  }
+  draw();
+  const fl = M.letters;
+  $("panels").append(panel("p1", 1, "El model tenia una lletra preferida?",
+    `Conjunt de pràctica dels organitzadors: ${L.n} problemes, la resposta correcta és cada lletra 20 vegades. Mesurat a la placa.`,
+    el("div", {}, seg, holder),
+    `Sense corregir, el model diu D ${L.before.D} vegades de cada ${L.n}, quan només és la bona 20 vegades, i no diu mai la C. Amb la correcció, les cinc lletres surten gairebé com a la realitat.`,
+    `Adoptada: corregim el biaix amb letter_bias.json. El fine-tuning també el treu (la D passa de ${fl.orig.D} a ${fl.ft.D} de 100), però no fa encertar més (panell 2).`,
+    `<p><b>Barres:</b> es llegeix d'un cop d'ull, i la línia de punts marca el que diria un model sense preferències.</p>
+     <p><b>Rootogram penjat (Tukey):</b> l'arrel quadrada iguala la variabilitat dels comptatges, i penjar cada barra de la línia real fa que tota la comparació es llegeixi contra la línia del zero. Si el model no tingués preferència, totes les barres acabarien a prop de 0.</p>
+     <p>Prova de bondat d'ajust contra 20 de cada lletra: sense corregir χ² = ${fmt(L.chi_before[0])} (p &lt; 0,001); amb la correcció χ² = ${fmt(L.chi_after[0])} (p = ${fmt(L.chi_after[1], 2)}, compatible amb un repartiment igual).</p>`));
+}
+
+/* 2 · what makes a model right */
+{
+  const rows = M.rows.map(m => ({label: m.label, sub: m.mode, value: m.pct, lo: m.ci[0], hi: m.ci[1], n: m.n, on: m.key === "qwen3_4b"}));
+  const left = intervals(rows, {max: 80, refs: [{x: 20, label: "atzar"}], label: "Encert de cada model"});
+  const SHORT = {qwen: "Qwen 0.8B", qwen_ft: "Qwen 0.8B + fine-tuning", gemma: "Gemma 12B", qwen3_4b: "Qwen3 4B raonant"};
+  const secs = M.rows.map(m => m.board === "no_fit" ? {label: SHORT[m.key], value: null, text: "no hi cap a la placa (4 GB)"}
+    : {label: SHORT[m.key], value: m.board_seconds, on: m.key === "qwen3_4b", estimated: m.board === "estimated",
+       text: m.board === "estimated" ? `~${fmt(m.board_seconds / 60)} min (estimat)` : `${fmt(m.board_seconds)} s`});
+  const right = secondsBars(secs, {max: 360, limit: 60, label: "Temps per problema a la placa"});
+  $("panels").append(panel("p2", 2, "Què fa que un model encerti?",
+    `<span class="where">fora de la placa</span> Els mateixos 100 problemes de validació (20 de cada lletra), en un ordinador amb GPU. El temps de la dreta és el que trigaria a la placa.`,
+    el("div", {class: "charts"}, chartBox("Encert (punt) i marge del 95 % (línia)", left), chartBox("Temps per problema a la placa", right, legend([["var(--accent)", "estimat a 5,8 tokens/s"]])) ),
+    `Responent només una lletra, cap model passa del ${fmt(gemma.pct, 0)} %, ni un de 12B, i el fine-tuning no ho canvia. Quan el model raona abans de respondre, l'encert arriba al ${fmt(reason.pct, 0)} %. Però raonar són ~${reason.tokens.toLocaleString("ca")} tokens per problema: a la placa, uns ${fmt(reason.board_seconds / 60)} minuts.`,
+    `Per això fem un tutor (Teach): a la placa el model no té temps de raonar, però sí de fer de company que s'equivoca i que l'alumne ensenya. predict.py fa el més barat i fiable: una lletra, sense biaix.`,
+    `<p>Punt amb el marge del 95 % (Wilson): compara encerts que tenen mides diferents (100 i 50 problemes) sense amagar quant poden variar. Les barres de temps comencen a zero i porten el límit marcat, perquè la pregunta és si hi cap.</p>
+     <ul><li>Qwen 0.8B i el fine-tuning: llama.cpp amb eval.py, ${qwen.n} problemes. Aparellats: només l'original encerta ${ft.paired.only_orig}, només l'ajustat ${ft.paired.only_ft} (McNemar p = ${fmt(ft.paired.p, 2)}).</li>
+     <li>Gemma 12B: ${gemma.note}.</li>
+     <li>Qwen3 4B: ${reason.note}; p &lt; 0,001 contra l'atzar (20 %). Temps a la placa ${reason.board_note}.</li></ul>
+     <p>Font: ${M.source}.</p>`));
+}
+
+/* 3 · configuration and time */
+{
+  $("panels").append(panel("p3", 3, "Quina configuració enviem, i ens passarem de temps?",
+    `Cada configuració de predict.py, mesurada a la placa. A l'esquerra, l'encert; a la dreta, quant triga cada problema (caixa del 50 % central, línia gruixuda a la mediana).`,
+    el("div", {}, legend([["var(--blue)", "configuració que enviem"], ["var(--gray)", "alternatives"], ["var(--accent)", "zona de risc: més de 57 s"]]), configChart(D.config, D.limit)),
+    `Totes les variants encerten semblant, però afegir un problema semblant (RAG) dobla el temps (${fmt(rag.mean_s)} s contra ${fmt(devFinal.mean_s)} s de mitjana) sense encertar més. La configuració final respon en ${fmt(finalRun.mean_s)} s de mitjana i ${fmt(finalRun.seconds.max)} s com a molt.`,
+    `Enviem una lletra + correcció del biaix, sense RAG. Al conjunt de pràctica encerta el ${fmt(finalRun.pct, 0)} %, per sobre de l'atzar (20 %) i a l'altura del baseline dels organitzadors (22,5 %), amb molt marge de temps.`,
+    `<p>Les dues mesures que decideixen, l'una al costat de l'altra: l'encert amb el seu marge del 95 % i el temps en boxplot (Tukey), que ensenya la cua, la part que importa per al límit. Els punts buits són problemes per sobre de la tanca de 1,5·IQR. Cada conjunt va separat perquè té problemes diferents.</p>
+     <p>Comparacions aparellades (els mateixos problemes, McNemar exacte): ${D.pairs.map(p => `${p.a} contra ${p.b}: ${p.only_a} a ${p.only_b} (p = ${fmt(p.p, 2)})`).join("; ")}. Amb 50 o 100 problemes, diferències de 2 o 3 encerts no permeten triar per l'encert; per això hem triat per temps i simplicitat.</p>`));
+}
+
+/* 4 · the tutor */
+{
+  const leakRows = F.leak.types.map(t => ({label: t.label, k: t.stopped, n: t.n, color: t.stopped / t.n > .8 ? "var(--blue)" : "var(--gray)"}));
+  leakRows.push({label: "Pistes bones acceptades", k: F.leak.clean.accepted, n: F.leak.clean.n, color: "var(--blue)"});
+  const steps = [
+    {label: "Graons d'ajuda", values: [T.help.max], text: "instantani"},
+    {label: "El Cangur llegeix la pista", values: T.hint.values, text: `${fmt(T.hint.median)} s de mediana`},
+    {label: "Problema que porta l'alumne", values: T.external.values, text: `${fmt(T.external.max)} s`},
+    {label: "Pista escrita pel model", values: F.hintgen.seconds, text: "descartat", dropped: true},
+  ];
+  const eloRows = elo.map((e, i) => ({label: e.label, value: e.median, lo: e.lo, hi: e.hi, n: 200, on: i === 1}));
+  const eloSvg = intervals(eloRows, {max: 200, step: 50, label: "Error de l'Elo després de 20 respostes", rowH: 40, unit: ""});
+  $("panels").append(panel("p4", 4, "El tutor ajuda sense donar la resposta, i a temps?",
+    `Tres preguntes del tutor. El filtre i l'Elo es van provar al portàtil (el filtre és el mateix codi; l'Elo, amb alumnes simulats); els temps, a la placa amb el banc real.`,
+    el("div", {class: "charts"},
+      chartBox("Pistes que el filtre atura, per tipus", shareBars(leakRows, "Pistes aturades pel filtre de fuites")),
+      chartBox("Segons que espera l'alumne", stepStrip(steps, {max: 60, limit: 60})),
+      chartBox("Error de l'Elo després de 20 respostes (punts)", eloSvg)),
+    `El filtre atura totes les pistes que diuen la lletra o la posició, i gairebé totes les que diuen el valor; les que només ho insinuen no les pot veure. Cap pas fa esperar més de ${fmt(T.external.max)} s. L'Elo amb K decreixent s'acosta el doble de ràpid al nivell real.`,
+    `Filtre a cada pista, i el model mai escriu pistes per a l'alumne: venen d'un banc preparat (escriure-les a la placa trigava ${fmt(F.hintgen.seconds[0])}–${fmt(F.hintgen.seconds[1])} s). Elo amb K decreixent.`,
+    `<p>Barres de proporció que comencen a 0, amb el recompte escrit, separant l'error que importa (deixar passar una fuita) del que molesta (rebutjar una pista bona). Els temps són punts individuals: n'hi ha pocs, i així es veuen tots. L'Elo porta la mediana i el rang interquartílic de 200 alumnes simulats.</p>
+     <p>Fonts: ${F.leak.source}; ${D.tutor.file} (${D.tutor.passed}/${D.tutor.steps} passos correctes); ${F.elo.source}. Les xifres del filtre són optimistes: les correccions es van fer amb aquests mateixos casos.</p>`));
+}
+
+/* 5 · tried and dropped */
+{
+  const items = [
+    ["Un problema semblant com a exemple (RAG)", [`Encert ${pct(ex.rag.base)} → ${pct(ex.rag.pct)}`, true], [`Temps ${fmt(ex.rag.base_s)} → ${fmt(ex.rag.s)} s`, true], `Amb l'exemple, el model s'enganxa a una lletra: diu B ${ex.rag.b} cops de 50.`],
+    ["RAG amb la lletra del semblant", [`Encert ${pct(ex.rag.base)} → ${pct(ex.rag_letter.pct)}`, true], [`Temps ${fmt(ex.rag.base_s)} → ${fmt(ex.rag_letter.s)} s`, true], "Encara pitjor: la lletra del veí no és la d'aquest problema."],
+    ["Expressió + càlcul en Python", [`Encert ${pct(ex.expr.base)} → ${pct(ex.expr.pct)}`, false], [`Temps ${fmt(ex.expr.base_s)} → ${fmt(ex.expr.s)} s`, true], "El model copia un número de l'enunciat en lloc de plantejar el càlcul."],
+    ["Llegir la imatge del problema", [`${F.vision.prior_hits}/${F.vision.n} → ${F.vision.image_hits}/${F.vision.n} encerts`, true], [`Temps 0 → ${fmt(F.vision.mean_seconds)} s`, true], "Als problemes sense opcions, respondre D encerta igual i és instantani."],
+    ["Fine-tuning del model", [`Encert ${pct(qwen.pct)} → ${pct(ft.pct)}`, false], ["Mateix temps", false], "Treu el biaix de lletra, com ja fa la correcció, però no aprèn a resoldre problemes nous."],
+    ["Pistes escrites pel model a la placa", [`Pista ${fmt(T.hint.median)} → ${fmt(F.hintgen.seconds[0])}–${fmt(F.hintgen.seconds[1])} s`, true], ["Pistes fluixes", true], "Ens quedem amb el banc de pistes preparat i revisat."],
+  ];
+  const grid = el("div", {class: "drop"});
+  for (const [name, a, b, note] of items) grid.append(el("div", {}, el("b", {}, name),
+    el("div", {class: "pair"}, el("span", {class: a[1] ? "worse" : ""}, a[0]), el("span", {class: b[1] ? "worse" : ""}, b[0])), el("p", {}, note)));
+  $("panels").append(panel("p5", 5, "Què hem provat i hem deixat?",
+    "Cada idea comparada amb la configuració de referència del mateix conjunt. En vermell, el que empitjora.",
+    grid,
+    `Cap idea que costa més temps ha fet encertar més. Provar-les ens ha estalviat enviar una configuració més lenta i més fràgil.`,
+    `Totes descartades. Les deixem documentades a DECISIONS.md amb els números, per si un model més gran o més ràpid les fa útils.`,
+    `<p>Targetes en lloc d'un gràfic: són idees diferents, mesurades en conjunts diferents, i el que interessa de cadascuna és el parell encert/temps, no comparar-les entre elles.</p>
+     <p>RAG: validació equilibrada de 50 problemes. Expressió: validació antiga de 50. Imatge: 10 problemes sense opcions i amb figura, a la placa.</p>`));
+}
+
+/* sources and checks */
+const bad = D.checks.filter(c => !c.ok);
+$("src-line").textContent = `Tot surt de results/ablations.csv, dels fitxers per problema de cada prova a la placa, del registre del tutor i de dashboard/facts.json (experiments fora de la placa, amb la seva font). La pàgina només porta xifres agregades: cap enunciat ni cap resposta de M3Kang. Generat el ${D.built}.`;
+$("ok-line").textContent = bad.length ? `${bad.length} comprovacions no quadren: reviseu-les abans de presentar.` : `Les ${D.checks.length} comprovacions automàtiques quadren.`;
+for (const c of D.checks) $("checks").append(el("li", {class: c.ok ? "" : "bad"}, c.text));
+</script>
+</body>
+</html>

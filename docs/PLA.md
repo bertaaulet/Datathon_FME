@@ -251,7 +251,7 @@ python3 app/server.py --host 0.0.0.0                 # al portàtil: adb forward
 # Qualsevol
 python3 sim/students.py --db data/tutor.db
 python3 -m copilot.leak data/leak_cases.jsonl results/leak.json
-python3 dashboard/build.py --baseline baseline-org
+python3 dashboard/build.py
 ```
 
 Si es preparen més llengües, `val.jsonl` es sobreescriu. Per tant, `predict.py` es mesura sempre amb el mateix `--languages`.
