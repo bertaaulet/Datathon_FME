@@ -22,7 +22,7 @@ Les tasques s'assignen en veu alta a l'equip; aquí només hi ha què queda i de
 | Línia | Fet | Pendent | Depèn de |
 | --- | --- | --- | --- |
 | `predict.py` | Calibració, guardrails, biaix per lot, expressió (descartada), RAG amb pregunta + valor correcte, biaix robust | Segona ronda d'experiments; triar la configuració de `config.env`; `letter_bias.json` bo a la placa; confirmar amb el conjunt de pràctica; anàlisi d'errors; placa a punt per al *last call* | La placa |
-| Pistes (Berta) | Infraestructura (lots, validació, importació, rànquing, similitud, pistes de mètode en 6 llengües). **Decidit: sense pistes de companys** (un alumne per placa) | Redissenyar el graó 3 (banc i externs), l'ensenyament del Cangur i l'idioma; treure les pistes de companys del codi; banc de pistes de l'agent; τ (D2); pistes generades pel model | `tutor.db` i la placa per a D2 |
+| Pistes (Berta) | Infraestructura (lots, validació, importació, rànquing, similitud, pistes de mètode en 6 llengües). **Flux nou decidit** ([`PISTES.md`](PISTES.md)): sense companys, escala nova, Cangur en català, es guarden només les pistes que convencen | Implementar-ho al codi; banc de pistes de l'agent; τ (D2); pistes generades pel model | `tutor.db` i la placa per a D2 |
 | Tutor (Teach) | Escala d'ajuda, Cangur, pont d'idioma, Elo de l'alumne (el dels problemes és fix), problemes externs, interfície nova, servei i reinici | Problemes 11–14 de `PROBLEMES.md`; revisar l'Elo i el pont d'idioma; reconstruir `tutor.db` amb les dades noves de l'OCR (si es vol) | — |
 | Lliuraments | — | README, `LICENSE`, xifres de PISA, pitch, vídeo de reserva, Project Hub, dashboard Tukey | Resultats per als números |
 

@@ -100,7 +100,7 @@ El 22,5% és el model sol, amb un prompt i una crida. Un **harness** és tot el 
 
 ## Pistes
 
-> **2026-11-14:** cada alumne té la seva placa. No hi ha pistes de companys: les pistes que escriu l'alumne per ensenyar el Cangur només es desen com a dades. El graó 3 i el flux de pistes s'estan redissenyant (Berta).
+> **2026-11-14:** cada alumne té la seva placa. No hi ha pistes de companys: les pistes que escriu l'alumne per ensenyar el Cangur només es desen com a dades. El flux nou de pistes (escala d'ajuda, Cangur en català, què es guarda) és a [`PISTES.md`](PISTES.md), i mana sobre aquesta secció.
 
 Les pistes surten de dos llocs. Un agent prepara al portàtil un banc de pistes de referència. Després, el model de la placa genera pistes noves fent servir aquest banc com a exemple. Totes passen pel filtre de fuites i es mesuren. No s'escriu cap pista a mà.
 
