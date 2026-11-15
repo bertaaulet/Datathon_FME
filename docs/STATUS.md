@@ -1,6 +1,6 @@
 # Estat actual
 
-_Última actualització: 2026-11-15 04:05 — Irene (amb Claude): proves B1 (D2) i B3 del paquet de la Berta a la placa (secció "Pont d'idioma i pistes"). 03:15 — Irene (amb Codex i Claude): banc de pistes de l'agent i desplegament del tutor a la placa (secció "Pont d'idioma i pistes"). 02:45 — Irene (amb Claude): segona ronda de `predict.py` a la placa amb `dev50` (resultats i incidència USB). Pont d'idioma: Irene (amb Codex). La resta, de les 01:45 (Berta)._
+_Última actualització: 2026-11-15 09:20 — Irene (amb Claude): nit final a la placa (`NIT_FINAL.md`): pistes, pas 4 amb el conjunt de pràctica, configuració final + reinici, i experiment d'imatge; resultats a [`RESULTATS_NIT_FINAL.md`](RESULTATS_NIT_FINAL.md). 04:05 — Irene (amb Claude): proves B1 (D2) i B3 del paquet de la Berta a la placa (secció "Pont d'idioma i pistes"). 03:15 — Irene (amb Codex i Claude): banc de pistes de l'agent i desplegament del tutor a la placa (secció "Pont d'idioma i pistes"). 02:45 — Irene (amb Claude): segona ronda de `predict.py` a la placa amb `dev50` (resultats i incidència USB). Pont d'idioma: Irene (amb Codex). La resta, de les 01:45 (Berta)._
 
 ## Fase
 - **Tutor:** funciona a la placa amb el banc real (`tutor.db`, 601 problemes utilitzables, el Cangur precalculat), arrenca sol amb la placa i amb la matriu LED, i els problemes externs segueixen el mateix recorregut que els del banc (provat amb problemes inventats).
@@ -13,8 +13,10 @@ _Última actualització: 2026-11-15 04:05 — Irene (amb Claude): proves B1 (D2)
 | Què | Estat |
 | --- | --- |
 | Segona ronda a la placa amb `dev50` (codi de `main` `c34427e`): `build_index.py --only-with-options --skip-suspect` (2.111 files) i `dev-nodebias`, `dev-debias`, `dev-debias-rag1`, `dev-debias-rag1-letter`. `letter_bias.json` no es va refer (ja havia acabat a les 23:33) | ✅ 01:33 |
-| Pas 4: confirmació amb el conjunt de pràctica (`data/demo.jsonl`, 100 files): `demo-nodebias` i una segona línia per decidir amb la taula de la segona ronda (proposta: `demo-debias`, sense RAG) | ⏳ cal decidir-ho |
-| Triar la configuració de `config.env` per al *last call* (no s'ha tocat) | ⏳ després del pas 4 |
+| Pas 4: confirmació amb el conjunt de pràctica (`data/demo.jsonl`, 100 files): **`demo-debias` 25%**, `demo-nodebias` 22% (taula a "Resultats de `predict.py`") | ✅ 04:37 UTC |
+| Configuració final per al *last call*: per defecte (`PREDICT_RAG_K=0`, debias `auto` amb `letter_bias.json`, sense RAG). Comprovada abans i després d'un reinici net a la placa (`NIT_FINAL.md` bloc D) | ✅ 04:41 UTC |
+| Última prova de les pistes ([`PROVES_FINALS_PISTES.md`](PROVES_FINALS_PISTES.md)): 139 proves OK, `tutor_smoke` 67/67, pista mediana 11,5 s / pitjor 15,0 s, recorregut al navegador correcte | ✅ 04:20 UTC |
+| Experiment d'imatge (`NIT_FINAL.md` bloc B): visió 4/10, prior 5/10 | ✅ 08:17 UTC |
 
 ## Línies de feina
 Les tasques s'assignen en veu alta a l'equip; aquí només hi ha què queda i de què depèn. La llista completa és a `PLA.md`.
@@ -85,6 +87,17 @@ Conclusions: no preguntar al model sense opcions; el `letter_bias.json` d'aquest
 
 Lectura: el biaix del fitxer reparteix millor les lletres (treu el pic de D), però no guanya encerts de manera fiable (+1). El RAG dobla el temps i no millora: amb la resposta del veí, el model s'enganxa a la B (34/50); amb la lletra, cau al 12%. `dev-debias-rag1` es va tallar al problema 32 per la caiguda USB i es va repetir sencer: les 32 primeres lletres van sortir idèntiques (és determinista). Els CSV per problema no es pugen; `ablations.csv` té les xifres agregades. Les files `nou-nodebias` (28%) i `nou-debias` (24%) d'`ablations.csv` són d'una tanda anterior interrompuda, amb `data/val.jsonl` (amb opcions, lletres no equilibrades) i l'índex sense `--skip-suspect`: no es comparen amb aquesta taula.
 
+**Pas 4: conjunt de pràctica** (placa, 2026-11-15 04:11–04:37 UTC, `data/demo.jsonl`: 100 problemes dels organitzadors, 20 de cada lletra; configuració final de `predict.py`, sense RAG). Detall a [`RESULTATS_NIT_FINAL.md`](RESULTATS_NIT_FINAL.md).
+
+| Experiment | Encert | Lletres predites A/B/C/D/E | Temps mitjà / pitjor | > 57 s |
+| --- | --- | --- | --- | --- |
+| **`demo-debias`** (configuració final) | **25% (25/100)**, interval 18–34% | 21/24/20/18/17 | 7,6 / 12,2 s | 0 |
+| `demo-nodebias` (`--debias off`) | 22% (22/100) | 18/7/0/73/2 | 7,6 / 11,9 s | 0 |
+
+Lectura: el biaix del fitxer treu el pic de D (73 → 18) i reparteix les lletres; +3 encerts, dins del soroll. Supera el baseline dels organitzadors (22,5%) però no de manera significativa. Cap problema s'acosta al límit.
+
+**Imatge (placa, 2026-11-15 08:10 UTC):** 10 problemes en anglès sense opcions i amb figura (`val.jsonl`), servidor de visió temporal (Qwen 3.5 0.8B + `mmproj` f16, `--image-max-tokens 128`): **amb imatge 4/10, prior (D) 5/10**, 31,6–40,3 s per problema (mitjana 36,1 s). La imatge no millora la prior i costa ~36 s: proposta, no fer-la servir a `predict.py`.
+
 ## Experiments al portàtil (sense placa ni model)
 Fets per l'Elsa (amb Claude) i repetits per la Berta (amb Claude) sobre `main` (`1d1fc0b`), amb les dades de la segona volta d'OCR. Només xifres agregades; els casos i els temes de referència no es pugen.
 
@@ -107,7 +120,7 @@ Revisió humana de mostra (Berta, 20 línies de cada, triades a l'atzar amb llav
 - **Placa inestable per USB/alimentació** (`PROBLEMES.md` 15): un tall durant el *last call* o la demo és un risc. Un altre reinici sol el 2026-11-15 a les 02:33 (hora de la placa), amb el model treballant (D2).
 
 ## Per decidir com a equip
-- Què entra per diumenge i què s'aparca (pistes generades pel model, ajust fi, imatge…).
+- Què entra per diumenge i què s'aparca (pistes generades pel model, ajust fi, imatge…). Imatge: mesurada a la placa, 4/10 contra 5/10 de la prior i ~36 s per problema (proposta: no entra).
 - **La barra del Cangur:** D2 diu que les pistes bones no el mouen més que les absurdes (13 a 11, p = 0,84). Treure-la, o deixar-la i explicar-ho com a limitació.
 - Quan es fa el dashboard Tukey.
 - L'ordre d'ús de la placa fins a la presentació.
