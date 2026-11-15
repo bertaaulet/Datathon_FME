@@ -1,10 +1,10 @@
 # Estat actual
 
-_Última actualització: 2026-11-15 — Irene (amb Codex): verificació local i integració del pont d'idioma. La resta, de les 01:45 (Berta)._
+_Última actualització: 2026-11-15 02:45 — Irene (amb Claude): segona ronda de `predict.py` a la placa amb `dev50` (resultats i incidència USB). Pont d'idioma: Irene (amb Codex). La resta, de les 01:45 (Berta)._
 
 ## Fase
 - **Tutor:** funciona a la placa amb el banc real (`tutor.db`, 601 problemes utilitzables, el Cangur precalculat), arrenca sol amb la placa i amb la matriu LED, i els problemes externs segueixen el mateix recorregut que els del banc (provat amb problemes inventats).
-- **`predict.py`:** primera ronda d'experiments feta (taula de sota). Ara hi ha **dades noves** (segona volta d'OCR; train 85% i validació 15%), el **conjunt de pràctica dels organitzadors com a test**, i el codi del RAG i del biaix robust a la PR de `berta/rag-split`. **Cal repetir els experiments a la placa.**
+- **`predict.py`:** primera ronda (validació antiga) i **segona ronda amb `dev50` feta a la placa** (taules de sota). Cap configuració surt del soroll; el RAG no ajuda i dobla el temps. **Pendent: decidir el pas 4** (confirmació amb el conjunt de pràctica, `data/demo.jsonl`) i triar `config.env`.
 - **Test final:** 20 problemes nous, executats amb el nostre `predict.py` **a la nostra placa** després del *last call* de les 12:00 (detall a `PLA.md`).
 - **Lliuraments** (README, `LICENSE`, pitch, vídeo, Project Hub, dashboard): sense començar.
 - La presentació és **diumenge**. El pla és a [`PLA.md`](PLA.md), i els problemes trobats a la placa a [`PROBLEMES.md`](PROBLEMES.md).
@@ -12,9 +12,9 @@ _Última actualització: 2026-11-15 — Irene (amb Codex): verificació local i 
 ## Ara mateix
 | Què | Estat |
 | --- | --- |
-| Fusionar la PR de `berta/rag-split` (RAG des de `config.env`, biaix robust, `priors.json` nou, `--only-with-options`, documents) | ⏳ |
-| Preparar el conjunt de pràctica amb la comanda dels organitzadors (`prepare_m3kang.py --parquet … --val-fraction 0 --out data/demo --save-images`) | ⏳ |
-| Segona ronda d'experiments a la placa: `build_index.py`, `letter_bias.py`, i `nou-nodebias`, `nou-debias`, `nou-debias-rag1`, `nou-debias-rag1-letter` (50 problemes de validació amb opcions); després, la configuració triada amb el conjunt de pràctica | ⏳ ~2 h, quan la PR sigui a `main` |
+| Segona ronda a la placa amb `dev50` (codi de `main` `c34427e`): `build_index.py --only-with-options --skip-suspect` (2.111 files) i `dev-nodebias`, `dev-debias`, `dev-debias-rag1`, `dev-debias-rag1-letter`. `letter_bias.json` no es va refer (ja havia acabat a les 23:33) | ✅ 01:33 |
+| Pas 4: confirmació amb el conjunt de pràctica (`data/demo.jsonl`, 100 files): `demo-nodebias` i una segona línia per decidir amb la taula de la segona ronda (proposta: `demo-debias`, sense RAG) | ⏳ cal decidir-ho |
+| Triar la configuració de `config.env` per al *last call* (no s'ha tocat) | ⏳ després del pas 4 |
 
 ## Línies de feina
 Les tasques s'assignen en veu alta a l'equip; aquí només hi ha què queda i de què depèn. La llista completa és a `PLA.md`.
@@ -46,7 +46,8 @@ Les tasques s'assignen en veu alta a l'equip; aquí només hi ha què queda i de
 - **RAM:** com a mínim 2,66 GB disponibles en totes les proves (models, tutor i matriu).
 - **Placa contra portàtil:** 47/50 lletres iguals. El portàtil serveix per explorar; els números i els temps finals es mesuren a la placa.
 - **Temps del tutor** (banc real): problema nou 9,7 s de mitjana (màxim 15,6 s); el Cangur amb una pista 10,7 s (màxim 12,6 s); els graons d'ajuda, instantanis. Problemes externs: `solve()` 7,2 s, referència del Cangur 8,1 s, pista 9,5 s (detall a `PROBLEMES.md`).
-- **Temps de `predict.py`:** per defecte, mitjana 5,3 s i màxim 12,4 s (els problemes sense opcions són instantanis). Amb l'expressió, màxim 35 s. Amb el RAG, encara per mesurar.
+- **Temps de `predict.py`:** per defecte, mitjana 5,3 s i màxim 12,4 s (els problemes sense opcions són instantanis). Amb l'expressió, màxim 35 s. Amb `dev50` (tots amb opcions): sense RAG 10,5 / 18,2 s; RAG 1 (resposta) 18,0 / 29,4 s; RAG 1 (lletra) 23,0 / 34,1 s. Cap problema per sobre de 57 s.
+- **Alimentació / USB:** el 2026-11-15 la connexió USB va caure a les 00:37 i la placa es va reiniciar sola ("crash", sense apagada neta) a les 00:57; hi ha dues arrencades "crash" més del dia 14. Les tasques llançades des d'`adb shell` (també dins de tmux) moren quan cau `adbd`: cal llançar-les amb `systemd-run --user` (`PROBLEMES.md` 15).
 - **`tutor.db`** es va construir amb les dades de la **primera** volta d'OCR. Està a la placa i no es puja mai a Git.
 
 ## Resultats de `predict.py`
@@ -65,12 +66,25 @@ Conclusions: no preguntar al model sense opcions; el `letter_bias.json` d'aquest
 
 **Dades noves:** la lletra de reserva és la global del train (D). "Sempre D" encerta 65/280 (23,2%) a la validació nova en anglès.
 
+**Segona ronda** (placa, `data/dev50.jsonl`: 50 problemes de la validació nova, tots amb les 5 opcions, un idioma cada un — 25 eng i 25 cat — i 10 de cada lletra; codi `c34427e`; índex del RAG amb `--skip-suspect`; `letter_bias.json` de 60 problemes, fet a les 23:33). Amb lletres equilibrades, l'atzar i "sempre D" donen el 20%. Interval del 95% d'uns ±11–12 punts: **cap diferència surt del soroll** (McNemar exacte, p ≥ 0,21). **No es pot comparar amb la primera ronda.**
+
+| Experiment | Encert | eng / cat | Lletres predites A/B/C/D/E | Temps mitjà / pitjor |
+| --- | --- | --- | --- | --- |
+| `dev-nodebias` (`--debias off`) | 22% (11/50) | 7/25 · 4/25 | 17/2/0/29/2 | 10,5 / 18,1 s |
+| `dev-debias` (biaix del fitxer) | **24% (12/50)** | 7/25 · 5/25 | 18/11/5/2/14 | 10,5 / 18,2 s |
+| `dev-debias-rag1` (RAG 1 veí, resposta) | 20% (10/50) | 4/25 · 6/25 | 2/34/10/2/2 | 18,0 / 29,4 s |
+| `dev-debias-rag1-letter` (RAG 1 veí, lletra) | 12% (6/50) | 3/25 · 3/25 | 7/10/12/13/8 | 23,0 / 34,1 s |
+
+Lectura: el biaix del fitxer reparteix millor les lletres (treu el pic de D), però no guanya encerts de manera fiable (+1). El RAG dobla el temps i no millora: amb la resposta del veí, el model s'enganxa a la B (34/50); amb la lletra, cau al 12%. `dev-debias-rag1` es va tallar al problema 32 per la caiguda USB i es va repetir sencer: les 32 primeres lletres van sortir idèntiques (és determinista). Els CSV per problema no es pugen; `ablations.csv` té les xifres agregades. Les files `nou-nodebias` (28%) i `nou-debias` (24%) d'`ablations.csv` són d'una tanda anterior interrompuda, amb `data/val.jsonl` (amb opcions, lletres no equilibrades) i l'índex sense `--skip-suspect`: no es comparen amb aquesta taula.
+
 ## Bloquejos i riscos
 - **Lliuraments sense començar**, i són el que veurà el jurat.
 - **Una sola placa:** experiments de `predict.py`, la mesura final amb el test i les proves del tutor l'han de compartir. Desplegaments que es trepitgen: `PROBLEMES.md` 14.
 - **Abast:** `PLA.md` té moltes tasques obertes. Cal decidir què es fa per diumenge i què s'explica com a "no fet".
 - **Les opcions del test final passen per l'OCR:** els problemes amb figura o mal llegits es queden sense opcions i reben la lletra de reserva. Cal mesurar-ho amb el conjunt de pràctica.
 - **Amb 20 problemes, la correcció per lot no s'aplica:** el que compta és `letter_bias.json` a la placa.
+- **`letter_bias.json` actual de la placa** (60 problemes, 23:33): C = 0,004 i D = 0,56, el mateix patró que el de la primera ronda que es va considerar dolent (C = 0,005). Amb `dev50` encara prediu poc la C (5/50). Cal decidir si és prou bo per al *last call*.
+- **Placa inestable per USB/alimentació** (`PROBLEMES.md` 15): un tall durant el *last call* o la demo és un risc.
 
 ## Per decidir com a equip
 - Què entra per diumenge i què s'aparca (pistes generades pel model, ajust fi, imatge…).
