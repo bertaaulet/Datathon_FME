@@ -58,46 +58,38 @@ CREATE TABLE IF NOT EXISTS hints (
     problem_id TEXT, student INTEGER, text TEXT,
     delta REAL,             -- how far the hint moved the Kangaroo's margin (NULL: not measured)
     convinced INTEGER,
-    shown INTEGER DEFAULT 0, solved_after INTEGER DEFAULT 0,
     ts REAL,
-    source TEXT DEFAULT 'student',  -- who wrote it: 'student', 'seed' or 'agent'
-    relevance REAL,         -- cosine similarity to the problem's references (NULL: not measured)
-    dups INTEGER DEFAULT 0, -- how many later hints were near copies of this one
-    vec BLOB,               -- the hint's embedding, float32 (NULL: not embedded)
-    rejected TEXT,          -- why the leak filter refused it (NULL: it passed); never shown
-    lang TEXT               -- the language the hint is written in, guessed (NULL: not recorded)
+    source TEXT DEFAULT 'student',  -- who wrote it: 'student' or 'agent'
+    step INTEGER,           -- an agent hint's place: 1 (where to start) or 2 (the next step)
+    lang TEXT               -- guessed language of a stored student's hint
+);
+-- What happened to each hint a student sent the Kangaroo, with no text (docs/PISTES.md):
+-- outcome 'rejected' (reason: the leak filter's), 'not_convinced' or 'convinced'.
+-- feigned = 1 when the model already preferred the right answer and the Kangaroo
+-- only pretended (no delta then: it measures nothing). Bank problems only.
+CREATE TABLE IF NOT EXISTS hint_events (
+    n INTEGER PRIMARY KEY AUTOINCREMENT,
+    problem_id TEXT, outcome TEXT, reason TEXT, feigned INTEGER, delta REAL, ts REAL
 );
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
--- Embeddings of the texts a student's hint is compared with, made on the laptop
--- (prep/embed_refs.py): kind 'method' (ref: topic key) or 'solution' (ref: problem id).
-CREATE TABLE IF NOT EXISTS ref_vectors (
-    kind TEXT, ref TEXT, n INTEGER, text TEXT, vec BLOB,
-    PRIMARY KEY (kind, ref, n)
-);
 """
 
 # Columns added after the first version: (table, column, declaration). Older databases
 # get them when they are opened, keeping their rows.
 MIGRATIONS = [
     ("hints", "source", "TEXT DEFAULT 'student'"),
-    ("hints", "relevance", "REAL"),
-    ("hints", "dups", "INTEGER DEFAULT 0"),
-    ("hints", "vec", "BLOB"),
-    ("hints", "rejected", "TEXT"),
+    ("hints", "step", "INTEGER"),
     ("attempts", "external", "INTEGER DEFAULT 0"),
     ("texts", "source", "TEXT DEFAULT 'official'"),
     ("attempts", "origin_lang", "TEXT"),
     ("hints", "lang", "TEXT"),
 ]
+# Older databases may still have the columns of the shared-hint version (relevance, dups,
+# vec, rejected, shown, solved_after) and a ref_vectors table: they are left as they are
+# and never read. Since 2026-11-15 nobody else sees a student's hint (one board each).
 
-# The order of the hints another student may see: what helped people most, then the
-# closest to the problem's references, then how far it moved the Kangaroo, then the oldest.
-HINT_ORDER = ("ORDER BY (solved_after + 1.0) / (shown + 2.0) DESC, COALESCE(relevance, -1) DESC, "
-              "COALESCE(delta, 0) DESC, n")
-
-# Who wrote a hint: a student teaching the Kangaroo, a hint shipped with the
-# database, or the agent's hint bank (prep/import_hints.py).
-HINT_SOURCES = ("student", "seed", "agent")
+HINT_SOURCES = ("student", "agent")
+OUTCOMES = ("rejected", "not_convinced", "convinced")
 
 
 def default_path():
@@ -125,7 +117,6 @@ class Store:
             if column not in columns:
                 self.db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
         self.db.execute("UPDATE hints SET source = 'student' WHERE source IS NULL")
-        self.db.execute("UPDATE hints SET dups = 0 WHERE dups IS NULL")
         self.db.execute("UPDATE attempts SET external = 0 WHERE external IS NULL")
         self.db.execute("UPDATE texts SET source = 'official' WHERE source IS NULL")
         # Before student_lang there was one home language per student: its attempts and its
@@ -246,49 +237,20 @@ class Store:
     # --- hints -------------------------------------------------------------
 
     def add_hint(self, problem_id, student_id, text, delta, convinced, source="student",
-                 relevance=None, vec=None, rejected=None, lang=None):
-        """Store a hint. rejected: the leak filter's reason, for a hint kept only as data."""
+                 step=None, lang=None):
+        """Store a hint with its text: an agent's (prep/import_hints.py) or a student's.
+
+        The tutor only stores a student's hint when it convinced a Kangaroo that wasn't
+        pretending, on a bank problem (docs/PISTES.md). Everything else is a hint event.
+        convinced None: not measured yet (an agent hint before kangaroo_agent_hints.py).
+        """
         if source not in HINT_SOURCES:
             raise ValueError(f"unknown hint source {source!r}, expected one of {HINT_SOURCES}")
-        if rejected:
-            delta, convinced, relevance, vec = None, False, None, None
         return self.run("INSERT INTO hints (problem_id, student, text, delta, convinced, ts, "
-                        "source, relevance, vec, rejected, lang) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        (problem_id, student_id, text, delta, int(bool(convinced)), time.time(),
-                         source, relevance, vec, rejected or None, lang)).lastrowid
-
-    def hint_duplicate(self, n, convinced=False):
-        """A near copy of hint n arrived: count it, and keep the better verdict of the two."""
-        self.run("UPDATE hints SET dups = dups + 1, convinced = MAX(convinced, ?) WHERE n = ?",
-                 (int(bool(convinced)), n))
-
-    def hint_vectors(self, problem_id, source=None):
-        """[(n, source, vec blob)] for the embedded hints of a problem."""
-        sql = ("SELECT n, source, vec FROM hints WHERE problem_id = ? AND vec IS NOT NULL "
-               "AND rejected IS NULL")
-        args = [problem_id]
-        if source:
-            sql += " AND source = ?"
-            args.append(source)
-        with self.lock:
-            return [tuple(row) for row in self.db.execute(sql + " ORDER BY n", args)]
-
-    def set_hint_vector(self, n, vec):
-        self.run("UPDATE hints SET vec = ? WHERE n = ?", (vec, n))
-
-    def set_ref_vectors(self, kind, ref, items):
-        """Replace the reference vectors of one topic or problem: items = [(text, vec blob)]."""
-        with self.lock:
-            self.db.execute("DELETE FROM ref_vectors WHERE kind = ? AND ref = ?", (kind, ref))
-            self.db.executemany("INSERT INTO ref_vectors VALUES (?, ?, ?, ?, ?)",
-                                [(kind, ref, i, text, vec) for i, (text, vec) in enumerate(items)])
-            self.db.commit()
-
-    def ref_vectors(self, kind, ref):
-        with self.lock:
-            return [row[0] for row in self.db.execute(
-                "SELECT vec FROM ref_vectors WHERE kind = ? AND ref = ? ORDER BY n", (kind, ref))]
+                        "source, step, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (problem_id, student_id, text, delta,
+                         None if convinced is None else int(bool(convinced)), time.time(),
+                         source, step, lang)).lastrowid
 
     def has_hint(self, problem_id, text, source=None):
         sql, args = "SELECT 1 FROM hints WHERE problem_id = ? AND text = ?", [problem_id, text]
@@ -297,47 +259,47 @@ class Store:
             args.append(source)
         return self.one(sql + " LIMIT 1", args) is not None
 
-    def best_hint(self, problem_id, min_relevance=None):
-        """The hint to show another student, or None.
+    def agent_hints(self, problem_id):
+        """The agent's hints of a problem, in order: step 1, then step 2 (then any without)."""
+        return self.rows("SELECT * FROM hints WHERE problem_id = ? AND source = 'agent' "
+                         "ORDER BY COALESCE(step, 99), n", (problem_id,))
 
-        A student's hint that convinced the Kangaroo comes first (a student's hint is only
-        stored after it passed the leak filter), ranked by the human signal: how often
-        people solved the problem after seeing it. The agent's bank is only the fallback
-        when there is no such hint. min_relevance, when set, leaves out the student hints
-        that were measured and are too far from the problem's references.
-        """
-        relevant, args = "", [problem_id]
-        if min_relevance is not None:
-            relevant, args = " AND (relevance IS NULL OR relevance >= ?)", [problem_id, min_relevance]
-        found = self.one("SELECT * FROM hints WHERE problem_id = ? AND rejected IS NULL AND "
-                         "source != 'agent' AND (convinced = 1 OR (source = 'seed' AND delta IS NULL))"
-                         f"{relevant} {HINT_ORDER} LIMIT 1", args)
-        return found or self.one("SELECT * FROM hints WHERE problem_id = ? AND rejected IS NULL "
-                                 f"AND source = 'agent' {HINT_ORDER} LIMIT 1", (problem_id,))
+    def set_hint_measure(self, n, delta, convinced):
+        """The Kangaroo's verdict on a stored hint (prep/kangaroo_agent_hints.py)."""
+        self.run("UPDATE hints SET delta = ?, convinced = ? WHERE n = ?",
+                 (delta, int(bool(convinced)), n))
 
-    def best_neighbour_hint(self, neighbour_ids, min_relevance=None):
-        """The best hint of a similar problem: a student's first, then the agent's.
+    def hints(self, source=None):
+        sql, args = "SELECT * FROM hints", []
+        if source:
+            sql, args = sql + " WHERE source = ?", [source]
+        return self.rows(sql + " ORDER BY n", args)
 
-        Neighbours are tried in their stored order (most similar first). The result
-        carries "from_problem", so the tutor can say where it comes from.
-        """
-        fallback = None
-        for other in neighbour_ids:
-            found = self.best_hint(other, min_relevance)
-            if found and found["source"] != "agent":
-                return dict(found, from_problem=other)
-            if found and fallback is None:
-                fallback = dict(found, from_problem=other)
-        return fallback
+    def student_hints(self):
+        """The student's hints that are kept: the ones that convinced the Kangaroo."""
+        return self.rows("SELECT n, problem_id, text, delta, ts FROM hints "
+                         "WHERE source = 'student' AND convinced = 1 ORDER BY n")
 
-    def hint_shown(self, n):
-        self.run("UPDATE hints SET shown = shown + 1 WHERE n = ?", (n,))
+    def add_hint_event(self, problem_id, outcome, reason=None, feigned=False, delta=None):
+        if outcome not in OUTCOMES:
+            raise ValueError(f"unknown outcome {outcome!r}, expected one of {OUTCOMES}")
+        self.run("INSERT INTO hint_events (problem_id, outcome, reason, feigned, delta, ts) "
+                 "VALUES (?, ?, ?, ?, ?, ?)",
+                 (problem_id, outcome, reason, int(bool(feigned)), delta, time.time()))
 
-    def hint_solved(self, n):
-        self.run("UPDATE hints SET solved_after = solved_after + 1 WHERE n = ?", (n,))
+    def hint_events(self):
+        return self.rows("SELECT * FROM hint_events ORDER BY n")
 
-    def hints(self):
-        return self.rows("SELECT * FROM hints ORDER BY n")
+    def hint_counts(self):
+        """{"rejected": {reason: n}, "not_convinced": n, "convinced": n, "feigned": n}."""
+        counts = {"rejected": {}, "not_convinced": 0, "convinced": 0, "feigned": 0}
+        for row in self.hint_events():
+            if row["outcome"] == "rejected":
+                counts["rejected"][row["reason"]] = counts["rejected"].get(row["reason"], 0) + 1
+            else:
+                counts[row["outcome"]] += 1
+                counts["feigned"] += int(bool(row["feigned"]))
+        return counts
 
     # --- leaving the Kangaroo ----------------------------------------------
     # Its own table, created on first use, so older databases need no migration.

@@ -218,6 +218,13 @@ select { appearance: none; padding-right: 40px;
 .msg.malament, .msg.fuita { color: var(--err); }
 .msg.avis { background: var(--warn-bg); color: var(--ink); padding: 9px 14px; border-radius: var(--r-ctl); }
 .msg.exemple { border-left: 3px solid var(--accent); padding: 2px 0 2px 14px; margin-left: 2px; }
+/* rung 4: a similar problem the student may try before seeing its answer */
+.side-problem { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 6px 0 6px 2px; }
+.side-problem p { margin: 0 0 8px; white-space: pre-wrap; }
+.side-problem .opts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.side-problem .opts > button, .side-problem .opts > span { padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; background: none; font: inherit; }
+.side-problem .opts .right { border-color: var(--accent); font-weight: 600; }
+.side-problem .opts .wrong { text-decoration: line-through; opacity: .7; }
 .msg small { display: block; font-size: 14px; color: var(--soft); margin-top: 4px; }
 .thinking { align-self: flex-start; color: var(--soft); padding: 6px 4px; font-size: 16px; }
 .thinking i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 4px; animation: dot 1.1s infinite; }
@@ -831,7 +838,7 @@ function updateRoo(view) {
 
 /* ───────── the page ───────── */
 let state = null, timer = null, langsFilled = false, seenMessages = 0, maxTries = 3, lastProblem = null, wasBusy = false;
-const HELP_RUNGS = 4;
+const HELP_RUNGS = 5;     /* method, hint, another hint, a similar problem, the solution */
 /* a new problem slides in: statement first, then the options one by one */
 function enter() {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -842,7 +849,8 @@ function enter() {
 
 function render(view) {
   // A language/stage change also replaces the screen reader's last announcement.
-  const context = v => v && v.student ? v.student.lang_origen + ":" + v.student.etapa : "";
+  const context = v => v && v.student ? v.student.lang_origen + ":" + v.student.etapa + ":" +
+    (v.problem ? v.problem.id + ":" + v.problem.origen_lang : "") : "";
   if (context(state) !== context(view)) seenMessages = 0;
   state = view;
   const student = view.student, problem = view.problem;
@@ -971,7 +979,7 @@ function render(view) {
   options.classList.toggle("short", answers.length > 0 && answers.every(t => t.length <= 14));
 
   $("btn-help").classList.toggle("hidden", !open);
-  const helpKey = problem && problem.helps >= 3 ? "help_solution" : problem && problem.helps > 0 ? "help_more" : "help_first";
+  const helpKey = problem && problem.helps >= HELP_RUNGS - 1 ? "help_solution" : problem && problem.helps > 0 ? "help_more" : "help_first";
   labelled($("btn-help"), "lamp", helpKey, false,
     {help_solution: "Ensenya'm la solució", help_more: "Una altra pista", help_first: "Demana una pista"}[helpKey]);
   $("btn-reveal").classList.toggle("hidden", !(problem && problem.can_reveal));
@@ -1000,6 +1008,37 @@ function render(view) {
     if (kind) bubble.append(resultGlyph(kind));
     chat.append(bubble);
   });
+  // rung 4: the similar problem, to try before its answer shows
+  if (problem && problem.side) {
+    const side = problem.side, box = el("div", {class: "side-problem", role: "group", "aria-label": uiLabel("similar_problem")});
+    box.append(el("p", {}, side.text));
+    if (side.origen) box.append(withMt(inLang(el("p", {}, side.origen), side.origen_lang),
+      side.origen_source === "official" ? null : side.origen_source));
+    if (side.translation_missing) box.append(say(el("p", {class: "fine"}), "missing_problem"));
+    if (side.options_translation_missing) box.append(say(el("p", {class: "fine"}), "missing_options"));
+    const opts = el("div", {class: "opts"});
+    for (const letter of "ABCDE") {
+      if (!(letter in side.options)) continue;
+      const label = letter + ") " + side.options[letter];
+      const words = el("span", {}, label), own = side.options_origen && side.options_origen[letter];
+      if (own && own !== side.options[letter]) words.append(inLang(el("small", {class: "ui-own"}, own), side.origen_lang));
+      if (side.open) {
+        const cls = letter === side.label ? "right" : letter === side.answer ? "wrong" : "";
+        const answer = el("span", {class: cls}); answer.append(words); opts.append(answer);
+      } else {
+        const button = el("button", {type: "button"}); button.append(words);
+        button.onclick = () => act("/api/side-answer", {letter});
+        opts.append(button);
+      }
+    }
+    box.append(opts);
+    if (!side.open) {
+      const reveal = say(el("button", {class: "btn quiet", type: "button"}, "Mostra'n la resposta"), "side_reveal");
+      reveal.onclick = () => act("/api/side-reveal");
+      box.append(reveal);
+    }
+    chat.append(box);
+  }
   // screen readers hear only the new messages, not the whole log again
   const fresh = view.messages.slice(seenMessages).map(m => m.text + (m.origen ? " · " + m.origen.text : ""));
   if (fresh.length) $("announce").textContent = fresh.join(" ");
@@ -1141,9 +1180,15 @@ async function teacher() {
     for (const row of data.languages)
       body.append(el("div", {class: "hintnote"}, (LANG_NAMES[row.lang] || row.lang) + ": " + (STAGES[row.etapa] || "")));
   }
-  body.append(el("h4", {class: "lab"}, "Pistes escrites per l'alumne: " + data.hints.length));
+  // only the hints that convinced the Kangaroo keep their text; the rest are counts
+  const counts = data.hint_counts || {rejected: {}, not_convinced: 0, convinced: 0, feigned: 0};
+  const rejected = Object.values(counts.rejected).reduce((a, b) => a + b, 0);
+  body.append(el("h4", {class: "lab"}, "Pistes al Cangur"));
+  body.append(el("p", {}, counts.convinced + " l'han convençut, " + counts.not_convinced + " no, i " +
+    rejected + " s'han rebutjat perquè deien la resposta."));
+  if (data.hints.length) body.append(el("h4", {class: "lab"}, "Pistes que l'han convençut"));
   for (const hint of data.hints.slice(-5))
-    body.append(el("div", {class: "hintnote"}, "«" + hint.text + "»" + (hint.convinced ? " ✓" : "")));
+    body.append(el("div", {class: "hintnote"}, "«" + hint.text + "»"));
 }
 function drawer(open) {
   $("teacher").classList.toggle("on", open); $("scrim").classList.toggle("on", open);

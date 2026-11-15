@@ -4,7 +4,8 @@
     python3 prep/import_hints.py data/agent_hints.jsonl [--db data/tutor.db]
 
 Takes the file check_agent_output.py wrote for --kind hint_bank (only lines that
-passed) and adds each hint with source='agent'. Running it twice adds nothing
+passed) and adds each hint with source='agent' and its step: 1 (where to start,
+shown at rung 2 of the help) or 2 (the next step, rung 3). Running it twice adds nothing
 new: a hint already there for the same problem is skipped. Hints for problems
 that aren't in the database are skipped and counted.
 """
@@ -30,7 +31,8 @@ def import_hints(store, rows):
         elif store.has_hint(problem_id, hint):
             counts["already"] += 1
         else:
-            store.add_hint(problem_id, None, hint, None, False, source="agent")
+            step = row.get("step") if row.get("step") in (1, 2) else None
+            store.add_hint(problem_id, None, hint, None, None, source="agent", step=step)
             counts["added"] += 1
     return counts
 

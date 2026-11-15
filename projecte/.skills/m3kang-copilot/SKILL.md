@@ -45,9 +45,10 @@ After every change, run `python3 predict.py --input data/sample_problems.jsonl -
 | --- | --- |
 | `copilot/llm.py` | Also `letter_probs(problem, hint, order, bias)`: one call, a probability per letter. A hint always goes after the problem, so the cached start of the prompt is reused. |
 | `copilot/pipeline.py` | `solve()` now corrects the letter bias, rotates the options while there's time, answers the most common letter without options, and never raises. Settings: `PREDICT_DEBIAS`, `PREDICT_ROTATIONS`, `PREDICT_NO_OPTIONS` in `config.env`; `eval.py --rotations N --debias off` tries one without editing the file. |
-| `copilot/tutor.py` | The tutor "Ensenya el Cangur". The model plays a weak classmate and only reports letter probabilities; it never writes text for the student. Kept apart from `predict.py`. |
+| `copilot/tutor.py` | The tutor "Ensenya el Cangur". The model plays a weak classmate (in Catalan, `KANGAROO_LANG`) and only reports letter probabilities; it always starts wrong, pretending when it prefers the right answer. Kept apart from `predict.py`. Flow: `docs/PISTES.md`. |
+| `copilot/hintgen.py` | The only text the model writes for a student: a one-sentence hint for an outside problem, with one similar bank problem as the example, always through `leak.check_strict`. |
 | `copilot/leak.py`, `elo.py`, `topics.py`, `store.py`, `led.py` | The leak filter, ratings, keyword topics, the SQLite file (`data/tutor.db`), LED pictures |
-| `prep/` | `check_model.py` (run first), `letter_bias.py`, `build_tutor_db.py`, `kangaroo_baseline.py`, `hint_experiment.py` |
+| `prep/` | `check_model.py` (run first), `letter_bias.py`, `build_tutor_db.py`, `kangaroo_baseline.py`, `import_hints.py`, `kangaroo_agent_hints.py`, `hint_experiment.py` |
 | `app/server.py` | The tutor's web page, port 8090 |
 | `applab/math-matrix/` | App Lab app that draws the tutor's picture on the LED matrix |
 | `sim/students.py`, `dashboard/build.py` | Simulated students, and the decisions dashboard |
@@ -97,7 +98,7 @@ The deliverable asks for errors by topic, language, and difficulty (level). Join
 
 The copilot should guide, not hand out answers. Patterns that fit the board:
 
-- **Hint ladder:** a similar, easier solved problem from the index (lower `level`), then the topic of the neighbours, then a one-sentence model hint, then the solution only on request. Check every model hint in code: reject it if it contains the correct option's value.
+- **Hint ladder (this team's):** the topic and a method hint, then the agent's two ordered hints (bank problems) or a one-sentence model hint (outside problems), then a similar, easier problem to try without its answer, then the solution only on request. Check every model hint in code: reject it if it names any option, its value or its position.
 - **Adaptive practice:** pick the next problem from the nearest neighbours, one level up after a right answer, same topic one level down after a wrong one. No model in the loop. Keep the student profile in SQLite on the board.
 - **Adapted problems for dyslexia or dyscalculia:** rewrite problems ahead of time, on the board, into short sentences and one idea per line, or with smaller numbers and one step at a time, and store them in SQLite. Check every rewrite in code: all the original numbers and options are still there, and the answer is unchanged. Let the student or the teacher choose the mode, and never label a student.
 - **Debate:** send the problem to the server as soon as it's shown, so `cache_prompt` has it. When the class votes, the model only reads the short request.

@@ -4,7 +4,8 @@ The student solves a problem from the M3Kang bank. M3Kang knows the right
 answer, so checking is exact. The language model plays the Kangaroo, a weak
 classmate: it never explains anything. It only reports how likely it finds
 each letter, and the student's job is to move it towards the right one with a
-hint that doesn't give the answer away.
+hint that doesn't give the answer away. The whole flow, in Catalan, is in
+docs/PISTES.md at the root of the repository.
 
 The language bridge: a student who is still learning Catalan chooses a home
 language, and sees the problems, the options and everything the Kangaroo says in both
@@ -22,14 +23,20 @@ import os
 import threading
 import time
 
-from . import elo, embed, hintsim, langs, leak, led, phrases, topics
+from . import elo, hintgen, langs, leak, led, phrases, topics
 from .config import CONFIG, ROOT
 from .llm import LETTERS, letter_probs, split_problem
 from .pipeline import solve
 
 LANG = CONFIG.get("TUTOR_LANG", "cat")          # the classroom language
-MODEL_LANG = CONFIG.get("MODEL_LANG", "eng")    # the language the model reads
-NEUTRAL_HINT = "Think carefully."               # the reference: a hint that says nothing
+MODEL_LANG = CONFIG.get("MODEL_LANG", "eng")    # the language predict.py's model reads
+# The Kangaroo reads the problem and the student's hint in one language: Catalan, the
+# hint's language (docs/DECISIONS.md, 2026-11-15). predict.py is not affected.
+KANGAROO_LANG = CONFIG.get("KANGAROO_LANG", "cat")
+NEUTRAL_HINTS = {"cat": "Pensa-ho bé.", "eng": "Think carefully."}
+NEUTRAL_HINT = NEUTRAL_HINTS.get(KANGAROO_LANG, NEUTRAL_HINTS["eng"])   # a hint that says nothing
+HELP_RUNGS = 5        # method, hint, another hint, a similar problem, the solution
+FEIGNED_BAR = 0.35    # where the bar starts when the Kangaroo only pretends to be wrong
 MAX_TRIES = int(CONFIG.get("HINT_MAX_TRIES", 3))
 HINT_MAX_CHARS = int(CONFIG.get("HINT_MAX_CHARS", 200))
 LANG_NAMES = langs.CATALAN                      # each language's name, in Catalan
@@ -46,15 +53,20 @@ EXTERNAL_WARNING = phrases.EXTERNAL_WARNING
 def kangaroo(probs, label):
     """The Kangaroo always starts wrong: its answer is the likeliest WRONG option.
 
-    Returns {"answer", "sure", "margin"}:
-      sure    how sure it is of that answer once the right option is left out
-      margin  log P(right) - log P(best wrong). Below zero, it prefers a wrong one.
+    The model's probabilities are never changed. When the model prefers a wrong option
+    (most problems), that option is simply its answer. When it already prefers the right
+    one, the Kangaroo pretends ("feigned"): it says the likeliest wrong option, so the
+    student always has someone to teach.
+
+    Returns {"answer", "sure", "margin", "feigned"}:
+      sure     the model's real probability of that answer
+      margin   log P(right) - log P(best wrong). Below zero, it prefers a wrong one.
+      feigned  True when margin >= 0: the Kangaroo is only pretending
     """
     wrong = {letter: probs[letter] for letter in LETTERS if letter != label}
     answer = max(wrong, key=lambda letter: (wrong[letter], -LETTERS.index(letter)))
     margin = math.log(max(probs[label], 1e-9)) - math.log(max(wrong[answer], 1e-9))
-    return {"answer": answer, "sure": wrong[answer] / max(sum(wrong.values()), 1e-9),
-            "margin": margin}
+    return {"answer": answer, "sure": probs[answer], "margin": margin, "feigned": margin >= 0}
 
 
 def bar_value(margin):
@@ -64,11 +76,11 @@ def bar_value(margin):
 
 class Tutor:
     def __init__(self, store, ask=letter_probs, index=None, images_dir=None, background=True,
-                 embedder=embed.embed, solver=solve):
+                 solver=solve, hint_writer=hintgen.generate):
         self.store = store
         self.ask = ask                    # letter_probs, or a fake one in the tests
         self.solver = solver              # the harness (pipeline.solve), for outside problems
-        self.embedder = embedder          # embeds a student's hint; None switches it off
+        self.hint_writer = hint_writer    # writes an outside problem's hint (copilot/hintgen.py)
         self.index = index                # copilot.rag.Index, to place outside problems
         self.images_dir = images_dir or os.path.join(ROOT, "data", "images")
         self.background = background      # False runs model calls inline (tests)
@@ -162,6 +174,10 @@ class Tutor:
             threading.Thread(target=function, args=args, daemon=True).start()
         else:
             function(*args)
+
+    def _kangaroo_reads(self, problem, hint):
+        """One call to the Kangaroo, in its language."""
+        return self.ask(problem, hint=hint, timeout=180, lang=KANGAROO_LANG)
 
     def _tau(self):
         return float(self.store.meta("tau", CONFIG.get("HINT_TAU", 1.0)))
@@ -335,7 +351,9 @@ class Tutor:
             row = self.store.problem(problem_id)
             if not row:
                 return self.view()
-            model_text = self.store.text(problem_id, MODEL_LANG) or self.store.text(problem_id, LANG)
+            # What the Kangaroo reads: its language first (KANGAROO_LANG)
+            model_text = (self.store.text(problem_id, KANGAROO_LANG) or self.store.text(problem_id, LANG)
+                          or self.store.text(problem_id, MODEL_LANG))
             cat = self.store.text(problem_id, LANG) or model_text
             origin_text = self.store.text(problem_id, origin) if origin else None
             missing = bool(origin) and not origin_text and not self._image(problem_id, origin)
@@ -343,22 +361,28 @@ class Tutor:
                 shown, counts_for = "cat", "cat"
             if missing and self.student["etapa"] in (1, 2):
                 notice = notice or "no_traduit"
-            options = (cat or {}).get("options") or model_text["options"]
+            options = ((cat or {}).get("options") or model_text["options"]
+                       or (self.store.text(problem_id, MODEL_LANG) or {}).get("options", {}))
             own_options = (origin_text or {}).get("options") or {}
             self.current = {
                 "id": problem_id, "row": row, "label": row["label"], "options": options,
                 "options_origen": own_options if own_options and set(own_options) == set(options)
                 else None,
                 "model": {"id": problem_id, "text": model_text["text"],
-                          "options": model_text["options"], "level": row["level"]},
+                          "options": model_text["options"] or options, "level": row["level"]},
                 "cat": cat, "origen": origin_text, "shown": shown, "counts_for": counts_for,
                 "started": time.time(), "answered": False, "correct": None, "revealed": False,
-                "helps": 0, "solution_shown": False, "hint_n": None, "wrong": [],
+                "helps": 0, "solution_shown": False, "wrong": [], "method_n": 1, "side": None,
                 "ref": None, "ref_done": False, "teach_wait": False, "tries": 0, "bar": None,
                 "taught": False, "solved": False, "external": False,
+                "generated": None, "generated_used": False,
             }
-            precomputed = bool(row.get("k_probs"))
-            if precomputed:  # measured ahead of time (prep/kangaroo_baseline.py): answer at once
+            # Measured ahead of time (prep/kangaroo_baseline.py), in the language the Kangaroo
+            # reads now: a database measured in another language is asked again, live.
+            precomputed = bool(row.get("k_probs")) and \
+                self.store.meta("kangaroo_lang", "eng") == KANGAROO_LANG and \
+                model_text.get("lang") == KANGAROO_LANG
+            if precomputed:
                 self.current["ref"] = kangaroo(row["k_probs"], row["label"])
                 self.current["ref_done"] = True
             self.phase, self.outside, self.busy = "solving", None, False
@@ -380,7 +404,7 @@ class Tutor:
         """Read the problem with a hint that says nothing. Also fills the server's cache."""
         try:
             with self.model_lock:
-                answer = self.ask(current["model"], hint=NEUTRAL_HINT, timeout=180)
+                answer = self._kangaroo_reads(current["model"], NEUTRAL_HINT)
             state = kangaroo(answer["probs"], current["label"])
         except Exception:
             state = None
@@ -454,8 +478,6 @@ class Tutor:
             current["solved"] = True
             self._show(led.tick())
             self._tell("sistema", "correcte", kind="be")
-            if current["hint_n"]:
-                self.store.hint_solved(current["hint_n"])
             if current["ref"] is None and not current["ref_done"]:
                 current["teach_wait"], self.busy = True, True   # the Kangaroo is still reading
                 self.phase = "teach"
@@ -471,13 +493,11 @@ class Tutor:
         if state is None:
             self.phase = "done"
             self._tell("sistema", "cangur_no_pensa")
-        elif state["margin"] >= 0:
-            # The model really prefers the right answer here: nothing to teach
-            self.phase = "done"
-            self._tell("cangur", ("tambe_be", {"label": current["label"]}))
         else:
+            # Always a wrong answer. When the model already prefers the right one, the
+            # Kangaroo pretends, and its bar starts below half like any doubtful Kangaroo.
             self.phase = "teach"
-            current["bar"] = bar_value(state["margin"])
+            current["bar"] = FEIGNED_BAR if state["feigned"] else bar_value(state["margin"])
             self._show(led.bar(current["bar"]))
             self._tell("cangur", ("jo_he_dit", {"answer": state["answer"],
                                                 "sure": round(100 * state["sure"])}))
@@ -509,11 +529,11 @@ class Tutor:
                     reason = reason or (options and leak.check(text, current["label"], options,
                                                                statements)) or None
             if reason:
-                # Kept as data (how often students give the answer away), never shown to anyone.
-                # Not for outside problems: hints are stored per bank problem only.
+                # Counted (how often students give the answer away), never with its text.
+                # Not for outside problems: their hints are never kept.
                 if not current["external"]:
-                    self.store.add_hint(current["id"], 1, text, None, False, rejected=reason,
-                                        lang=langs.guess(text))
+                    self.store.add_hint_event(current["id"], "rejected", reason,
+                                              feigned=current["ref"]["feigned"])
                 self._tell("sistema", "fuita_" + reason, kind="fuita")
                 return self.view()
             current["tries"] += 1
@@ -525,14 +545,10 @@ class Tutor:
     def _teach(self, current, text):
         try:
             with self.model_lock:
-                answer = self.ask(current["model"], hint=text, timeout=180)
+                answer = self._kangaroo_reads(current["model"], text)
             state = kangaroo(answer["probs"], current["label"])
         except Exception:
             state = None
-        # Only the new hint is embedded; None (no server) stores it without the signals.
-        # An outside problem's hints aren't stored: no one else will see that problem.
-        signals = None if state is None or current["external"] else hintsim.assess(
-            self.store, current["id"], current["row"]["topic"], text, self.embedder)
         with self.lock:
             if self.current is not current:
                 return
@@ -541,17 +557,21 @@ class Tutor:
                 self._tell("sistema", "cangur_no_respon")
                 current["tries"] -= 1
                 return
+            feigned = current["ref"]["feigned"]
             delta = state["margin"] - current["ref"]["margin"]
             tau = self._tau()
-            convinced = delta > tau and state["margin"] > 0
-            if current["external"]:
-                pass
-            elif signals and signals["duplicate_of"]:
-                self.store.hint_duplicate(signals["duplicate_of"], convinced)
+            if feigned:
+                # The model already preferred the right answer: delta measures nothing. The
+                # hint passed the filter; it convinces if it didn't confuse the model.
+                convinced = state["margin"] > 0
             else:
-                self.store.add_hint(current["id"], 1, text, delta, convinced,
-                                    relevance=(signals or {}).get("relevance"),
-                                    vec=(signals or {}).get("vec"), lang=langs.guess(text))
+                convinced = delta > tau and state["margin"] > 0
+            if not current["external"]:
+                # Only numbers, except the text of a hint that really convinced the Kangaroo
+                self.store.add_hint_event(current["id"], "convinced" if convinced else "not_convinced",
+                                          feigned=feigned, delta=None if feigned else delta)
+                if convinced and not feigned:
+                    self.store.add_hint(current["id"], 1, text, delta, True, lang=langs.guess(text))
             previous = current.get("bar")
             current["bar"] = bar_value(state["margin"])
             self._show(led.bar(current["bar"], previous))
@@ -559,11 +579,11 @@ class Tutor:
                 current["taught"] = True
                 self.phase = "done"
                 self._tell("cangur", ("ara_ho_veig", {"label": current["label"]}),
-                           "gracies" if current["external"] else "gracies_companys", kind="be")
+                           "gracies", kind="be")
             elif current["tries"] >= MAX_TRIES:
                 self.phase = "done"
                 self._tell("cangur", "espes")
-            elif delta > tau / 2:
+            elif not feigned and delta > tau / 2:
                 self._tell("cangur", "repensant")
             else:
                 self._tell("cangur", "no_entes")
@@ -571,39 +591,43 @@ class Tutor:
     # ------------------------------------------------------------------ help, one rung at a time
 
     def help(self):
+        """One rung of help per click (docs/PISTES.md):
+
+        1. the topic and a method hint
+        2. a hint: the agent's first (bank) or the model's (outside problem)
+        3. another hint: the agent's second, or a method hint
+        4. a similar, easier problem WITHOUT its answer: the student may try it
+        5. the solution (counts as not solved)
+        Whatever is missing falls back to the topic's next method hint.
+        """
         with self.lock:
             current = self.current
             if not current or self.phase not in ("solving", "help"):
                 return self.view()
             current["helps"] += 1
-            rung = min(current["helps"], 4)
+            rung = min(current["helps"], HELP_RUNGS)
             topic = current["row"]["topic"]
             if rung == 1:
-                example = self._easier_neighbour(current)
-                if example:
-                    self._tell("sistema", "semblant_facil", kind="pista")
-                    self._say("sistema", example[0], "exemple", own=example[1], source=example[2])
-                else:
-                    rung = 2
-            if rung == 2:
                 self._tell("sistema", ("es_un_problema_de", {"topic": self._topic(topic)}),
                            ("method", {"topic": topic, "n": 0}), kind="pista")
-            elif rung == 3:
-                peer = self.store.best_hint(current["id"], hintsim.min_relevance())
-                similar = None if peer else self._neighbour_hint(current)
-                if peer:
-                    current["hint_n"] = peer["n"]
-                    self.store.hint_shown(peer["n"])
-                    # Only a student's hint is "from a classmate"; the agent's bank is not.
-                    # The hint itself stays as it was written: nothing is translated here.
-                    lead = "pista_company" if peer.get("source", "student") == "student" else "pista"
-                    self._tell("sistema", (lead, {"text": peer["text"]}), kind="pista")
-                elif similar:
-                    # Not counted as shown or solved: those counts belong to its own problem.
-                    self._tell("sistema", ("pista_semblant", {"text": similar["text"]}), kind="pista")
+            elif rung in (2, 3):
+                hint = self._rung_hint(current, rung)
+                if hint:
+                    if self._origin() and self.student["etapa"] in (1, 2):
+                        self._tell("sistema", "hint_cat", kind="avis")
+                    key = "pista" if rung == 2 else "pista_mes"
+                    self._say("sistema", phrases.phrase(key, text=hint), kind="pista")
                 else:
-                    self._tell("sistema", ("method", {"topic": topic, "n": 1}), kind="pista")
+                    self._tell("sistema", ("method", {"topic": topic, "n": current["method_n"]}), kind="pista")
+                    current["method_n"] += 1
             elif rung == 4:
+                side = self._easier_neighbour(current)
+                if side:
+                    current["side"] = side
+                    self._tell("sistema", "side_invite", kind="pista")
+                else:
+                    rung = current["helps"] = HELP_RUNGS
+            if rung == HELP_RUNGS:
                 if not current["answered"]:
                     self._record_first("", False)   # seeing the solution counts as not solved
                 current["solution_shown"] = True
@@ -626,26 +650,19 @@ class Tutor:
         """A topic's name, in whichever language a phrase is being written."""
         return lambda lang: phrases.topic_name(key, lang)
 
-    def _neighbour_hint(self, current):
-        """The best hint of a similar problem, if it says nothing about this answer."""
-        found = self.store.best_neighbour_hint(current["row"]["neighbours"],
-                                               hintsim.min_relevance())
-        if not found:
+    def _rung_hint(self, current, rung):
+        """The hint of rung 2 or 3, or None (then a method hint is shown)."""
+        if current["external"]:
+            # The model's hint, whichever rung comes after it is ready
+            if current["generated"] and not current["generated_used"]:
+                current["generated_used"] = True
+                return current["generated"]
             return None
-        statements = [current["model"]["text"], (current["cat"] or {}).get("text"),
-                      (current["origen"] or {}).get("text")]
-        for options in (current["options"], current["model"]["options"],
-                        current.get("options_origen") or current["options"]):
-            if current["external"]:
-                if leak.check_strict(found["text"], options, statements):
-                    return None
-            elif leak.check(found["text"], current["label"], options, statements):
-                return None
-        return found
+        hints = self.store.agent_hints(current["id"])
+        return hints[rung - 2]["text"] if len(hints) > rung - 2 else None
 
     def _easier_neighbour(self, current):
-        """A similar problem with a lower rating, with its answer: (in Catalan, in the
-        student's language or None). Only texts that are already in the database."""
+        """A similar problem with a lower rating, to try: {"id", "text", "options", "label"}."""
         best = None
         for other_id in current["row"]["neighbours"]:
             other = self.store.problem(other_id)
@@ -661,17 +678,62 @@ class Tutor:
         if not shown:
             return None
         options = shown["options"] or (self.store.text(best["id"], MODEL_LANG) or {}).get("options", {})
+        if not options or best["label"] not in options:
+            return None
+        return {"id": best["id"], "text": shown["text"], "options": options, "label": best["label"],
+                "answer": None, "open": False}
 
-        def example(text, options, lang):
-            answer = phrases.phrase("exemple_resposta", lang, label=best["label"],
-                                    value=options.get(best["label"], ""))
-            return f"{text['text']}\n{answer}".strip()
+    def side_answer(self, letter):
+        """The student's answer to the similar problem of rung 4. Then its answer is shown."""
+        with self.lock:
+            current = self.current
+            side = current and current["side"]
+            letter = (letter or "").strip().upper()[:1]
+            if not side or side["open"] or letter not in side["options"]:
+                return self.view()
+            side["answer"], side["open"] = letter, True
+            right = side["label"]
+            if letter == right:
+                self._tell("sistema", "side_correct", kind="be")
+            else:
+                self._tell("sistema", ("side_wrong", {"label": right, "value": self._side_value(side)}), kind="malament")
+            return self.view()
+
+    def side_reveal(self):
+        """The answer of the similar problem, without trying it."""
+        with self.lock:
+            current = self.current
+            side = current and current["side"]
+            if not side or side["open"]:
+                return self.view()
+            side["open"] = True
+            right = side["label"]
+            self._tell("sistema", ("side_solution", {"label": right, "value": self._side_value(side)}), kind="exemple")
+            return self.view()
+
+    def _side_value(self, side):
+        def value(lang):
+            own = self.store.text(side["id"], lang)
+            return ((own or {}).get("options") or side["options"]).get(side["label"], "")
+        return value
+
+    def _side_view(self, current):
+        side = current["side"]
+        if not side:
+            return None
         origin = self._origin()
-        own = self.store.text(best["id"], origin) if origin else None
-        source = (own or {}).get("source")
-        return (example(shown, options, LANG),
-                example(own, own["options"] or options, origin) if own else None,
-                None if source in (None, "official") else source)
+        bridge = bool(origin) and self.student["etapa"] in (1, 2) \
+            and (not self._behind_button() or current["revealed"])
+        own = self.store.text(side["id"], origin) if bridge else None
+        return {"text": side["text"], "options": side["options"],
+                "answer": side["answer"], "open": side["open"],
+                "label": side["label"] if side["open"] else None,
+                "origen": own["text"] if own else None,
+                "options_origen": own["options"] if own else None,
+                "origen_lang": origin if own else None,
+                "origen_source": own["source"] if own else None,
+                "options_translation_missing": bool(own and not own["options"]),
+                "translation_missing": bridge and not own}
 
     # ------------------------------------------------------------------ problems from outside
 
@@ -759,9 +821,10 @@ class Tutor:
                       "level": outside["level"]},
             "cat": text, "origen": None, "shown": "cat", "counts_for": "cat",
             "started": time.time(), "answered": False, "correct": None, "revealed": False,
-            "helps": 0, "solution_shown": False, "hint_n": None, "wrong": [],
+            "helps": 0, "solution_shown": False, "wrong": [], "method_n": 1, "side": None,
             "ref": None, "ref_done": False, "teach_wait": False, "tries": 0, "bar": None,
             "taught": False, "solved": False, "external": True, "solve_failed": False,
+            "generated": None, "generated_used": False,
         }
         self.phase, self.outside, self.busy = "solving", None, True
         self._tell("cangur", ("extern_obert" if outside["level"] is None else "extern_obert_nivell",
@@ -792,6 +855,34 @@ class Tutor:
                 return
             current["label"] = label
         self._reference(current)
+        self._write_hint(current)
+
+    def _write_hint(self, current):
+        """An outside problem's hint, written by the model after the harness and the Kangaroo.
+
+        One similar bank problem is the example: its Catalan statement and its first agent
+        hint. No neighbour with a hint, a failed filter or no answer: the rung shows a
+        method hint instead (docs/DECISIONS.md, 2026-11-15).
+        """
+        if not hintgen.enabled():
+            return
+        example = None
+        for other_id in current["row"]["neighbours"]:
+            hints = self.store.agent_hints(other_id)
+            text = self.store.text(other_id, LANG)
+            if hints and text:
+                example = (text["text"], hints[0]["text"])
+                break
+        if not example:
+            return
+        try:
+            with self.model_lock:
+                hint, _reason = self.hint_writer(current["model"], *example)
+        except Exception:
+            hint = None
+        with self.lock:
+            if self.current is current and hint:
+                current["generated"] = hint
 
     def leave_teaching(self):
         """The student solved the problem and doesn't want to teach the Kangaroo (any more).
@@ -879,6 +970,8 @@ class Tutor:
                     "wrong": list(current["wrong"]),
                     "label": current["label"] if solved else None,
                     "helps": current["helps"],
+                    "rungs": HELP_RUNGS,
+                    "side": self._side_view(current),
                     "tries_left": MAX_TRIES - current["tries"],
                     "bar": current["bar"],
                 }
@@ -903,9 +996,10 @@ class Tutor:
             summary = {"student": student, "attempts": len(attempts),
                        "external_attempts": len(self.store.attempts(external=True)), "by_topic": [],
                        "gap": None, "tau": self._tau(),
-                       "languages": self.store.student_langs(),   # the bridge, per home language
-                       # the embedding (bytes) is not JSON and the teacher does not need it
-                       "hints": [{k: v for k, v in h.items() if k != "vec"} for h in self.store.hints()]}
+                       "languages": self.store.student_langs(),
+                       # only the hints that convinced the Kangaroo keep their text; the rest
+                       # are counts (docs/PISTES.md)
+                       "hints": self.store.student_hints(), "hint_counts": self.store.hint_counts()}
             groups = {}
             for attempt in attempts:
                 groups.setdefault(attempt["topic"] or topics.DEFAULT, []).append(attempt["correct"])

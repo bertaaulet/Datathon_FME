@@ -98,6 +98,12 @@ CATALAN = {
     "cangur_no_pensa": "El Cangur no ha pogut pensar-hi (el model no respon).",
     "cangur_no_respon": "El Cangur no respon ara mateix. Torna-ho a provar.",
     # --- the help ladder -----------------------------------------------------------------
+    "side_invite": "Prova aquest problema semblant i més fàcil. Quan el responguis, et diré la resposta.",
+    "side_correct": "Correcte! Ara torna al teu problema: és semblant.",
+    "side_wrong": "No: la resposta era la {label}) {value}. Torna al teu problema amb aquesta idea.",
+    "side_solution": "La resposta del problema semblant és la {label}) {value}.",
+    "pista_mes": "Una altra pista: «{text}»",
+    "hint_cat": "Aquesta pista només està disponible en català.",
     "semblant_facil": "Mira aquest problema semblant i més fàcil:",
     "exemple_resposta": "Resposta: {label}) {value}",
     "es_un_problema_de": "És un problema de «{topic}».",
@@ -120,7 +126,7 @@ CATALAN = {
 # asked for the solution. "jo_dic" is the student's own answer, in the student's voice.
 AFTER_SOLVING = frozenset({"tambe_be", "jo_he_dit", "ara_ho_veig", "solucio", "solucio_extern"})
 STUDENT_VOICE = frozenset({"jo_dic"})
-OTHER_PROBLEM = frozenset({"exemple_resposta"})     # the answer of a similar problem, shown as an example
+OTHER_PROBLEM = frozenset({"exemple_resposta", "side_wrong", "side_solution"})     # the answer of a similar problem, shown as an example
 
 
 def fields(template):
