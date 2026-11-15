@@ -208,6 +208,13 @@ select { appearance: none; padding-right: 40px;
 .msg.malament, .msg.fuita { color: var(--err); }
 .msg.avis { background: var(--warn-bg); color: var(--ink); padding: 9px 14px; border-radius: var(--r-ctl); }
 .msg.exemple { border-left: 3px solid var(--accent); padding: 2px 0 2px 14px; margin-left: 2px; }
+/* rung 4: a similar problem the student may try before seeing its answer */
+.side { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 6px 0 6px 2px; }
+.side p { margin: 0 0 8px; white-space: pre-wrap; }
+.side .opts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.side .opts button, .side .opts span { padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; background: none; font: inherit; }
+.side .opts .right { border-color: var(--accent); font-weight: 600; }
+.side .opts .wrong { text-decoration: line-through; opacity: .7; }
 .msg small { display: block; font-size: 14px; color: var(--soft); margin-top: 4px; }
 .thinking { align-self: flex-start; color: var(--soft); padding: 6px 4px; font-size: 16px; }
 .thinking i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 4px; animation: dot 1.1s infinite; }
@@ -756,7 +763,7 @@ function updateRoo(view) {
 
 /* ───────── the page ───────── */
 let state = null, timer = null, langsFilled = false, seenMessages = 0, maxTries = 3, lastProblem = null, wasBusy = false;
-const HELP_RUNGS = 4;
+const HELP_RUNGS = 5;     /* method, hint, another hint, a similar problem, the solution */
 /* a new problem slides in: statement first, then the options one by one */
 function enter() {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -865,7 +872,7 @@ function render(view) {
   options.classList.toggle("short", answers.length > 0 && answers.every(t => t.length <= 14));
 
   $("btn-help").classList.toggle("hidden", !open);
-  labelled($("btn-help"), "lamp", problem && problem.helps >= 3 ? "Ensenya'm la solució" :
+  labelled($("btn-help"), "lamp", problem && problem.helps >= HELP_RUNGS - 1 ? "Ensenya'm la solució" :
     problem && problem.helps > 0 ? "Una altra pista" : "Demana una pista");
   $("btn-reveal").classList.toggle("hidden", !(problem && problem.can_reveal));
   const canNext = ["ready", "done"].includes(view.phase) && !view.busy;
@@ -891,6 +898,31 @@ function render(view) {
     if (kind) bubble.append(resultGlyph(kind));
     chat.append(bubble);
   });
+  // rung 4: the similar problem, to try before its answer shows
+  if (problem && problem.side) {
+    const side = problem.side, box = el("div", {class: "side", role: "group", "aria-label": "Problema semblant"});
+    box.append(el("p", {}, side.text));
+    const opts = el("div", {class: "opts"});
+    for (const letter of "ABCDE") {
+      if (!(letter in side.options)) continue;
+      const label = letter + ") " + side.options[letter];
+      if (side.open) {
+        const cls = letter === side.label ? "right" : letter === side.answer ? "wrong" : "";
+        opts.append(el("span", {class: cls}, label));
+      } else {
+        const button = el("button", {type: "button"}, label);
+        button.onclick = () => act("/api/side-answer", {letter});
+        opts.append(button);
+      }
+    }
+    box.append(opts);
+    if (!side.open) {
+      const reveal = el("button", {class: "btn quiet", type: "button"}, "Mostra'n la resposta");
+      reveal.onclick = () => act("/api/side-reveal");
+      box.append(reveal);
+    }
+    chat.append(box);
+  }
   // screen readers hear only the new messages, not the whole log again
   const fresh = view.messages.slice(seenMessages).map(m => m.text);
   if (fresh.length) $("announce").textContent = fresh.join(" ");
@@ -1024,9 +1056,15 @@ async function teacher() {
     }
     body.append(box);
   }
-  body.append(el("h4", {class: "lab"}, "Pistes escrites per l'alumne: " + data.hints.length));
+  // only the hints that convinced the Kangaroo keep their text; the rest are counts
+  const counts = data.hint_counts || {rejected: {}, not_convinced: 0, convinced: 0, feigned: 0};
+  const rejected = Object.values(counts.rejected).reduce((a, b) => a + b, 0);
+  body.append(el("h4", {class: "lab"}, "Pistes al Cangur"));
+  body.append(el("p", {}, counts.convinced + " l'han convençut, " + counts.not_convinced + " no, i " +
+    rejected + " s'han rebutjat perquè deien la resposta."));
+  if (data.hints.length) body.append(el("h4", {class: "lab"}, "Pistes que l'han convençut"));
   for (const hint of data.hints.slice(-5))
-    body.append(el("div", {class: "hintnote"}, "«" + hint.text + "»" + (hint.convinced ? " ✓" : "")));
+    body.append(el("div", {class: "hintnote"}, "«" + hint.text + "»"));
 }
 function drawer(open) {
   $("teacher").classList.toggle("on", open); $("scrim").classList.toggle("on", open);

@@ -37,7 +37,7 @@ tutor.db (pistes, amb source='agent'), harness, filtre de fuites, dashboard
 | Lot (`--kind`) | Instruccions | Entrada | Fitxer final | Qui el fa servir |
 | --- | --- | --- | --- | --- |
 | `hint_experiment` | [hint_experiment.md](hint_experiment.md) | `hint_experiment.py --make-template 25` | `data/hints_experiment.jsonl` | Experiment D2 |
-| `hint_bank` | [hint_bank.md](hint_bank.md) | problemes elegibles del train | `data/agent_hints.jsonl` | `import_hints.py`, exemples de `hintgen`, reserva del graó 3 |
+| `hint_bank` | [hint_bank.md](hint_bank.md) | problemes elegibles del train | `data/agent_hints.jsonl` | `import_hints.py`: graons 2 i 3 del tutor, i exemple de `hintgen` per als problemes externs |
 | `solutions` | [solutions.md](solutions.md) | tot el train (mai la validació) | `data/agent_solutions.jsonl` | Línia A: RAG (etapa 4), expressió (etapa 3), ajust fi |
 | `problem_types` | [problem_types.md](problem_types.md) | train i val, sense etiqueta | `data/problem_types.jsonl` | Línia A: solucionadors de Python (etapa 2), anàlisi d'errors |
 | `leak_cases` | [leak_cases.md](leak_cases.md) | problemes elegibles del train | `data/leak_cases.jsonl` | `python -m copilot.leak` |

@@ -1,6 +1,6 @@
 # Estat actual
 
-_Última actualització: 2026-11-15 00:05 — Berta (amb Claude)_
+_Última actualització: 2026-11-15 01:45 — Berta (amb Claude)_
 
 ## Fase
 - **Tutor:** funciona a la placa amb el banc real (`tutor.db`, 601 problemes utilitzables, el Cangur precalculat), arrenca sol amb la placa i amb la matriu LED, i els problemes externs segueixen el mateix recorregut que els del banc (provat amb problemes inventats).
