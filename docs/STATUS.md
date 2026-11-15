@@ -87,7 +87,7 @@ Fets per l'Elsa (amb Claude) i repetits per la Berta (amb Claude) sobre `main` (
 | C3 · Simulació de l'Elo (`sim/students.py`, 200 alumnes simulats per punt de partida, banc inventat) | Error després de 20 respostes, començant a 300 punts: K fix = 32, **147** (140–172); K decreixent, **65** (58–84). El README i `elo.py` deien "about 160/170" per a K = 32: corregit a ~150. La bretxa d'idioma del README (163 i 185; 121–261) es reprodueix |
 | C4 · Problemes sense opcions (`prep/options_coverage.py`, validació) | **205/280 problemes (73,2%)** tenen les 5 opcions, igual en eng i cat. Els 75 restants no arriben al model i reben la D, que n'encerta 20 (26,7%). Pitjor al nivell 2 (51,7% amb opcions) |
 
-Revisió de mostra: Codex 19/20 en les etiquetes de fuites i 19/20 en els temes. **Falta la revisió humana de 20 + 20 línies** (regla de `prep/agent/README.md`).
+Revisió de mostra (Codex, llavor 42): 19/20 etiquetes de fuites i 19/20 temes correctes. Es dona per bona sense revisió humana (`DECISIONS.md`); quan es publiqui, s'ha de dir que la va fer Codex.
 
 ## Bloquejos i riscos
 - **Lliuraments sense començar**, i són el que veurà el jurat.
