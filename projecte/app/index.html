@@ -63,6 +63,8 @@ button:disabled { cursor: default; }
 .ladder span { padding: 4px 10px; border-radius: 6px; white-space: nowrap; }
 .ladder span.on { background: var(--accent-bg); color: var(--accent-text); font-weight: 600; }
 .level { font-size: 14px; color: var(--soft); white-space: nowrap; }
+/* the home language, to switch it during the session */
+.langpick select { width: auto; max-width: 11.5em; padding: 5px 34px 5px 10px; font-size: 14px; background-position: right 10px center; }
 .steps { display: inline-flex; align-items: flex-end; gap: 3px; margin-left: 6px; vertical-align: -2px; }
 .steps i { width: 6px; height: calc(7px + var(--k) * 1.6px); border-radius: 2px; background: var(--line); transition: background-color .3s var(--ease); }
 .steps i.on { background: var(--blue); }
@@ -114,6 +116,13 @@ button:disabled { cursor: default; }
 .text { white-space: pre-wrap; overflow-wrap: anywhere; font: clamp(20px, 2.1vw, 23px)/1.6 var(--serif); text-wrap: pretty; }
 .text small { display: block; font: 600 12px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--soft); margin-bottom: 8px; }
 .text.second { border-left: 1px solid var(--line); padding-left: 22px; }
+/* a machine translation says so, next to the language's name */
+.msg small .mt, #p-warning small .mt { display: inline-block; margin-inline-start: 6px; padding: 0 5px; border: 1px solid currentColor; border-radius: 4px; font-size: .78em; opacity: .8; }
+.ui-own { display: block; width: fit-content; max-width: 100%; font-size: .82em; font-weight: 500; opacity: .85; margin-top: 2px; }
+.lbl { display: inline-flex; flex-direction: column; align-items: flex-start; text-align: start; }
+.ladder .ui-own { font-size: .9em; }
+.ui-mt { margin-top: 12px; font-size: 13.5px; color: var(--soft); }
+.text small .mt { margin-inline-start: 8px; padding: 2px 6px; border: 1px solid currentColor; border-radius: 4px; letter-spacing: .04em; text-transform: none; font-weight: 500; }
 @media (max-width: 640px) { .text.second { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: 16px; } }
 .text img { max-width: 100%; height: auto; border-radius: 8px; outline: 1px solid rgba(0,0,0,.1); outline-offset: -1px; background: #fff; }
 /* a new problem arrives in two small steps: statement, then options one after another */
@@ -131,6 +140,7 @@ button.opt:active:not(:disabled) .bub { scale: .94; }
 .opt .bub { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--ink); display: grid; place-items: center; font: 600 16px/1 var(--sans);
   background: var(--surface); transition: background-color .15s, color .15s, border-color .15s, scale .2s var(--ease); }
 .opt .t { overflow-wrap: anywhere; font: clamp(19px, 2vw, 21px)/1.45 var(--serif); text-wrap: pretty; }
+.opt .t .own { display: block; font-size: .84em; line-height: 1.35; color: var(--soft); }   /* the option in the student's language */
 .opt.wrong { opacity: .55; }
 .opt.wrong .t { text-decoration: line-through 1.5px var(--soft); }
 .opt.wrong .bub { border-color: var(--soft); color: var(--soft); border-style: dashed; }
@@ -209,12 +219,12 @@ select { appearance: none; padding-right: 40px;
 .msg.avis { background: var(--warn-bg); color: var(--ink); padding: 9px 14px; border-radius: var(--r-ctl); }
 .msg.exemple { border-left: 3px solid var(--accent); padding: 2px 0 2px 14px; margin-left: 2px; }
 /* rung 4: a similar problem the student may try before seeing its answer */
-.side { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 6px 0 6px 2px; }
-.side p { margin: 0 0 8px; white-space: pre-wrap; }
-.side .opts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-.side .opts button, .side .opts span { padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; background: none; font: inherit; }
-.side .opts .right { border-color: var(--accent); font-weight: 600; }
-.side .opts .wrong { text-decoration: line-through; opacity: .7; }
+.side-problem { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; margin: 6px 0 6px 2px; }
+.side-problem p { margin: 0 0 8px; white-space: pre-wrap; }
+.side-problem .opts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.side-problem .opts > button, .side-problem .opts > span { padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; background: none; font: inherit; }
+.side-problem .opts .right { border-color: var(--accent); font-weight: 600; }
+.side-problem .opts .wrong { text-decoration: line-through; opacity: .7; }
 .msg small { display: block; font-size: 14px; color: var(--soft); margin-top: 4px; }
 .thinking { align-self: flex-start; color: var(--soft); padding: 6px 4px; font-size: 16px; }
 .thinking i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 4px; animation: dot 1.1s infinite; }
@@ -333,17 +343,19 @@ form.hint textarea { min-height: 78px; }
 </head>
 <body>
 
-<a class="skip" href="#app">Salta al contingut</a>
+<a class="skip" href="#app" data-ui="skip">Salta al contingut</a>
 <header class="mast">
   <h1 class="title" id="title" translate="no"></h1>
   <span class="spacer"></span>
-  <div class="ladder hidden" id="ladder" role="group" aria-label="Etapa de llengua"></div>
-  <span class="level hidden" id="level" role="img">Nivell <span class="steps" id="level-steps"></span></span>
+  <label class="langpick hidden" id="lang-box"><span class="vh" data-ui="my_language">La meva llengua</span>
+    <select id="sw-lang" name="language"></select></label>
+  <div class="ladder hidden" id="ladder" role="group" data-ui-aria="language_stage" aria-label="Etapa de llengua"></div>
+  <span class="level hidden" id="level" role="img"><span data-ui="level">Nivell</span> <span class="steps" id="level-steps"></span></span>
   <button class="link" id="btn-teacher" aria-expanded="false" aria-controls="teacher">Docent</button>
 </header>
 
 <div class="net hidden" id="net" role="alert"><span id="net-msg"></span>
-  <button class="btn" id="btn-retry" type="button">Torna-ho a provar</button></div>
+  <button class="btn" id="btn-retry" type="button" data-ui="retry" data-ui-always>Torna-ho a provar</button></div>
 <div class="vh" id="announce" aria-live="polite"></div>
 
 <main id="app" data-phase="welcome" tabindex="-1">
@@ -352,53 +364,56 @@ form.hint textarea { min-height: 78px; }
   <section id="welcome" aria-labelledby="hello">
     <div class="hero">
       <h2 id="hello" translate="no"></h2>
-      <p class="lead">Un cangur que s'equivoca força. Tu l'ensenyes.</p>
+      <p class="lead" data-ui="lead">Un cangur que s'equivoca força. Tu l'ensenyes.</p>
       <div class="roo" id="roo-welcome" aria-hidden="true"></div>
     </div>
     <form class="card ticket" id="start-form">
-      <h3>Hola! Comencem?</h3>
-      <label class="lab" for="in-name">Com et dius? (opcional)</label>
+      <h3 data-ui="start_title">Hola! Comencem?</h3>
+      <label class="lab" for="in-name" data-ui="name_label">Com et dius? (opcional)</label>
       <input type="text" id="in-name" name="name" maxlength="40" autocomplete="off" spellcheck="false" autocapitalize="words" enterkeyhint="go">
-      <div class="lab" id="lab-level">Quin curs fas?</div>
+      <div class="lab" id="lab-level" data-ui="course_label">Quin curs fas?</div>
       <div class="levels" id="levels" role="group" aria-labelledby="lab-level"></div>
-      <label class="lab" for="in-lang">Vols veure els problemes també en una altra llengua?</label>
+      <label class="lab" for="in-lang" data-ui="lang_label">Quina llengua entens millor? Ho veuràs tot en català i en la teva llengua.</label>
       <select id="in-lang" name="lang"></select>
-      <div class="row"><button class="btn primary big" id="btn-start" type="submit">Comencem</button></div>
-      <p class="fine">Tot el que facis es queda en aquesta placa.</p>
+      <div class="row"><button class="btn primary big" id="btn-start" type="submit" data-ui="start">Comencem</button></div>
+      <p class="fine" data-ui="fine">Tot el que facis es queda en aquesta placa.</p>
+      <p class="fine ui-mt hidden" data-ui-mt></p>
     </form>
   </section>
 
   <!-- ─ the problem ─ -->
   <section class="card" id="problem" aria-labelledby="h-problem" tabindex="-1">
-    <h2 class="vh" id="h-problem">Problema</h2>
+    <h2 class="vh" id="h-problem" data-ui="problem">Problema</h2>
     <div class="p-head">
       <span class="tag" id="p-level"></span><span id="p-topic"></span>
       <div class="rungs hidden" id="p-rungs" title="Pistes demanades"></div>
     </div>
     <div class="msg avis hidden" id="p-warning" role="note"></div>
     <div class="texts" id="p-texts"></div>
-    <div class="options" id="p-options" role="group" aria-label="Opcions de resposta"></div>
-    <div class="keys hidden" id="p-keys">Drecera de teclat: amb el focus en una opció, prem A–E per respondre.</div>
+    <div class="options" id="p-options" role="group" data-ui-aria="answer_options" aria-label="Opcions de resposta"></div>
+    <p class="fine hidden" id="p-options-note" role="note" data-ui="missing_options"></p>
+    <div class="keys hidden" id="p-keys" data-ui="keys">Drecera de teclat: amb el focus en una opció, prem A–E per respondre.</div>
     <div class="row">
       <button class="btn" id="btn-help">Demana una pista</button>
-      <button class="btn quiet hidden" id="btn-reveal">Veure en la meva llengua</button>
+      <button class="btn quiet hidden" id="btn-reveal" data-ui="reveal" data-ui-always>Veure en la meva llengua</button>
       <button class="btn primary big hidden" id="btn-next">Problema següent</button>
-      <button class="btn quiet hidden" id="btn-leave">Prou, següent problema</button>
+      <button class="btn quiet hidden" id="btn-leave" data-ui="leave">Prou, següent problema</button>
     </div>
     <details class="own">
-      <summary>Tinc un problema meu</summary>
-      <label class="lab" for="in-ext">Escriu l'enunciat i les opcions (A) … B) … fins a E)).</label>
+      <summary data-ui="own_summary">Tinc un problema meu</summary>
+      <label class="lab" for="in-ext" data-ui="own_label">Escriu l'enunciat i les opcions (A) … B) … fins a E)).</label>
       <textarea id="in-ext" name="external" placeholder="Quant fa 2 + 3?&#10;A) 4   B) 5   C) 6   D) 7   E) 8"></textarea>
-      <div class="row" style="margin-top:12px"><button class="btn" id="btn-ext" type="button" disabled>Envia'l al Cangur</button></div>
+      <div class="row" style="margin-top:12px"><button class="btn" id="btn-ext" type="button" disabled data-ui="own_send">Envia'l al Cangur</button></div>
     </details>
+    <p class="fine ui-mt hidden" data-ui-mt></p>
   </section>
 
   <!-- ─ the yard ─ -->
   <div class="side">
     <section class="card" id="yard" aria-labelledby="h-yard">
-      <h2 class="vh" id="h-yard">El Cangur</h2>
-      <div class="stage" id="stage" role="meter" aria-valuemin="0" aria-valuemax="100" aria-label="Què prefereix el Cangur">
-        <div class="stage-cap">El Cangur</div>
+      <h2 class="vh" id="h-yard" data-ui="kangaroo">El Cangur</h2>
+      <div class="stage" id="stage" role="meter" aria-valuemin="0" aria-valuemax="100" data-ui-aria="preference" aria-label="Què prefereix el Cangur">
+        <div class="stage-cap" data-ui="kangaroo">El Cangur</div>
         <div class="ground" aria-hidden="true"></div>
         <div class="sym l" id="sym-l" aria-hidden="true"></div><div class="sym r" id="sym-r" aria-hidden="true"></div>
         <div class="lamps" id="lamps" aria-hidden="true"></div>
@@ -406,18 +421,18 @@ form.hint textarea { min-height: 78px; }
       </div>
     </section>
 
-    <section class="board" aria-label="Matriu LED de la placa">
+    <section class="board" data-ui-aria="led_board" aria-label="Matriu LED de la placa">
       <div class="pcb"><div id="led" aria-hidden="true"></div></div>
-      <p><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg><b>Placa</b></p>
+      <p><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg><b data-ui="board">Placa</b></p>
     </section>
 
     <section class="card talk" aria-labelledby="h-talk" id="talk">
-      <h2 class="vh" id="h-talk">Conversa amb el Cangur</h2>
+      <h2 class="vh" id="h-talk" data-ui="conversation">Conversa amb el Cangur</h2>
       <div class="log" id="chat" role="log" aria-live="off"></div>
       <form class="hint hidden" id="hint-form">
-        <label for="in-hint">Escriu-li una pista, sense dir-li la resposta.</label>
+        <label for="in-hint" data-ui="hint_label">Escriu-li una pista, sense dir-li la resposta.</label>
         <textarea id="in-hint" name="hint" maxlength="200" enterkeyhint="send" aria-describedby="hint-tip" placeholder="Per exemple: compta de dos en dos…"></textarea>
-        <p class="tip" id="hint-tip">Enter l'envia · Maj+Enter fa una línia nova</p>
+        <p class="tip" id="hint-tip" data-ui="hint_tip">Enter l'envia · Maj+Enter fa una línia nova</p>
         <div class="hint-foot">
           <span class="stubs" id="stubs"></span>
           <span class="count" id="hint-count">0/200</span>
@@ -426,7 +441,7 @@ form.hint textarea { min-height: 78px; }
       </form>
       <div id="outside" class="hidden">
         <div class="row" id="similar"></div>
-        <div class="row"><button class="btn primary" id="btn-back">Tornem als problemes</button></div>
+        <div class="row"><button class="btn primary" id="btn-back" data-ui="back">Tornem als problemes</button></div>
       </div>
     </section>
 
@@ -468,7 +483,7 @@ function offline(down) {
   const net = $("net"), wasDown = !net.classList.contains("hidden");
   net.classList.toggle("hidden", !down);
   // an alert is read when its text changes, so write it each time the link drops
-  if (down && !wasDown) { $("net-msg").textContent = ""; setTimeout(() => { $("net-msg").textContent = NET_MSG; }, 60); }
+  if (down && !wasDown) { $("net-msg").textContent = NET_MSG; setTimeout(() => say($("net-msg"), "net", null, true), 60); }
 }
 let inflight = false;                      // one action at a time: a double click must not answer twice
 async function act(path, body) {
@@ -478,8 +493,8 @@ async function act(path, body) {
   try { render(await call(path, body || {})); offline(false); } catch (error) { offline(true); }
   finally { inflight = false; $("app").removeAttribute("aria-busy"); }
 }
-const ISO1 = {cat: "ca", eng: "en", esp: "es", fra: "fr", deu: "de", ita: "it", por: "pt", arb: "ar", zho: "zh",
-  tur: "tr", vie: "vi", ind: "id", swh: "sw", kor: "ko", jpn: "ja", lit: "lt", ron: "ro", urd: "ur", ukr: "uk", rus: "ru"};
+/* each language's own name and two-letter code: sent by the server (copilot/langs.py), one source for both */
+const ISO1 = {}, LANG_NAMES = {};
 
 /* ───────── dot-matrix lettering (5x7), drawn as SVG dots ───────── */
 const FONT = {
@@ -615,20 +630,21 @@ for (let i = 0; i < LAMPS; i++) $("lamps").append(el("i", {class: i > LAMPS >> 1
 
 /* small line icons for the buttons */
 const ICONS = {lamp: "M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z", next: "M5 12h14M13 6l6 6-6 6"};
-function labelled(btn, icon, text, after) {
+/* key: one of the page's own words (copilot/ui_text.py); fallback: its Catalan, before the table arrives */
+function labelled(btn, icon, key, after, fallback) {
   const svg = sv("svg", {viewBox: "0 0 24 24", width: 18, height: 18, fill: "none", stroke: "currentColor", "stroke-width": 2,
     "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true", class: after ? "after" : ""});
   svg.append(sv("path", {d: ICONS[icon]}));
-  btn.replaceChildren(...(after ? [document.createTextNode(text), svg] : [svg, document.createTextNode(text)]));
+  const words = say(el("span", {class: "lbl"}, fallback || key), key);
+  btn.replaceChildren(...(after ? [words, svg] : [svg, words]));
 }
-labelled($("btn-hint"), "next", "Envia", true);
 
 const LEVELS = [["5è de primària"], ["6è de primària"], ["1r d'ESO"], ["2n d'ESO"], ["3r d'ESO"], ["4t d'ESO"], ["1r de batxillerat"], ["2n de batxillerat"]];
 let chosenLevel = 2;
 function drawLevels() {
   const box = $("levels");
   LEVELS.forEach(([name], i) => {
-    const b = el("button", {type: "button", class: "pill", "aria-pressed": String(i === chosenLevel)}, name);
+    const b = el("button", {type: "button", class: "pill", "aria-pressed": String(i === chosenLevel), "data-ui": "level" + i}, name);
     b.onclick = () => {        // update in place: rebuilding the buttons would drop the keyboard focus
       chosenLevel = i;
       [...box.children].forEach((pill, k) => pill.setAttribute("aria-pressed", String(k === i)));
@@ -638,11 +654,71 @@ function drawLevels() {
 }
 drawLevels();
 
-const LANG_NAMES = {eng: "English", cat: "Català", esp: "Castellano", fra: "Français",
-  arb: "العربية", zho: "中文", deu: "Deutsch", tur: "Türkçe", vie: "Tiếng Việt",
-  ind: "Bahasa Indonesia", swh: "Kiswahili", kor: "한국어", jpn: "日本語", lit: "Lietuvių",
-  ron: "Română", urd: "اردو", ukr: "Українська", rus: "Русский", por: "Português", ita: "Italiano"};
+/* a piece of text in the student's language: its direction (Arabic runs right to left) and its language */
+/* machine translation, never reviewed by a native speaker: always said on screen */
+function mtTag(source) {
+  return el("span", {class: "mt", lang: "ca", dir: "ltr", title: "Traduït per una màquina (" + source + "), sense revisar"}, "traducció automàtica");
+}
+function withMt(node, source) { if (source) node.append(mtTag(source)); return node; }
+function inLang(node, lang) {
+  node.setAttribute("dir", "auto");
+  if (ISO1[lang]) node.setAttribute("lang", ISO1[lang]);
+  return node;
+}
 const STAGES = {1: "Dues llengües", 2: "Català amb ajuda", 3: "Només català"};
+
+/* ───────── the page's own words in the student's language (copilot/ui_text.py) ─────────
+   Same stage rules as the Kangaroo: stage 1, Catalan with the student's language under it;
+   stage 2, only once the problem has been shown in that language, except the "see it in
+   my language" button and the connection warning (always); stage 3, Catalan only. Before
+   the student starts: the language picked in the form. Machine translation: said on screen. */
+let UI = null;
+function fill(text, data) { return text.replace(/\{(\w+)\}/g, (m, k) => data && k in data ? data[k] : m); }
+function ownLang(always) {
+  const view = state, classroom = view ? view.classroom_lang : "cat";
+  if (!view || !view.student) {
+    const picked = $("in-lang").value;
+    return picked && picked !== classroom ? picked : null;
+  }
+  const student = view.student, lang = student.lang_origen;
+  if (!lang || lang === classroom || !student.etapa || student.etapa >= 3) return null;
+  if (student.etapa === 1 || always) return lang;
+  return !view.problem || !view.problem.can_reveal ? lang : null;   // match the tutor when there is no button
+}
+function uiText(key, lang, data) {
+  const texts = UI && UI.texts[key];
+  return texts && texts[lang] ? fill(texts[lang], data) : null;
+}
+/* Catalan, and under it the student's language when the stage allows it */
+function say(node, key, data, always) {
+  const cat = uiText(key, "cat", data);
+  if (cat === null) return node;                  // no table yet: the Catalan already there stays
+  node.replaceChildren(document.createTextNode(cat));
+  const lang = ownLang(always), own = lang && uiText(key, lang, data);
+  if (own && own !== cat) node.append(inLang(el("small", {class: "ui-own"}, own), lang));
+  return node;
+}
+/* Attribute values cannot contain language-tagged child elements. */
+function uiLabel(key, data, always) {
+  const cat = uiText(key, "cat", data) || "", lang = ownLang(always);
+  const own = lang && uiText(key, lang, data);
+  return cat + (own && own !== cat ? " · " + own : "");
+}
+function applyUi() {
+  if (!UI) return;
+  for (const node of document.querySelectorAll("[data-ui]")) say(node, node.dataset.ui, null, node.hasAttribute("data-ui-always"));
+  for (const node of document.querySelectorAll("[data-ui-aria]")) node.setAttribute("aria-label", uiLabel(node.dataset.uiAria));
+  const lang = ownLang(false), noticeLang = ownLang(true);
+  for (const note of document.querySelectorAll("[data-ui-mt]")) {
+    note.classList.toggle("hidden", !noticeLang);
+    note.title = UI.source;
+    if (noticeLang) say(note, "mt_note", {llengua: LANG_NAMES[noticeLang] || noticeLang}, true); else note.replaceChildren();
+  }
+  const cat = uiText("hint_placeholder", "cat");
+  if (cat) $("in-hint").placeholder = cat + (lang ? " · " + uiText("hint_placeholder", lang) : "");
+  $("in-ext").placeholder = uiLabel("own_placeholder") + "\nA) 4   B) 5   C) 6   D) 7   E) 8";
+  for (const id of ["in-hint", "in-ext", "in-name"]) $(id).dir = "auto";
+}
 
 /* ───────── the yard: where the Kangaroo stands, and how it jumps ───────── */
 const roo = {mood: "", x: 16, bar: null, problem: null, was: -1};
@@ -652,7 +728,7 @@ const hinted = new Set();             // problems where a hint was sent
 const RESULT = {up: ["↑", "var(--blue)", "Ha pujat"], same: ["=", "var(--soft)", "Sense canvis"], down: ["↓", "var(--accent)", "Ha baixat"]};
 function resultGlyph(kind) {
   const [glyph, color, label] = RESULT[kind];
-  const box = el("span", {class: "res", role: "img", "aria-label": label});
+  const box = el("span", {class: "res", role: "img", "aria-label": uiLabel(kind) || label});
   const svg = dotText(glyph, {color});
   svg.removeAttribute("role"); svg.removeAttribute("aria-label");
   box.append(svg);
@@ -753,8 +829,7 @@ function updateRoo(view) {
   const lit = bar === null ? 0 : Math.round(bar * (LAMPS - 1)) + 1;     // the lamp under the Kangaroo is the last lit one
   [...$("lamps").children].forEach((lamp, i) => lamp.classList.toggle("on", i < lit));
   $("stage").setAttribute("aria-valuenow", String(bar === null ? 0 : Math.round(bar * 100)));
-  $("stage").setAttribute("aria-valuetext", bar === null ? "El Cangur encara no ha donat cap resposta" :
-    bar > .5 ? "El Cangur prefereix la resposta correcta" : "El Cangur prefereix una resposta equivocada");
+  $("stage").setAttribute("aria-valuetext", uiLabel(bar === null ? "no_answer" : bar > .5 ? "prefers_right" : "prefers_wrong"));
   [...$("lamps").children].forEach((lamp, i) => lamp.classList.toggle("was", i === roo.was));
   $("lamps").classList.toggle("scan", !!view.busy);
   $("stage").classList.toggle("waiting", !(problem && hinted.has(problem.id)));
@@ -773,6 +848,10 @@ function enter() {
 }
 
 function render(view) {
+  // A language/stage change also replaces the screen reader's last announcement.
+  const context = v => v && v.student ? v.student.lang_origen + ":" + v.student.etapa + ":" +
+    (v.problem ? v.problem.id + ":" + v.problem.origen_lang : "") : "";
+  if (context(state) !== context(view)) seenMessages = 0;
   state = view;
   const student = view.student, problem = view.problem;
   $("app").dataset.phase = view.phase;
@@ -780,32 +859,44 @@ function render(view) {
   const focused = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
   const hadFocusInProblem = !!(focused && $("problem").contains(focused));
   if (!langsFilled) {
-    const select = $("in-lang");
-    select.append(el("option", {value: ""}, "No, només en català"));
-    for (const lang of view.languages)
-      if (lang !== view.classroom_lang && lang !== "eng")
-        select.append(el("option", {value: lang}, LANG_NAMES[lang] || lang));
-    if (view.languages.includes("eng") && view.classroom_lang !== "eng")
-      select.append(el("option", {value: "eng"}, LANG_NAMES.eng));
+    for (const code in view.lang_names || {}) {
+      LANG_NAMES[code] = view.lang_names[code].name;
+      if (view.lang_names[code].iso) ISO1[code] = view.lang_names[code].iso;
+    }
+    // the same choices when starting and in the header; a language whose problems aren't
+    // in the bank says so: only the Kangaroo speaks it
+    for (const [select, catalan] of [[$("in-lang"), "Ja parlo català"], [$("sw-lang"), LANG_NAMES[view.classroom_lang] || "Català"]]) {
+      select.append(el("option", {value: view.classroom_lang}, catalan));
+      for (const lang of view.languages) {
+        if (lang === view.classroom_lang) continue;
+        const inBank = (view.bank_languages || view.languages).includes(lang);
+        select.append(el("option", {value: lang, lang: ISO1[lang] || ""},
+          (LANG_NAMES[lang] || lang) + (inBank ? "" : " · " + (uiText("only_cat", lang) || uiText("only_cat", "cat") || "problemes només en català"))));
+      }
+    }
     langsFilled = true;
   }
+  applyUi();
+  $("lang-box").classList.toggle("hidden", !student);
+  if (student) { $("sw-lang").value = student.lang_origen || view.classroom_lang; $("sw-lang").disabled = !!view.busy; }
 
   // header
   $("level").classList.toggle("hidden", !student);
   if (student) {
     const steps = $("level-steps"); steps.replaceChildren();
     for (let i = 0; i < LEVELS.length; i++) steps.append(el("i", {class: i <= Math.max(0, student.level) ? "on" : "", style: "--k:" + i}));
-    $("level").setAttribute("aria-label", "Nivell " + student.level);
+    $("level").setAttribute("aria-label", uiLabel("problem_level", {level: student.level}));
   }
   const ladder = $("ladder"), stage = student && student.etapa ? student.etapa : 0;
   ladder.replaceChildren();
   ladder.classList.toggle("hidden", !stage);
-  for (const key of [1, 2, 3]) ladder.append(el("span", {class: key === stage ? "on" : "", "aria-current": key === stage ? "step" : "false"}, STAGES[key]));
+  for (const key of [1, 2, 3]) ladder.append(say(el("span", {class: key === stage ? "on" : "", "aria-current": key === stage ? "step" : "false"}, STAGES[key]), "stage" + key));
 
   // the problem
   const texts = $("p-texts"), options = $("p-options");
   texts.replaceChildren(); options.replaceChildren();
   const open = ["solving", "help"].includes(view.phase);
+  $("p-options-note").classList.toggle("hidden", !(problem && problem.options_origen_missing));
   $("p-keys").classList.toggle("hidden", !open);
   $("p-rungs").classList.toggle("hidden", !(problem && problem.helps > 0));
   if (problem) {
@@ -813,9 +904,14 @@ function render(view) {
     maxTries = Math.max(maxTries, problem.tries_left);
     const known = problem.level !== null && problem.level !== undefined && problem.level !== "?";   // an outside problem may have no level yet
     $("p-level").textContent = problem.external ? "Problema teu" + (known ? " · nivell " + problem.level : "") : "Problema de nivell " + problem.level;
+    say($("p-level"), problem.external ? (known ? "own_problem_level" : "own_problem") : "problem_level", {level: problem.level});
     $("p-topic").textContent = "· " + problem.topic;
+    const topicLang = ownLang(false);
+    if (topicLang && problem.topic_origen && problem.topic_origen !== problem.topic)
+      $("p-topic").append(inLang(el("small", {class: "ui-own"}, problem.topic_origen), topicLang));
     const rungs = $("p-rungs"); rungs.replaceChildren();
-    rungs.setAttribute("role", "img"); rungs.setAttribute("aria-label", "Pistes demanades: " + problem.helps + " de " + HELP_RUNGS);
+    rungs.setAttribute("role", "img"); rungs.setAttribute("aria-label", uiLabel("helps_used", {n: problem.helps, max: HELP_RUNGS}));
+    rungs.title = rungs.getAttribute("aria-label");
     for (let i = 0; i < HELP_RUNGS; i++) rungs.append(el("b", {class: i < problem.helps ? "on" : ""}));
     const own = problem.origen || problem.origen_image;
     texts.className = "texts" + (problem.cat && own ? " both" : "");
@@ -826,11 +922,14 @@ function render(view) {
       texts.append(box);
     }
     if (own) {
-      const box = el("div", {class: "text" + (problem.cat ? " second" : ""), dir: "auto"});
-      if (ISO1[problem.origen_lang]) box.setAttribute("lang", ISO1[problem.origen_lang]);
-      box.append(el("small", {}, LANG_NAMES[problem.origen_lang] || problem.origen_lang));
+      const box = inLang(el("div", {class: "text" + (problem.cat ? " second" : "")}), problem.origen_lang);
+      const name = el("small", {}, LANG_NAMES[problem.origen_lang] || problem.origen_lang);
+      // anything that isn't M3Kang's own text was translated by a machine, and nobody reviewed it
+      if (problem.origen_source && problem.origen_source !== "official" && !problem.origen_image)
+        name.append(mtTag(problem.origen_source));
+      box.append(name);
       if (problem.origen_image) box.append(el("img", {src: "/img/" + problem.origen_image, decoding: "async",
-        alt: "Enunciat original en " + (LANG_NAMES[problem.origen_lang] || problem.origen_lang)}));
+        alt: uiLabel("original_image", {llengua: LANG_NAMES[problem.origen_lang] || problem.origen_lang})}));
       else box.append(document.createTextNode(problem.origen));
       texts.append(box);
     }
@@ -838,18 +937,22 @@ function render(view) {
       if (!(letter in problem.options)) continue;
       const button = el("button", {class: "opt", type: "button", "data-letter": letter});
       button.style.setProperty("--i", options.children.length + 1);
-      button.append(el("span", {class: "bub"}, letter), el("span", {class: "t"}, problem.options[letter]));
+      const value = el("span", {class: "t"}, problem.options[letter]);
+      // the letter never changes; the student's language goes under the Catalan option
+      const own = problem.options_origen && problem.options_origen[letter];
+      if (problem.shown === "origen") inLang(value, problem.origen_lang);
+      else if (own && own !== problem.options[letter]) value.append(inLang(el("span", {class: "own"}, own), problem.origen_lang));
+      button.append(el("span", {class: "bub"}, letter), value);
       const wrong = problem.wrong.includes(letter), right = problem.label === letter;
       if (wrong) button.classList.add("wrong");
       if (right) button.classList.add("right");
       button.disabled = !open || view.busy || wrong;     // an outside problem waits for the harness's answer
-      if (wrong) button.setAttribute("aria-label", letter + ": " + problem.options[letter] + " (equivocada)");
-      if (right) button.setAttribute("aria-label", letter + ": " + problem.options[letter] + " (correcta)");
+      if (wrong || right) button.setAttribute("aria-label", letter + ": " + value.textContent + " (" + uiLabel(right ? "right" : "wrong") + ")");
       button.onclick = () => act("/api/answer", {letter});
       options.append(button);
     }
   } else if (view.outside) {
-    $("p-level").textContent = "Problema teu";
+    say(Object.assign($("p-level"), {textContent: "Problema teu"}), "own_problem");
     $("p-topic").textContent = "· " + view.outside.topic;
     texts.className = "texts";
     texts.append(el("div", {class: "text"}, view.outside.text));
@@ -860,11 +963,15 @@ function render(view) {
     }
   } else {
     $("p-level").textContent = view.phase === "ready" ? "Tot a punt" : "";
+    if (view.phase === "ready") say($("p-level"), "ready");
     $("p-topic").textContent = "";
   }
 
   // always visible while working on an outside problem (CLAUDE.md)
   $("p-warning").textContent = problem && problem.warning ? problem.warning : "";
+  if (problem && problem.warning && problem.warning_origen)
+    $("p-warning").append(withMt(inLang(el("small", {}, problem.warning_origen.text), problem.warning_origen.lang),
+                                 problem.warning_origen.source));
   $("p-warning").classList.toggle("hidden", !(problem && problem.warning));
 
   // short answers (numbers, single words) sit side by side instead of one per line
@@ -872,12 +979,17 @@ function render(view) {
   options.classList.toggle("short", answers.length > 0 && answers.every(t => t.length <= 14));
 
   $("btn-help").classList.toggle("hidden", !open);
-  labelled($("btn-help"), "lamp", problem && problem.helps >= HELP_RUNGS - 1 ? "Ensenya'm la solució" :
-    problem && problem.helps > 0 ? "Una altra pista" : "Demana una pista");
+  const helpKey = problem && problem.helps >= HELP_RUNGS - 1 ? "help_solution" : problem && problem.helps > 0 ? "help_more" : "help_first";
+  labelled($("btn-help"), "lamp", helpKey, false,
+    {help_solution: "Ensenya'm la solució", help_more: "Una altra pista", help_first: "Demana una pista"}[helpKey]);
   $("btn-reveal").classList.toggle("hidden", !(problem && problem.can_reveal));
+  // the button is in the student's own language too: a student who can't read the Catalan label yet still finds it
+  say($("btn-reveal"), "reveal", null, true);
   const canNext = ["ready", "done"].includes(view.phase) && !view.busy;
   $("btn-next").classList.toggle("hidden", !canNext);
-  labelled($("btn-next"), "next", view.phase === "ready" ? "Primer problema" : "Problema següent", true);
+  labelled($("btn-next"), "next", view.phase === "ready" ? "first_problem" : "next", true,
+    view.phase === "ready" ? "Primer problema" : "Problema següent");
+  labelled($("btn-hint"), "next", "send", true, "Envia");
   // teaching the Kangaroo is optional: the problem is already solved
   $("btn-leave").classList.toggle("hidden", !(view.phase === "teach" && !view.busy));
   if (view.hint_max_chars && $("in-hint").maxLength !== view.hint_max_chars) {
@@ -890,47 +1002,51 @@ function render(view) {
   chat.replaceChildren();
   view.messages.forEach((message, i) => {
     const bubble = el("div", {class: "msg " + message.who + " " + (message.kind || "") + (i >= seenMessages ? " new" : "")}, message.text);
-    if (message.origen) {   // the same hint in the student's language (language bridge)
-      bubble.append(el("small", {lang: message.origen.lang},
-                       (LANG_NAMES[message.origen.lang] || message.origen.lang) + ": " + message.origen.text));
-    }
+    if (message.origen)    // the same words in the student's language (language bridge)
+      bubble.append(withMt(inLang(el("small", {}, message.origen.text), message.origen.lang), message.origen.source));
     const kind = problem && marks.get(problem.id + ":" + i);
     if (kind) bubble.append(resultGlyph(kind));
     chat.append(bubble);
   });
   // rung 4: the similar problem, to try before its answer shows
   if (problem && problem.side) {
-    const side = problem.side, box = el("div", {class: "side", role: "group", "aria-label": "Problema semblant"});
+    const side = problem.side, box = el("div", {class: "side-problem", role: "group", "aria-label": uiLabel("similar_problem")});
     box.append(el("p", {}, side.text));
+    if (side.origen) box.append(withMt(inLang(el("p", {}, side.origen), side.origen_lang),
+      side.origen_source === "official" ? null : side.origen_source));
+    if (side.translation_missing) box.append(say(el("p", {class: "fine"}), "missing_problem"));
+    if (side.options_translation_missing) box.append(say(el("p", {class: "fine"}), "missing_options"));
     const opts = el("div", {class: "opts"});
     for (const letter of "ABCDE") {
       if (!(letter in side.options)) continue;
       const label = letter + ") " + side.options[letter];
+      const words = el("span", {}, label), own = side.options_origen && side.options_origen[letter];
+      if (own && own !== side.options[letter]) words.append(inLang(el("small", {class: "ui-own"}, own), side.origen_lang));
       if (side.open) {
         const cls = letter === side.label ? "right" : letter === side.answer ? "wrong" : "";
-        opts.append(el("span", {class: cls}, label));
+        const answer = el("span", {class: cls}); answer.append(words); opts.append(answer);
       } else {
-        const button = el("button", {type: "button"}, label);
+        const button = el("button", {type: "button"}); button.append(words);
         button.onclick = () => act("/api/side-answer", {letter});
         opts.append(button);
       }
     }
     box.append(opts);
     if (!side.open) {
-      const reveal = el("button", {class: "btn quiet", type: "button"}, "Mostra'n la resposta");
+      const reveal = say(el("button", {class: "btn quiet", type: "button"}, "Mostra'n la resposta"), "side_reveal");
       reveal.onclick = () => act("/api/side-reveal");
       box.append(reveal);
     }
     chat.append(box);
   }
   // screen readers hear only the new messages, not the whole log again
-  const fresh = view.messages.slice(seenMessages).map(m => m.text);
+  const fresh = view.messages.slice(seenMessages).map(m => m.text + (m.origen ? " · " + m.origen.text : ""));
   if (fresh.length) $("announce").textContent = fresh.join(" ");
-  else if (view.busy && !wasBusy) $("announce").textContent = "El Cangur hi està pensant…";
+  else if (view.busy && !wasBusy) $("announce").textContent = uiLabel("thinking");
   wasBusy = !!view.busy;
   seenMessages = view.messages.length;
   if (view.busy) {
-    const wait = el("div", {class: "thinking"}, "El Cangur hi està pensant");
+    const wait = say(el("div", {class: "thinking"}, "El Cangur hi està pensant"), "thinking");
     wait.append(el("i"), el("i"), el("i"));
     chat.append(wait);
   }
@@ -944,7 +1060,7 @@ function render(view) {
     const stubs = $("stubs"); stubs.replaceChildren();
     for (let i = 0; i < maxTries; i++) stubs.append(el("i", {class: i < problem.tries_left ? "on" : ""}));
     stubs.setAttribute("role", "img");
-    stubs.setAttribute("aria-label", "Intents que et queden: " + problem.tries_left);
+    stubs.setAttribute("aria-label", uiLabel("tries_left", {n: problem.tries_left}));
     // moving focus pops the keyboard open on a phone, so only do it with a mouse or keyboard
     if (wasHidden && matchMedia("(pointer: fine)").matches) setTimeout(() => $("in-hint").focus({preventScroll: true}), 50);
   }
@@ -953,7 +1069,7 @@ function render(view) {
     const similar = $("similar");
     similar.replaceChildren();
     view.outside.similar.slice(0, 3).forEach((item, i) => {
-      const button = el("button", {class: "btn", type: "button"}, "Practica un de semblant (" + (i + 1) + ")");
+      const button = say(el("button", {class: "btn", type: "button"}, "Practica un de semblant (" + (i + 1) + ")"), "practice", {n: i + 1});
       button.onclick = () => act("/api/practice", {id: item.id});
       similar.append(button);
     });
@@ -975,7 +1091,10 @@ function render(view) {
   if (view.busy) timer = setTimeout(refresh, 1000);
 }
 async function refresh() {
-  try { render(await call("/api/state")); offline(false); }
+  try {
+    if (!UI) UI = await call("/api/ui");
+    render(await call("/api/state")); offline(false);
+  }
   catch (error) { offline(true); timer = setTimeout(refresh, 2000); }
 }
 
@@ -998,7 +1117,7 @@ function countHint() {
   $("hint-count").textContent = n + "/" + max;
   const full = n >= max, was = $("hint-count").classList.contains("full");
   $("hint-count").classList.toggle("full", full);
-  if (full && !was) $("announce").textContent = "Has arribat al límit de " + max + " caràcters.";
+  if (full && !was) $("announce").textContent = uiLabel("char_limit", {max});
 }
 
 /* LED mirror */
@@ -1056,6 +1175,11 @@ async function teacher() {
     }
     body.append(box);
   }
+  if (data.languages && data.languages.length) {
+    body.append(el("h4", {class: "lab"}, "Pont d'idioma"));
+    for (const row of data.languages)
+      body.append(el("div", {class: "hintnote"}, (LANG_NAMES[row.lang] || row.lang) + ": " + (STAGES[row.etapa] || "")));
+  }
   // only the hints that convinced the Kangaroo keep their text; the rest are counts
   const counts = data.hint_counts || {rejected: {}, not_convinced: 0, convinced: 0, feigned: 0};
   const rejected = Object.values(counts.rejected).reduce((a, b) => a + b, 0);
@@ -1078,13 +1202,15 @@ function drawer(open) {
 $("start-form").onsubmit = async event => { event.preventDefault();
   const button = $("btn-start");
   if (inflight) return;
-  button.textContent = "Preparant el primer problema…"; button.setAttribute("aria-busy", "true");
+  button.textContent = "Preparant el primer problema…"; say(button, "starting"); button.setAttribute("aria-busy", "true");
   await act("/api/start", {name: $("in-name").value, level: chosenLevel, lang: $("in-lang").value});
-  button.textContent = "Comencem"; button.removeAttribute("aria-busy"); };
+  button.textContent = "Comencem"; say(button, "start"); button.removeAttribute("aria-busy"); };
+$("in-lang").onchange = () => applyUi();     // the welcome form speaks the language just picked
 $("btn-next").onclick = () => act("/api/next");
 $("btn-leave").onclick = () => { $("in-hint").value = ""; countHint(); act("/api/leave-teaching"); };
 $("btn-help").onclick = () => act("/api/help");
 $("btn-reveal").onclick = () => act("/api/reveal");
+$("sw-lang").onchange = () => act("/api/language", {lang: $("sw-lang").value});
 $("btn-back").onclick = () => act("/api/next");
 $("btn-retry").onclick = () => refresh();
 $("in-ext").oninput = () => { $("btn-ext").disabled = !$("in-ext").value.trim(); };
@@ -1112,7 +1238,11 @@ document.addEventListener("keydown", event => {
   }
 });
 
-setMood("idle"); refresh(); led();
+setMood("idle");
+// Retry a failed UI-table request with the state, rather than silently dropping translations.
+refresh();
+led();
+labelled($("btn-hint"), "next", "send", true, "Envia");
 </script>
 </body>
 </html>

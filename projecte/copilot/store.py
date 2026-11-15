@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS problems (
 );
 CREATE TABLE IF NOT EXISTS texts (
     id TEXT, lang TEXT, text TEXT, options TEXT,
+    source TEXT DEFAULT 'official',  -- 'official' (M3Kang) or the translator: 'opus-mt', 'haiku'...
     PRIMARY KEY (id, lang)
 );
 CREATE TABLE IF NOT EXISTS student (
@@ -34,6 +35,13 @@ CREATE TABLE IF NOT EXISTS student (
     etapa INTEGER,          -- 1: both languages, 2: classroom language + button, 3: classroom only
     streak INTEGER
 );
+-- The language bridge, once per home language: the student keeps a rating, a stage and a
+-- streak for each one, and finds them again after switching. student.elo_origen, etapa and
+-- streak are a copy of the row of the language in use.
+CREATE TABLE IF NOT EXISTS student_lang (
+    student INTEGER, lang TEXT, elo REAL, etapa INTEGER, streak INTEGER,
+    PRIMARY KEY (student, lang)
+);
 CREATE TABLE IF NOT EXISTS attempts (
     n INTEGER PRIMARY KEY AUTOINCREMENT,
     student INTEGER, problem_id TEXT,
@@ -41,8 +49,9 @@ CREATE TABLE IF NOT EXISTS attempts (
     shown TEXT,             -- what was on screen: 'cat', 'both' or 'origen'
     answer TEXT, correct INTEGER, revealed INTEGER, helps INTEGER,
     seconds REAL, ts REAL,
-    external INTEGER DEFAULT 0  -- 1: a problem from outside the bank, checked against the
+    external INTEGER DEFAULT 0, -- 1: a problem from outside the bank, checked against the
                                 -- harness's answer; never moves a rating or a bank count
+    origin_lang TEXT            -- the student's home language then ('' for none); NULL: older row
 );
 CREATE TABLE IF NOT EXISTS hints (
     n INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,7 +60,8 @@ CREATE TABLE IF NOT EXISTS hints (
     convinced INTEGER,
     ts REAL,
     source TEXT DEFAULT 'student',  -- who wrote it: 'student' or 'agent'
-    step INTEGER            -- an agent hint's place: 1 (where to start) or 2 (the next step)
+    step INTEGER,           -- an agent hint's place: 1 (where to start) or 2 (the next step)
+    lang TEXT               -- guessed language of a stored student's hint
 );
 -- What happened to each hint a student sent the Kangaroo, with no text (docs/PISTES.md):
 -- outcome 'rejected' (reason: the leak filter's), 'not_convinced' or 'convinced'.
@@ -70,6 +80,9 @@ MIGRATIONS = [
     ("hints", "source", "TEXT DEFAULT 'student'"),
     ("hints", "step", "INTEGER"),
     ("attempts", "external", "INTEGER DEFAULT 0"),
+    ("texts", "source", "TEXT DEFAULT 'official'"),
+    ("attempts", "origin_lang", "TEXT"),
+    ("hints", "lang", "TEXT"),
 ]
 # Older databases may still have the columns of the shared-hint version (relevance, dups,
 # vec, rejected, shown, solved_after) and a ref_vectors table: they are left as they are
@@ -105,6 +118,17 @@ class Store:
                 self.db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {declaration}")
         self.db.execute("UPDATE hints SET source = 'student' WHERE source IS NULL")
         self.db.execute("UPDATE attempts SET external = 0 WHERE external IS NULL")
+        self.db.execute("UPDATE texts SET source = 'official' WHERE source IS NULL")
+        # Before student_lang there was one home language per student: its attempts and its
+        # bridge state belong to that language.
+        classroom = CONFIG.get("TUTOR_LANG", "cat")
+        self.db.execute(
+            "UPDATE attempts SET origin_lang = COALESCE((SELECT CASE WHEN s.lang_origen = ? "
+            "THEN '' ELSE s.lang_origen END FROM student s WHERE s.id = attempts.student), '') "
+            "WHERE origin_lang IS NULL", (classroom,))
+        self.db.execute(
+            "INSERT OR IGNORE INTO student_lang SELECT id, lang_origen, elo_origen, etapa, streak "
+            "FROM student WHERE COALESCE(lang_origen, '') NOT IN ('', ?)", (classroom,))
 
     def run(self, sql, args=()):
         with self.lock:
@@ -149,11 +173,12 @@ class Store:
 
     def text(self, problem_id, lang):
         """The problem in one language: {"text", "options"}, or None."""
-        row = self.one("SELECT text, options FROM texts WHERE id = ? AND lang = ?",
+        row = self.one("SELECT text, options, source FROM texts WHERE id = ? AND lang = ?",
                        (problem_id, lang))
         if not row:
             return None
-        return {"text": row["text"], "options": json.loads(row["options"] or "{}"), "lang": lang}
+        return {"text": row["text"], "options": json.loads(row["options"] or "{}"), "lang": lang,
+                "source": row["source"] or "official"}
 
     def languages(self):
         return [row["lang"] for row in self.rows("SELECT DISTINCT lang FROM texts ORDER BY lang")]
@@ -174,16 +199,32 @@ class Store:
         return self.one("SELECT * FROM student WHERE id = ?", (student_id,))
 
     def save_student(self, student):
-        self.run("INSERT OR REPLACE INTO student VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        """Save the student, and the bridge state of the home language in use."""
+        self.run("INSERT OR REPLACE INTO student (id, name, lang_origen, level, elo_cat, "
+                 "elo_origen, etapa, streak) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                  (student["id"], student["name"], student["lang_origen"], student["level"],
                   student["elo_cat"], student["elo_origen"], student["etapa"], student["streak"]))
+        lang = student["lang_origen"] or ""
+        if lang and lang != CONFIG.get("TUTOR_LANG", "cat"):
+            self.run("INSERT OR REPLACE INTO student_lang (student, lang, elo, etapa, streak) "
+                     "VALUES (?, ?, ?, ?, ?)", (student["id"], lang, student["elo_origen"],
+                                                student["etapa"], student["streak"]))
+
+    def student_lang(self, student_id, lang):
+        """The bridge state the student left in one home language, or None."""
+        return self.one("SELECT * FROM student_lang WHERE student = ? AND lang = ?",
+                        (student_id, lang))
+
+    def student_langs(self, student_id=1):
+        return self.rows("SELECT * FROM student_lang WHERE student = ? ORDER BY lang", (student_id,))
 
     def add_attempt(self, student_id, problem_id, lang, shown, answer, correct, revealed,
-                    helps, seconds, external=False):
+                    helps, seconds, external=False, origin_lang=""):
         self.run("INSERT INTO attempts (student, problem_id, lang, shown, answer, correct, "
-                 "revealed, helps, seconds, ts, external) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                 "revealed, helps, seconds, ts, external, origin_lang) "
+                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                  (student_id, problem_id, lang, shown, answer, int(correct), int(revealed),
-                  helps, seconds, time.time(), int(bool(external))))
+                  helps, seconds, time.time(), int(bool(external)), origin_lang or ""))
 
     def attempts(self, student_id=1, external=False):
         """The student's attempts, oldest first. Bank problems only, unless external=True
@@ -196,7 +237,7 @@ class Store:
     # --- hints -------------------------------------------------------------
 
     def add_hint(self, problem_id, student_id, text, delta, convinced, source="student",
-                 step=None):
+                 step=None, lang=None):
         """Store a hint with its text: an agent's (prep/import_hints.py) or a student's.
 
         The tutor only stores a student's hint when it convinced a Kangaroo that wasn't
@@ -206,10 +247,10 @@ class Store:
         if source not in HINT_SOURCES:
             raise ValueError(f"unknown hint source {source!r}, expected one of {HINT_SOURCES}")
         return self.run("INSERT INTO hints (problem_id, student, text, delta, convinced, ts, "
-                        "source, step) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        "source, step, lang) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         (problem_id, student_id, text, delta,
                          None if convinced is None else int(bool(convinced)), time.time(),
-                         source, step)).lastrowid
+                         source, step, lang)).lastrowid
 
     def has_hint(self, problem_id, text, source=None):
         sql, args = "SELECT 1 FROM hints WHERE problem_id = ? AND text = ?", [problem_id, text]

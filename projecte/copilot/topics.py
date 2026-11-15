@@ -284,6 +284,9 @@ TRANSLATIONS = {
 DEFAULT = "aritmetica"
 HINT_LANG = "cat"    # the classroom language: every topic has it, and it is the fallback
 HINT_LANGS = ("cat", "eng", "esp", "fra", "arb", "zho")
+# Where TRANSLATIONS come from, for the "machine translation" mark on the page
+TRANSLATION_SOURCE = "llm (back-translated)"
+TRANSLATIONS_LANGS = tuple(lang for lang in HINT_LANGS if lang != HINT_LANG)
 NAMES = {key: name for key, name, _words, _hints in TOPICS}
 # HINTS[key][lang]: the method hints of one topic in one language.
 HINTS = {key: {HINT_LANG: hints, **TRANSLATIONS.get(key, {})}
