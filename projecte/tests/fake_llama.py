@@ -26,7 +26,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 LETTERS = "ABCDE"
 BIAS = {"A": 0.6, "B": 0.0, "C": -0.2, "D": 0.9, "E": -0.4}   # like the real model: loves D and A
 SKILL = 0.8          # how much it favours the right option
-NEUTRAL = "think carefully."
+NEUTRAL = ("think carefully.", "pensa-ho bé.")   # the neutral hints, English and Catalan
+HINT_LABELS = ("Hint from a classmate: ", "Pista d'un company: ")
+GENERATED_HINT = "Fixa't bé en les dades de l'enunciat i escriu-les ordenades."
 STOP = {"with", "from", "that", "this", "what", "have", "many", "then", "first", "quina",
         "quant", "quants", "quantes", "primer", "despres", "després", "calcula", "pensa"}
 
@@ -68,9 +70,10 @@ def read_prompt(messages):
         match = re.match(r"^([A-E])\) (.*)$", line)
         if match:
             options[match.group(1)] = match.group(2)
-        elif line.startswith("Hint from a classmate: "):
-            hint = line[len("Hint from a classmate: "):]
-        elif line.strip() not in ("Answer:", "Expression:"):
+        elif line.startswith(HINT_LABELS):
+            label = next(lab for lab in HINT_LABELS if line.startswith(lab))
+            hint = line[len(label):]
+        elif line.strip() not in ("Answer:", "Resposta:", "Expression:"):
             question.append(line)
     full = "\n".join(json.dumps(m["content"], ensure_ascii=False) for m in messages)
     return "\n".join(question).strip(), options, hint, full
@@ -79,7 +82,7 @@ def read_prompt(messages):
 def letter_logits(model, question, options, hint):
     right = model.answers.get(question)
     boost = 0.0
-    if hint and hint.strip().lower() != NEUTRAL:
+    if hint and hint.strip().lower() not in NEUTRAL:
         shared = len(words(hint) & words(question))
         boost = 2.5 if shared >= 2 else 1.0 if shared == 1 else 0.2 * noise("hint", hint, question)
     logits = {}
@@ -105,6 +108,13 @@ def fake_expression(model, question, options):
 
 def completion(model, request):
     question, options, hint, full = read_prompt(request["messages"])
+    if str(request.get("grammar", "")).startswith("root ::= [^"):   # a hint (copilot/hintgen.py)
+        with model.lock:
+            model.calls.append({"question": question, "hint": "", "prompt_n": len(full) // 4,
+                                "options": options, "hint_writer": True})
+        return {"choices": [{"index": 0, "finish_reason": "stop",
+                             "message": {"role": "assistant", "content": GENERATED_HINT}}],
+                "timings": {"prompt_n": len(full) // 4, "predicted_n": len(GENERATED_HINT) // 2}}
     if str(request.get("grammar", "")).startswith("root ::= expr"):
         with model.lock:
             model.calls.append({"question": question, "hint": "", "prompt_n": len(full) // 4,

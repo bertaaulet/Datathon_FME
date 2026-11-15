@@ -14,6 +14,16 @@ LETTERS = "ABCDE"
 SYSTEM = ("You solve multiple-choice math competition problems for school students. "
           "Read the problem and the options, then reply with the letter of the correct option.")
 
+# The Kangaroo of the tutor reads in Catalan (KANGAROO_LANG=cat), so the student's Catalan
+# hint arrives in the same language as everything around it. predict.py never passes a
+# language and keeps the English prompt above.
+KANGAROO_SYSTEM = {
+    "cat": ("Resols problemes de matemàtiques de tipus test per a alumnes d'escola. "
+            "Llegeix el problema i les opcions, i respon amb la lletra de l'opció correcta."),
+}
+HINT_LABEL = {"cat": "Pista d'un company: ", "eng": "Hint from a classmate: "}
+ANSWER_LABEL = {"cat": "Resposta:", "eng": "Answer:"}
+
 # "A) 12   B) 15 ..." written inside the question text
 _MARKER = r"(?:^|(?<=\s))\(?{letter}\)\s*"
 
@@ -71,15 +81,18 @@ def solved_example(example):
     return f"Similar solved problem:\n{question}\nCorrect answer: {correct_value(example)}\n\n"
 
 
-def build_messages(problem, examples=(), image_b64=None, order=None, hint=None):
+def build_messages(problem, examples=(), image_b64=None, order=None, hint=None, lang=None):
     """image_b64 is a PNG as base64 text. Only a server started with --mmproj can see it.
 
     hint goes after the problem, so the cached start of the prompt is reused.
+    lang="cat" writes the Kangaroo's prompt in Catalan (the tutor only); None keeps
+    predict.py's English prompt.
     Examples (RAG) follow PREDICT_RAG_FORMAT: "answer" (default) puts each solved
     problem's question and right value before the new problem, in the same message;
     "letter" is the organizers' format (full problem, then its letter as a reply).
     """
-    messages = [{"role": "system", "content": SYSTEM}]
+    lang = lang if lang in KANGAROO_SYSTEM else None   # None: predict.py's English prompt
+    messages = [{"role": "system", "content": KANGAROO_SYSTEM[lang] if lang else SYSTEM}]
     lead = ""
     if CONFIG.get("PREDICT_RAG_FORMAT", "answer").lower() == "letter":
         for ex in examples:
@@ -89,8 +102,8 @@ def build_messages(problem, examples=(), image_b64=None, order=None, hint=None):
         lead = "".join(solved_example(ex) for ex in examples) + "Now solve this problem.\n"
     text = lead + format_problem(problem, sees_image=bool(image_b64), order=order)
     if hint:
-        text += "\nHint from a classmate: " + " ".join(hint.split())
-    text += "\nAnswer:"
+        text += "\n" + HINT_LABEL[lang or "eng"] + " ".join(hint.split())
+    text += "\n" + ANSWER_LABEL[lang or "eng"]
     if image_b64:
         content = [{"type": "image_url", "image_url": {"url": "data:image/png;base64," + image_b64}},
                    {"type": "text", "text": text}]
@@ -197,7 +210,7 @@ def parse_letter_probs(response, generated):
 
 
 def letter_probs(problem, examples=(), timeout=60, image_b64=None, url=URL, order=None,
-                 hint=None, bias=None):
+                 hint=None, bias=None, lang=None):
     """One model call. Return {"letter", "probs", "found", "timings"}.
 
     probs maps each ORIGINAL option letter to a probability, also when order
@@ -208,7 +221,8 @@ def letter_probs(problem, examples=(), timeout=60, image_b64=None, url=URL, orde
     """
     top = int(CONFIG.get("LOGPROBS_TOP", 64))
     payload = {
-        "messages": build_messages(problem, examples, image_b64, order=order, hint=hint),
+        "messages": build_messages(problem, examples, image_b64, order=order, hint=hint,
+                                   lang=lang),
         "grammar": "root ::= [A-E]",
         "max_tokens": 1,
         "temperature": 0,
