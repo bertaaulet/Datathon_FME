@@ -38,6 +38,7 @@ NEUTRAL_HINT = NEUTRAL_HINTS.get(KANGAROO_LANG, NEUTRAL_HINTS["eng"])   # a hint
 HELP_RUNGS = 5        # method, hint, another hint, a similar problem, the solution
 FEIGNED_BAR = 0.35    # where the bar starts when the Kangaroo only pretends to be wrong
 CONVINCED_BAR = 0.85  # the least the bar shows once the Kangaroo says it understood
+SIGN_SECONDS = 2.5    # how long the tick or the cross stays on the LED matrix
 MAX_TRIES = int(CONFIG.get("HINT_MAX_TRIES", 3))
 HINT_MAX_CHARS = int(CONFIG.get("HINT_MAX_CHARS", 200))
 LANG_NAMES = langs.CATALAN                      # each language's name, in Catalan
@@ -118,6 +119,8 @@ class Tutor:
         self.chosen_topic = None          # the topic the student asked to practise, if any
         self.frame = led.text("?")
         self.frame_version = 0
+        self.frame_hold_until = 0.0       # see _show
+        self.frame_waiting = None
 
     # ------------------------------------------------------------------ helpers
 
@@ -188,8 +191,16 @@ class Tutor:
         found.discard(None)
         return ", ".join(sorted(found)) or None
 
-    def _show(self, frame):
-        self.frame = frame
+    def _show(self, frame, hold=0.0):
+        """Put a picture on the LED matrix. hold keeps it there that many seconds: a picture
+        sent meanwhile waits (led_view shows it later), so the tick isn't replaced by the
+        Kangaroo's bar before the matrix app reads it (docs/PROBLEMES.md 13)."""
+        now = time.time()
+        if not hold and now < self.frame_hold_until:
+            self.frame_waiting = frame
+            return
+        self.frame, self.frame_waiting = frame, None
+        self.frame_hold_until = now + hold if hold else 0.0
         self.frame_version += 1
 
     def _spawn(self, function, *args):
@@ -509,12 +520,12 @@ class Tutor:
             if not correct:
                 current["wrong"].append(letter)
                 self.phase = "help"
-                self._show(led.cross())
+                self._show(led.cross(), hold=SIGN_SECONDS)
                 self._tell("sistema", "no_coincideix" if current["external"] else "no_es_aquesta",
                            kind="malament")
                 return self.view()
             current["solved"] = True
-            self._show(led.tick())
+            self._show(led.tick(), hold=SIGN_SECONDS)
             self._tell("sistema", "correcte", kind="be")
             if current["ref"] is None and not current["ref_done"]:
                 current["teach_wait"], self.busy = True, True   # the Kangaroo is still reading
@@ -1063,6 +1074,8 @@ class Tutor:
 
     def led_view(self):
         with self.lock:
+            if self.frame_waiting is not None and time.time() >= self.frame_hold_until:
+                self._show(self.frame_waiting)
             return {"version": self.frame_version, "frame": self.frame}
 
     def teacher(self):

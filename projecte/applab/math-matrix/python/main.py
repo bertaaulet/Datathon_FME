@@ -35,7 +35,7 @@ def find_tutor():
             fetch(base)
             print(f"Tutor found at {base}")
             return base
-        except OSError:
+        except Exception:   # also a half-started tutor (bad HTTP, bad JSON): try the next one
             continue
     print("Tutor not reachable. Is app/server.py running (with --host 0.0.0.0)?")
     return None
@@ -55,12 +55,15 @@ def loop():
         return
     try:
         view = fetch(state["base"])
-    except (OSError, ValueError):
+    except Exception:   # an error here must never stop the loop: look for the tutor again
         state["base"], state["version"] = None, None
         return
     if view["version"] != state["version"]:   # only redraw when the picture changes
-        state["version"] = view["version"]
-        draw(view["frame"])
+        try:
+            draw(view["frame"])
+            state["version"] = view["version"]
+        except Exception as error:   # try again on the next pass
+            print(f"Could not draw: {type(error).__name__}: {error}")
     time.sleep(0.3)
 
 
