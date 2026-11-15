@@ -4,7 +4,9 @@
 
 *[Llegeix-ho en català](README.ca.md)*
 
-<!-- TODO: photo or GIF of the board, the web page and the LED matrix -->
+![The student's welcome screen: "Teach the Kangaroo", with the Kangaroo drawn in LED dots](docs/img/benvinguda.png)
+
+<!-- TODO: demo video -->
 
 ## The idea
 

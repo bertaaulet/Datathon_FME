@@ -4,7 +4,9 @@
 
 *[Read it in English](README.md)*
 
-<!-- TODO: foto o GIF de la placa, la pàgina web i la matriu LED -->
+![La pantalla de benvinguda de l'alumne: "Ensenya el Cangur", amb el Cangur dibuixat amb punts LED](docs/img/benvinguda.png)
+
+<!-- TODO: vídeo de la demo -->
 
 ## La idea
 

@@ -10,7 +10,7 @@
 
 ## Una sessió amb el Cangur
 
-<!-- TODO: captura de la pantalla de l'alumne -->
+![La pantalla de benvinguda de l'alumne: nom, curs i llengua](../docs/img/benvinguda.png)
 
 **1. Benvinguda.** L'alumne escriu el seu nom (si vol), el curs (de 5è de primària a 2n de batxillerat) i la llengua que entén millor: català, castellà, anglès, francès, àrab o xinès. La pantalla l'avisa: *"Tot el que facis es queda en aquesta placa."* El Cangur el saluda: *"Hola! Soc el Cangur. Resolem problemes junts? Aviso: jo m'equivoco força, potser m'hauràs d'ajudar!"*
 

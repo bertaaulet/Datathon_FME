@@ -10,7 +10,7 @@
 
 ## A session with the Kangaroo
 
-<!-- TODO: screenshot of the student's screen -->
+![The student's welcome screen: name, school year and language](../docs/img/benvinguda.png)
 
 **1. Welcome.** The student types their name (if they want), their school year (from 5th of primary to the last year of secondary) and the language they understand best: Catalan, Spanish, English, French, Arabic or Chinese. The screen tells them: *"Everything you do stays on this board."* The Kangaroo says hello: *"Hi! I'm the Kangaroo. Shall we solve problems together? Fair warning: I get things wrong quite often, so you may have to help me!"*
 
