@@ -12,6 +12,7 @@ import csv
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -25,11 +26,24 @@ sys.path.insert(0, HERE)
 
 import demo_data  # noqa: E402
 import fake_llama  # noqa: E402
-from copilot import calib, elo, hintgen, led, leak, llm, pipeline, topics  # noqa: E402
+from copilot import calib, elo, hintgen, langs, led, leak, llm, phrases, pipeline, topics, ui_text  # noqa: E402
 from copilot.config import CONFIG  # noqa: E402
 from copilot.store import Store  # noqa: E402
 from copilot.tutor import (FEIGNED_BAR, HELP_RUNGS, NEUTRAL_HINT, Tutor, bar_value,  # noqa: E402
                            kangaroo)
+
+# The tests don't depend on the machine translations of the phrases (phrases_mt.json and
+# its corrections, phrases_fix.json): every phrase and topic gets a stand-in
+# "translation", the Catalan text with a language tag. They check logic, not language.
+REAL_PHRASES, REAL_PROVENANCE, REAL_TOPICS, _ = phrases.build()
+for _key, _by_lang in phrases.PHRASES.items():
+    for _lang in phrases.LANGS:
+        if _lang != "cat":
+            _by_lang[_lang] = f"‹{_lang}› {_by_lang['cat']}"
+            phrases.PROVENANCE.setdefault(_key, {})[_lang] = "stand-in"
+phrases.TOPIC_NAMES.clear()
+phrases.TOPIC_NAMES.update({_key: {_lang: f"‹{_lang}› {_name}" for _lang in phrases.LANGS if _lang != "cat"}
+                            for _key, _name in topics.NAMES.items()})
 
 TRAIN, VAL = demo_data.make(90)
 SAMPLE = {"id": "s1", "level": 0,
@@ -54,6 +68,8 @@ class WithServers(unittest.TestCase):
     def tearDownClass(cls):
         cls.llm.shutdown()
         cls.embed.shutdown()
+        cls.llm.server_close()
+        cls.embed.server_close()
         CONFIG.clear()
         CONFIG.update(cls.saved)
 
@@ -422,6 +438,231 @@ class Leaks(unittest.TestCase):
     def test_length(self):
         self.assertEqual(self.check("Suma"), "curta")
         self.assertEqual(self.check("pensa " * 60), "llarga")
+        self.assertIsNone(self.check("先乘后减。"))                    # short in characters, not in words
+        self.assertEqual(self.check("乘"), "curta")
+
+    def test_numbers_written_in_words(self):
+        for words, value in [
+                ("vint-i-tres", "23"), ("noranta-set", "97"), ("dos-cents cinc", "205"),
+                ("treinta y dos", "32"), ("veintitrés", "23"), ("twenty-three", "23"),
+                ("three hundred and twelve", "312"),
+                ("dix-sept", "17"), ("soixante et onze", "71"), ("quatre-vingts", "80"),
+                ("quatre-vingt-dix", "90"), ("quatre-vingt-dix-sept", "97"), ("trois cent vingt", "320"),
+                ("ثلاثة وعشرون", "23"), ("أحد عشر", "11"), ("سبعة وتسعون", "97"), ("مئة وخمسة", "105"),
+                ("٩٧", "97"), ("۲۳", "23"), ("９７", "97"),
+                ("二十三", "23"), ("九十七", "97"), ("一百零五", "105"), ("两千", "2000"), ("十二", "12")]:
+            self.assertIn(value, leak.numbers(words), words)
+        # numbers next to each other aren't added up, and an article or an ordinal is no number
+        self.assertEqual(leak.numbers("suma tres i quatre, i mira les dues bosses"), {"2", "3", "4"})
+        self.assertEqual(leak.numbers("Il y a une solution et un seul cas"), set())
+        self.assertEqual(leak.numbers("第三步先算一下，再数一数"), set())
+        self.assertEqual(leak.numbers("36 cm²"), {"36"})             # the ² is no number
+
+    # For each of the six languages: hints that give the answer away (the letter C, the
+    # value 97, the third option) and method hints that don't. Written by the team.
+    OPTIONS_97 = {"A": "8", "B": "9", "C": "97", "D": "12", "E": "23"}
+    LEAKS = {
+        "cat": [("La resposta és la C", "lletra"), ("En queden noranta-set", "valor"),
+                ("Mira la tercera opció", "posicio")],
+        "esp": [("La respuesta es la C", "lletra"), ("Quedan noventa y siete manzanas", "valor"),
+                ("Mira la tercera opción", "posicio")],
+        "eng": [("The answer is C for sure", "lletra"), ("There are ninety-seven left", "valor"),
+                ("Look at the third option", "posicio")],
+        "fra": [("Je pense que c'est la C", "lletra"), ("la réponse est c bien sûr", "lletra"),
+                ("Il en reste quatre-vingt-dix-sept", "valor"), ("Regarde la troisième option", "posicio"),
+                ("C'est celle du milieu", "posicio")],
+        "arb": [("الجواب C بالتأكيد", "lletra"), ("الجواب هو ج طبعاً", "lletra"),
+                ("يبقى سبعة وتسعون تفاحة", "valor"), ("النتيجة هي ٩٧ تفاحة", "valor"),
+                ("انظر إلى الخيار الثالث", "posicio")],
+        "zho": [("答案是C", "lletra"), ("我觉得选Ｃ", "lletra"), ("还剩九十七个", "valor"),
+                ("一共９７个苹果", "valor"), ("看第三个选项", "posicio")],
+    }
+    CLEAN = {
+        "cat": ["Primer calcula quantes pomes hi ha en total i després resta.",
+                "Compta les bosses i multiplica."],
+        "esp": ["Primero calcula cuántas manzanas hay en total y después resta.",
+                "Cuenta las bolsas y multiplica."],
+        "eng": ["First work out how many apples there are in total, then subtract.",
+                "Count the bags and multiply."],
+        "fra": ["Calcule d'abord combien il y a de pommes en tout, puis soustrais.",
+                "C'est une multiplication, puis une soustraction.",
+                "Il y a 3 sacs : multiplie, puis enlève celles qu'elle mange."],
+        "arb": ["احسب أولاً عدد التفاحات كلها ثم اطرح ما أكلته.", "اضرب عدد الأكياس في عدد التفاحات."],
+        "zho": ["先算一共有多少个苹果，再减去吃掉的。", "先乘后减。", "把每袋的苹果数乘以袋数。"],
+    }
+
+    def test_six_languages(self):
+        self.assertEqual(set(self.LEAKS), set(phrases.LANGS))
+        self.assertEqual(set(self.CLEAN), set(phrases.LANGS))
+        for lang, cases in self.LEAKS.items():
+            for hint, reason in cases:
+                self.assertEqual(self.check(hint, "C", self.OPTIONS_97), reason, (lang, hint))
+                self.assertIsNotNone(leak.check_strict(hint, self.OPTIONS_97, self.TEXT), (lang, hint))
+        for lang, cases in self.CLEAN.items():
+            for hint in cases:
+                self.assertIsNone(self.check(hint, "C", self.OPTIONS_97), (lang, hint))
+                self.assertIsNone(leak.check_strict(hint, self.OPTIONS_97, self.TEXT), (lang, hint))
+                self.assertEqual(langs.guess(hint), lang, hint)
+
+    def test_option_written_in_words_in_another_script(self):
+        options = {"A": "星期一", "B": "星期二", "C": "星期三", "D": "星期四", "E": "星期五"}
+        self.assertEqual(self.check("我想应该是星期三吧，对不对", "C", options), "valor")
+        self.assertIsNone(self.check("数一数从今天起过了几天", "C", options))
+        options = {"A": "أحمر", "B": "أزرق", "C": "أخضر", "D": "أصفر", "E": "أسود"}
+        self.assertEqual(self.check("أظن أنه اللون الأخضر بالتأكيد", "C", options), "valor")
+        # a letter the problem itself uses is no answer
+        text = ["三角形的边长是 a、b 和 c，求周长。"]
+        self.assertIsNone(self.check("把 a、b 和 c 加起来就行了", "C", self.OPTIONS_97, text))
+
+    def test_french_preposition_a_is_no_option(self):
+        for label in "AC":
+            for hint in ("Pour trouver la réponse à ce problème, multiplie d'abord.",
+                         "Il faut ajouter à la fin ce qu'elle a mangé."):
+                self.assertIsNone(self.check(hint, label, self.OPTIONS_97), (label, hint))
+        self.assertEqual(self.check("la réponse est A", "A", self.OPTIONS_97), "lletra")
+        self.assertEqual(self.check("c'est la A", "A", self.OPTIONS_97), "lletra")
+
+    def test_ordinal_alone_is_a_position(self):
+        for hint in ("és la tercera", "Es la tercera, oi?", "it's the third one", "the third one",
+                     "c'est la troisième !", "la respuesta es la tercera"):
+            self.assertEqual(self.check(hint, "C", self.OPTIONS_97), "posicio", hint)
+        for hint in ("la tercera bossa té més pomes", "the third bag has more apples",
+                     "es la tercera vez que cuentas", "c'est la troisième boîte qui compte"):
+            self.assertIsNone(self.check(hint, "C", self.OPTIONS_97), hint)
+
+
+class Phrases(unittest.TestCase):
+    """The Kangaroo's templates (copilot/phrases.py), in the six languages."""
+    OPTIONS = {"A": "37", "B": "41", "C": "43", "D": "47", "E": "53"}
+    TEXT = ["How many legs do the animals have? There are 9 animals."]
+
+    def values(self, lang):
+        return {"label": "C", "answer": "B", "letter": "B", "sure": 60, "value": "43", "level": 3.5,
+                "topic": phrases.topic_name("geometria", lang), "llengua": langs.name("fra"),
+                "text": topics.method_hint("geometria", 0, lang)}
+
+    def test_every_phrase_in_every_language(self):
+        import string
+        fields = lambda text: {name for _, name, _, _ in string.Formatter().parse(text) if name}  # noqa: E731
+        for key, by_lang in phrases.PHRASES.items():
+            self.assertEqual(set(by_lang), set(phrases.LANGS), key)
+            for lang, text in by_lang.items():
+                self.assertEqual(fields(text), fields(by_lang["cat"]), (key, lang))
+                self.assertTrue(text.strip(), (key, lang))
+        for key in topics.NAMES:
+            self.assertEqual(set(phrases.TOPIC_NAMES[key]), set(phrases.LANGS) - {"cat"}, key)
+        self.assertLessEqual(phrases.AFTER_SOLVING | phrases.STUDENT_VOICE, set(phrases.PHRASES))
+        self.assertEqual(set(langs.BRIDGE), set(phrases.LANGS))
+        self.assertTrue(all(code in langs.NAMES and code in langs.ISO1 for code in langs.BRIDGE))
+
+    def test_falls_back_to_catalan(self):
+        self.assertEqual(phrases.phrase("correcte", "fra"), "‹fra› Correcte!")
+        self.assertEqual(phrases.phrase("correcte", "deu"), "Correcte!")           # no German
+        self.assertEqual(phrases.phrase("solucio", "esp", label="C", value="10"),
+                         "‹esp› La resposta és la C) 10.")
+        # a value missing even for Catalan: dots, never a raw {marker} on screen
+        self.assertEqual(phrases.phrase("solucio", "esp"), "La resposta és la …) ….")
+        self.assertEqual(phrases.topic_name("logica", "zho"), "‹zho› Lògica")
+        self.assertEqual(phrases.topic_name("logica", "deu"), topics.name("logica"))
+        self.assertEqual(phrases.phrase("avis_extern"), phrases.EXTERNAL_WARNING)
+
+    def test_machine_translations_file(self):
+        # A translation is only used with the same {markers} as its Catalan template
+        with tempfile.TemporaryDirectory() as folder:
+            path = os.path.join(folder, "mt.json")
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"phrases": {"solucio": {"fra": "La réponse est {label}) {value}.",
+                                                   "esp": "La respuesta es la {label}.",   # lost one
+                                                   "deu": "x {label} {value}", "arb": "  "},
+                                       "nope": {"fra": "x"}, "correcte": "broken"},
+                           "topics": {"logica": {"fra": "Logique"}, "nope": {"fra": "x"}},
+                           "failed": [["solucio", "zho"]]}, f)
+            found, names = phrases.load(path)
+            self.assertEqual(found, {"solucio": {"fra": "La réponse est {label}) {value}."}})
+            self.assertEqual(names, {"logica": {"fra": "Logique"}})
+            self.assertEqual(phrases.load(path + ".missing"), ({}, {}))
+        # The real file, when it is there: no phrase gives an option away before the answer
+        allowed = (phrases.AFTER_SOLVING | phrases.STUDENT_VOICE | phrases.OTHER_PROBLEM
+                   | {"extern_sense_opcions"})
+        for key, by_lang in REAL_PHRASES.items():
+            for lang, template in by_lang.items():
+                self.assertFalse(phrases.garbled(lang, template), (key, lang))
+                text = template.format(**self.values(lang))
+                if key not in allowed:
+                    self.assertNotIn(leak.check_strict(text, self.OPTIONS, self.TEXT),
+                                     ("lletra", "valor", "posicio"), (key, lang))
+
+    def test_real_files_cover_every_phrase(self):
+        # OPUS-MT plus the corrections: every phrase and topic exists in the five languages,
+        # and says where it came from. Not a check of the language itself (no native speaker).
+        for key in phrases.CATALAN:
+            self.assertEqual(set(REAL_PHRASES.get(key, {})), set(phrases.LANGS) - {"cat"}, key)
+            self.assertTrue(all(REAL_PROVENANCE[key].values()), key)
+        for key in topics.NAMES:
+            self.assertEqual(set(REAL_TOPICS.get(key, {})), set(phrases.LANGS) - {"cat"}, key)
+        with open(phrases.FIX_PATH, encoding="utf-8") as f:
+            fixes = json.load(f)["phrases"]
+        for key, by_lang in fixes.items():                  # every correction is used
+            for lang, text in by_lang.items():
+                self.assertEqual(REAL_PHRASES[key][lang], text, (key, lang))
+
+    def test_garbled_translations_are_not_used(self):
+        for lang, text in (("eng", "A lead: ascii{text} Mutz"), ("esp", "Parece de TABASA{topic}len"),
+                           ("arb", "دليل: Ascii {text} Mutz"), ("zho", "看起来像是Kolab {topic}节点"),
+                           ("zho", "我们一起解决问题?3⁄4 ̄ ̧B")):
+            self.assertTrue(phrases.garbled(lang, text), text)
+        for lang, text in (("eng", "A hint: «{text}»"), ("fra", "Un indice : « {text} »"),
+                           ("zho", "一个提示：「{text}」"), ("arb", "الإجابة: {label}) {value}"),
+                           ("zho", "我没能读出五个选项 A) … E)，所以没法批改你的答案。"),
+                           ("esp", "Es un problema de «{topic}».")):
+            self.assertFalse(phrases.garbled(lang, text), text)
+
+    def test_corrections_win_and_say_where_they_come_from(self):
+        with tempfile.TemporaryDirectory() as folder:
+            mt, fix = os.path.join(folder, "mt.json"), os.path.join(folder, "fix.json")
+            with open(mt, "w", encoding="utf-8") as f:
+                json.dump({"source": "opus-mt", "phrases": {
+                    "correcte": {"fra": "C'est exact !", "esp": "¡Correcto!"},
+                    "pista": {"eng": "A lead: ascii{text} Mutz"}}}, f)
+            with open(fix, "w", encoding="utf-8") as f:
+                json.dump({"source": "reviewer", "phrases": {
+                    "correcte": {"fra": "Correct !"}, "pista": {"eng": "A hint: «{text}»"}},
+                    "topics": {"logica": {"eng": "Logic"}}}, f)
+            texts, sources, names, name_sources = phrases.build(mt, fix)
+            self.assertEqual(texts, {"correcte": {"fra": "Correct !", "esp": "¡Correcto!"},
+                                     "pista": {"eng": "A hint: «{text}»"}})
+            self.assertEqual(sources, {"correcte": {"fra": "reviewer", "esp": "opus-mt"},
+                                       "pista": {"eng": "reviewer"}})
+            self.assertEqual((names, name_sources), ({"logica": {"eng": "Logic"}},
+                                                     {"logica": {"eng": "reviewer"}}))
+            # no corrections file: OPUS-MT alone, without the garbled one
+            texts, sources, _, _ = phrases.build(mt, fix + ".missing")
+            self.assertEqual(texts, {"correcte": {"fra": "C'est exact !", "esp": "¡Correcto!"}})
+        self.assertIsNone(phrases.provenance("correcte", "cat"))
+        self.assertIsNone(phrases.provenance("correcte", "deu"))       # Catalan fallback
+        self.assertEqual(phrases.provenance("correcte", "fra"), "stand-in")
+        self.assertEqual(phrases.phrase("solucio", "deu"), "La resposta és la …) ….")
+
+    def test_no_phrase_leaks_in_any_language(self):
+        # Every template, filled in, goes through the leak filter in its six versions.
+        # Only the phrases kept for after the answer may name a letter; "A) … E)" names
+        # them all, for an outside problem whose options couldn't be read.
+        allowed = (phrases.AFTER_SOLVING | phrases.STUDENT_VOICE | phrases.OTHER_PROBLEM
+                   | {"extern_sense_opcions"})
+        for key in phrases.PHRASES:
+            for lang in phrases.LANGS:
+                text = phrases.phrase(key, lang, **self.values(lang))
+                self.assertNotIn("{", text, (key, lang))
+                reason = leak.check_strict(text, self.OPTIONS, self.TEXT)
+                if key in allowed:
+                    continue
+                self.assertNotIn(reason, ("lletra", "valor", "posicio"), (key, lang, text))
+        # ... and the filter does see the letter in the ones that have it, in every language
+        for key in sorted(phrases.AFTER_SOLVING):
+            for lang in phrases.LANGS:
+                text = phrases.phrase(key, lang, **self.values(lang))
+                letter = "B" if key == "jo_he_dit" else "C"
+                self.assertEqual(leak.check(text, letter, self.OPTIONS, self.TEXT), "lletra", (key, lang))
 
     def test_evaluate(self):
         report = leak.evaluate([
@@ -432,6 +673,27 @@ class Leaks(unittest.TestCase):
              "text": SAMPLE["text"], "leak": True}])   # an indirect leak: the filter misses it
         self.assertEqual((report["leaks_caught"], report["leaks_missed"], report["clean_accepted"]),
                          (1, 1, 1))
+
+
+class PageWords(unittest.TestCase):
+    """The page's buttons, labels and notices (copilot/ui_text.py), in the six languages."""
+
+    def test_every_text_in_every_language(self):
+        self.assertEqual(ui_text.check(), [])
+        self.assertEqual(ui_text.LANGS, phrases.LANGS)
+        for key, by_lang in ui_text.TEXTS.items():
+            for lang in ("arb", "zho"):            # no Latin words left in Arabic or Chinese, but A-E
+                self.assertFalse(re.search(r"[A-Za-z]{2,}", re.sub(r"\{\w+\}|Enter|Shift", "", by_lang[lang])),
+                                 (key, lang))
+
+    def test_the_page_uses_only_known_keys(self):
+        with open(os.path.join(ROOT, "app", "index.html"), encoding="utf-8") as f:
+            html = f.read()
+        marked = set(re.findall(r'data-ui(?:-aria)?="(\w+)"', html))
+        self.assertLessEqual(marked, set(ui_text.TEXTS), marked - set(ui_text.TEXTS))
+        # every key is used: quoted in the page, or built there ("level" + i, "stage" + key)
+        used = set(re.findall(r'"(\w+)"', html)) | {f"level{i}" for i in range(8)} | {f"stage{i}" for i in (1, 2, 3)}
+        self.assertEqual(set(ui_text.TEXTS) - used, set())          # nothing in the table goes unused
 
 
 class Ratings(unittest.TestCase):
@@ -700,6 +962,301 @@ class TutorFlow(WithServers):
         self.assertEqual(view["phase"], "empty")
         self.assertIn("català", view["messages"][-1]["text"])
 
+    def machine_french(self, where="1 = 1"):
+        """French for some problems, as prep/import_translations.py leaves it."""
+        self.store.run("INSERT INTO texts (id, lang, text, options, source) SELECT id, 'fra', "
+                       f"'FR ' || text, options, 'opus-mt' FROM texts WHERE lang = 'esp' AND {where}")
+
+    def test_no_silent_switch_to_catalan(self):
+        # (a) no problem at all in the student's language: said on every problem
+        self.tutor.start("Test", "fra", 1)
+        before = dict(self.tutor.student)
+        view = self.tutor.next()
+        self.assertEqual((view["problem"]["shown"], view["problem"]["origen"]), ("cat", None))
+        notice = view["messages"][-1]
+        self.assertEqual(notice["text"], "Ja no queden problemes en Français. Continuem en català.")
+        self.assertEqual(notice["origen"]["lang"], "fra")           # and in French too
+        self.tutor.answer(self.tutor.current["label"])
+        last = self.store.attempts()[-1]
+        self.assertEqual((last["lang"], last["shown"], last["origin_lang"]), ("cat", "cat", "fra"))
+        self.assertGreater(self.tutor.student["elo_cat"], before["elo_cat"])
+        self.assertEqual(self.tutor.student["elo_origen"], before["elo_origen"])
+        # (b) a given problem that has no text in the student's language
+        some = english(TRAIN)[3]["id"]
+        self.machine_french(f"id != '{some}'")
+        view = self.tutor.next(some)
+        self.assertEqual((view["problem"]["shown"], view["problem"]["origen"]), ("cat", None))
+        self.assertEqual(view["messages"][-1]["text"],
+                         "Aquest problema encara no està traduït a la teva llengua.")
+        self.assertEqual(self.tutor.current["counts_for"], "cat")
+        view = self.tutor.next()                                    # the others have French
+        self.assertEqual(view["problem"]["shown"], "both")
+        self.assertEqual(len(view["messages"]), 1)                  # no notice
+
+    def test_machine_translation_is_marked(self):
+        self.machine_french()
+        view = self.tutor.start("Test", "fra", 1)
+        self.assertEqual(view["languages"], ["cat", "arb", "eng", "esp", "fra", "zho"])
+        self.assertEqual(view["bank_languages"], ["cat", "eng", "esp", "fra"])
+        self.assertEqual(view["lang_names"]["arb"], {"name": "العربية", "iso": "ar"})
+        view = self.tutor.next()
+        self.assertEqual(view["problem"]["origen_source"], "opus-mt")
+        self.assertTrue(view["problem"]["origen"].startswith("FR "))
+        self.tutor.set_language("esp")                              # M3Kang's own text
+        self.assertEqual(self.tutor.view()["problem"]["origen_source"], "official")
+
+    def test_options_in_the_student_language(self):
+        words = {"A": "uno", "B": "dos", "C": "tres", "D": "cuatro", "E": "cinco"}
+        self.store.run("UPDATE texts SET options = ? WHERE lang = 'esp'", (json.dumps(words),))
+        self.tutor.start("Test", "esp", 1)
+        view = self.tutor.next()                                    # stage 1: both
+        self.assertEqual(view["problem"]["options_origen"], words)
+        self.assertEqual(set(view["problem"]["options"]), set("ABCDE"))
+        self.assertNotEqual(view["problem"]["options"], words)      # the Catalan ones stay
+        label = self.tutor.current["label"]
+        self.tutor.answer(self.wrong_letter())
+        for _ in range(5):
+            view = self.tutor.help()
+        solution = view["messages"][-1]
+        self.assertIn(f"{label}) {self.tutor.current['options'][label]}", solution["text"])
+        self.assertEqual(solution["origen"]["text"], f"‹esp› La resposta és la {label}) {words[label]}.")
+        self.tutor.student["etapa"] = 2
+        seen = set()
+        for _ in range(6):                                          # stage 2
+            view = self.tutor.next()
+            problem = view["problem"]
+            seen.add(problem["shown"])
+            if problem["shown"] == "cat":
+                self.assertIsNone(problem["options_origen"])        # behind the button
+                self.assertEqual(self.tutor.reveal()["problem"]["options_origen"], words)
+            else:
+                self.assertEqual(problem["options"], words)         # only the student's language
+                self.assertIsNone(problem["options_origen"])
+            self.tutor.answer(self.wrong_letter())
+        self.assertEqual(seen, {"cat", "origen"})
+        # a hint that gives the value in the student's language is a leak too
+        self.tutor.student["etapa"] = 1
+        self.teachable()
+        value = words[self.tutor.current["label"]]
+        view = self.tutor.hint(f"Fíjate bien, al final sale {value} seguro")
+        self.assertEqual(view["messages"][-1]["kind"], "fuita")
+
+    def test_switching_language_keeps_each_state(self):
+        self.machine_french()
+        self.tutor.start("Test", "esp", 1)
+        for _ in range(4):
+            self.tutor.next()
+            self.tutor.answer(self.tutor.current["label"])
+        spanish = dict(self.tutor.student)
+        self.assertEqual(spanish["etapa"], 2)
+        view = self.tutor.set_language("fra")                       # a new language starts over
+        self.assertEqual((view["student"]["lang_origen"], view["student"]["etapa"]), ("fra", 1))
+        self.assertEqual(self.tutor.student["elo_origen"], elo.initial_student(1))
+        self.assertEqual(self.tutor.student["elo_cat"], spanish["elo_cat"])     # one for all
+        view = self.tutor.next()
+        self.assertEqual((view["problem"]["shown"], view["problem"]["origen_lang"]), ("both", "fra"))
+        problem_id = view["problem"]["id"]
+        view = self.tutor.set_language("esp")                       # not answered: shown again
+        self.assertEqual((view["phase"], view["problem"]["id"]), ("solving", problem_id))
+        self.assertEqual(view["student"]["etapa"], 2)               # where Spanish was left
+        self.assertEqual(self.tutor.student["elo_origen"], spanish["elo_origen"])
+        self.tutor.set_language("fra")
+        self.tutor.answer(self.tutor.current["label"])
+        self.assertEqual(self.tutor.student["streak"], 1)
+        self.assertEqual([a["origin_lang"] for a in self.store.attempts()], ["esp"] * 4 + ["fra"])
+        self.tutor.set_language("esp")
+        self.assertEqual((self.tutor.student["etapa"], self.tutor.student["streak"]), (2, 0))
+        self.tutor.set_language("fra")
+        self.assertEqual((self.tutor.student["etapa"], self.tutor.student["streak"]), (1, 1))
+        self.assertEqual({row["lang"]: row["etapa"] for row in self.tutor.teacher()["languages"]},
+                         {"esp": 2, "fra": 1})
+        view = self.tutor.set_language("cat")                       # "I already speak Catalan"
+        self.assertEqual((view["student"]["etapa"], self.tutor.student["etapa"]), (None, 3))
+        self.assertEqual(self.tutor.next()["problem"]["shown"], "cat")
+        self.assertEqual(self.tutor.set_language("xx")["student"]["lang_origen"], "")   # unknown
+        self.tutor.busy = True                                      # not while the Kangaroo thinks
+        self.assertEqual(self.tutor.set_language("esp")["student"]["lang_origen"], "")
+        self.tutor.busy = False
+        # a new session finds the languages as they were left
+        again = Tutor(self.store, ask=self.ask, background=False)
+        again.set_language("esp")
+        self.assertEqual((again.student["etapa"], again.student["elo_origen"]),
+                         (2, spanish["elo_origen"]))
+
+    def test_switching_a_solved_problem_removes_previous_language(self):
+        self.tutor.start("Test", "esp", 1)
+        self.teachable()
+        self.assertTrue(any("origen" in m for m in self.tutor.view()["messages"]))
+        view = self.tutor.set_language("cat")
+        self.assertEqual(view["problem"]["shown"], "cat")
+        for key in ("origen", "origen_lang", "options_origen", "topic_origen"):
+            self.assertIsNone(view["problem"][key], key)
+        self.assertTrue(all("origen" not in m for m in view["messages"]))
+        view = self.tutor.set_language("fra")
+        self.assertTrue(all(m.get("origen", {}).get("lang") != "esp" for m in view["messages"]))
+
+    def test_missing_translated_options_are_explicit(self):
+        self.store.run("UPDATE texts SET options = '{}' WHERE lang = 'esp'")
+        self.tutor.start("Test", "esp", 1)
+        view = self.tutor.next()
+        self.assertTrue(view["problem"]["options_origen_missing"])
+        self.assertEqual(set(view["problem"]["options"]), set("ABCDE"))
+        self.assertFalse(self.tutor.set_language("cat")["problem"]["options_origen_missing"])
+
+    def test_catalan_without_options_keeps_available_options(self):
+        self.store.run("UPDATE texts SET options = '{}' WHERE lang = 'cat'")
+        self.tutor.start("Test", "esp", 1)
+        self.assertEqual(set(self.tutor.next()["problem"]["options"]), set("ABCDE"))
+
+    def test_similar_problem_follows_the_language_bridge(self):
+        for lang in ("eng", "esp", "fra", "arb", "zho"):
+            self.store.run("INSERT OR IGNORE INTO texts (id, lang, text, options, source) "
+                           "SELECT id, ?, text, options, 'stand-in' FROM texts WHERE lang='cat'", (lang,))
+            for stage in (1, 2, 3):
+                self.tutor.start("Test", lang, 1, reset=True)
+                self.tutor.student["etapa"] = stage
+                self.tutor.next()
+                for _ in range(4):
+                    view = self.tutor.help()
+                side = view["problem"]["side"]
+                self.assertIsNotNone(side)
+                self.assertIsNone(side["label"])
+                self.assertEqual(bool(side["origen"]), stage == 1)
+                if stage == 2:
+                    self.assertTrue(self.tutor.reveal()["problem"]["side"]["origen"])
+                view = self.tutor.side_reveal()
+                self.assertIsNotNone(view["problem"]["side"]["label"])
+                self.assertEqual("origen" in view["messages"][-1], stage < 3)
+
+    def test_promotion_to_stage_three_hides_existing_translations(self):
+        self.tutor.start("Test", "esp", 1)
+        self.tutor.student.update(etapa=2, streak=3)
+        self.tutor.next()
+        self.tutor.reveal()
+        # Reveal some chat, then make the answer count as unaided, to exercise the
+        # presentation of a current problem at the instant it reaches stage three.
+        self.assertTrue(any("origen" in m for m in self.tutor.view()["messages"]))
+        self.tutor.current["revealed"] = False
+        view = self.tutor.answer(self.tutor.current["label"])
+        self.assertEqual(view["student"]["etapa"], 3)
+        self.assertIsNone(view["problem"]["origen"])
+        self.assertTrue(all("origen" not in m for m in view["messages"]))
+
+    def test_already_speaks_catalan(self):
+        for choice in ("cat", ""):
+            view = self.tutor.start("Test", choice, 1, reset=True)
+            self.assertEqual((view["student"]["etapa"], view["student"]["lang_origen"]), (None, ""))
+            self.assertEqual(self.tutor.student["etapa"], 3)        # no bridge at all
+            view = self.tutor.next()
+            self.assertEqual((view["problem"]["shown"], view["problem"]["origen"]), ("cat", None))
+            self.assertFalse(view["problem"]["can_reveal"])
+            self.tutor.answer(self.wrong_letter())
+            view = self.tutor.help()
+            self.assertTrue(all("origen" not in m for m in view["messages"]))
+            self.assertEqual(self.store.attempts()[-1]["origin_lang"], "")
+
+    def test_the_kangaroo_speaks_the_student_language(self):
+        self.machine_french()
+        # everything said, but a similar problem the bank doesn't have in that language:
+        # nothing is translated while the tutor runs
+        in_bank = lambda: self.tutor.student["lang_origen"] in self.store.languages()   # noqa: E731
+        templates = lambda view: [m for m in view["messages"]       # noqa: E731
+                                  if m["kind"] != "exemple" or in_bank()]
+        for lang in ("eng", "esp", "fra", "arb", "zho"):            # stage 1: always both
+            view = self.tutor.start("Test", lang, 1, reset=True)
+            self.assertEqual(view["messages"][0]["origen"]["text"], phrases.phrase("hola", lang))
+            self.tutor.next()
+            self.tutor.answer(self.wrong_letter())
+            for _ in range(4):
+                view = self.tutor.help()
+            said = templates(view)
+            self.assertGreaterEqual(len(said), 6)
+            for message in said:
+                self.assertEqual(message["origen"]["lang"], lang, message["text"])
+                self.assertNotEqual(message["origen"]["text"], message["text"])
+                # translated by a machine: the page marks it, and says by whom. A similar
+                # problem's own text is marked only when it isn't M3Kang's (official) one.
+                if message["kind"] != "exemple":
+                    self.assertTrue(message["origen"]["source"], message["text"])
+                elif lang == "fra":
+                    self.assertEqual(message["origen"]["source"], "opus-mt")
+                else:
+                    self.assertIsNone(message["origen"]["source"])
+            method = next(m for m in said if "És un problema de" in m["text"])
+            self.assertEqual(method["origen"]["source"], "llm (back-translated), stand-in")
+        self.tutor.start("Test", "fra", 1, reset=True)              # stage 2: behind the button
+        self.tutor.student["etapa"] = 2
+        view = self.tutor.next()
+        self.assertEqual(view["problem"]["shown"], "cat")
+        self.tutor.answer(self.wrong_letter())
+        view = self.tutor.help()
+        self.assertTrue(all("origen" not in m for m in view["messages"]))
+        self.assertTrue(view["problem"]["can_reveal"])
+        view = self.tutor.reveal()
+        self.assertTrue(all(m["origen"]["lang"] == "fra" for m in templates(view)))
+        view = self.tutor.answer(self.tutor.current["label"])       # said after the click too
+        self.assertEqual(view["messages"][-1]["origen"]["lang"], "fra")
+        self.tutor.student["streak"] = 3                            # one more and it's stage 3
+        view = self.tutor.next()
+        self.assertTrue(view["problem"]["can_reveal"])
+        view = self.tutor.answer(self.tutor.current["label"])
+        self.assertEqual(self.tutor.student["etapa"], 3)
+        change = next(m for m in view["messages"] if m["text"].startswith("Ja no et cal el botó"))
+        self.assertNotIn("origen", change)                       # stage 3 starts immediately
+        view = self.tutor.next()                                    # stage 3: Catalan only
+        self.tutor.answer(self.wrong_letter())
+        view = self.tutor.help()
+        self.assertTrue(all("origen" not in m for m in view["messages"]))
+        self.assertFalse(view["problem"]["can_reveal"])
+
+    def test_no_template_gives_the_answer_before_it_is_solved(self):
+        self.machine_french()
+        for lang in ("eng", "esp", "fra", "arb", "zho"):
+            self.tutor.start("Test", lang, 1, reset=True)
+            self.tutor.next()
+            current = self.tutor.current
+            self.tutor.answer(self.wrong_letter())
+            for _ in range(3):                                      # every rung before the solution
+                view = self.tutor.help()
+            statements = [current["model"]["text"], current["cat"]["text"]]
+            for message in view["messages"]:
+                if message["who"] == "alumne" or message["kind"] == "exemple":
+                    continue                    # the student's own answer; another problem's answer
+                for text in (message["text"], message.get("origen", {}).get("text", "")):
+                    for options in (current["options"], current["model"]["options"]):
+                        self.assertNotIn(leak.check(text, current["label"], options, statements),
+                                         ("lletra", "valor", "posicio"), text)
+            self.assertIsNone(view["problem"]["label"])
+            # a phrase with the answer in it is refused until then, whoever asks for it
+            before = len(self.tutor.messages)
+            for key in sorted(phrases.AFTER_SOLVING):
+                self.tutor._tell("cangur", (key, {"label": current["label"], "answer": "A",
+                                                  "sure": 50, "value": "x"}))
+            self.assertEqual(len(self.tutor.messages), before)
+
+    def test_hints_in_any_of_the_six_languages(self):
+        self.tutor.start("Test", "fra", 1)
+        self.teachable()
+        current = self.tutor.current
+        self.store.set_meta("tau", "100")                           # nothing convinces
+        calls = len(self.model.calls)
+        label, value = current["label"], current["options"][current["label"]]
+        for hint in (f"Je pense que c'est la {label}", f"答案是{label}", f"الجواب هو {label} بالتأكيد"):
+            view = self.tutor.hint(hint)
+            self.assertEqual(view["messages"][-1]["kind"], "fuita", hint)
+            self.assertEqual(view["messages"][-1]["origen"]["lang"], "fra")   # told in French too
+        self.assertEqual((len(self.model.calls), current["tries"]), (calls, 0))
+        view = self.tutor.hint("Regarde bien ce que le problème demande et fais un dessin.")
+        self.assertEqual(current["tries"], 1)                       # it reached the Kangaroo
+        self.assertEqual(self.model.calls[-1]["hint"],              # as written: nothing is translated
+                         "Regarde bien ce que le problème demande et fais un dessin.")
+        view = self.tutor.hint("先画一张图，再把已知条件标上去。")
+        self.assertEqual(current["tries"], 2)
+        self.assertEqual(self.store.hints(), [])  # main keeps no rejected or unconvincing text
+        self.assertEqual(self.store.hint_counts()["rejected"], {"lletra": 3})
+        self.assertEqual(self.store.hint_counts()["not_convinced"], 2)
+        self.assertIsNotNone(value)
+
     def test_hint_limit_is_sent_to_the_page(self):
         self.assertEqual(self.tutor.view()["hint_max_chars"], int(CONFIG.get("HINT_MAX_CHARS", 200)))
 
@@ -796,6 +1353,16 @@ class TutorFlow(WithServers):
         gap = self.tutor.teacher()["gap"]
         self.assertFalse(gap["ready"])                             # too few answers to say
 
+    def test_stage_three_is_only_catalan(self):
+        # no problem shown only in the home language once the bridge is over
+        self.tutor.start("Test", "esp", 1)
+        self.tutor.student["etapa"] = 3
+        for _ in range(7):
+            view = self.tutor.next()
+            self.assertEqual((view["problem"]["shown"], view["problem"]["origen"]), ("cat", None))
+            self.assertEqual(self.tutor.current["counts_for"], "cat")
+            self.tutor.answer(self.tutor.current["label"])
+
     def method_message(self, view):
         return next(m for m in reversed(view["messages"]) if m["text"].startswith("És un problema de"))
 
@@ -813,7 +1380,10 @@ class TutorFlow(WithServers):
         topic = self.tutor.current["row"]["topic"]
         message = self.method_message(self.ask_for_method())
         self.assertIn(topics.method_hint(topic, 0), message["text"])
-        self.assertEqual(message["origen"], {"lang": "esp", "text": topics.method_hint(topic, 0, "esp")})
+        self.assertEqual(message["origen"]["lang"], "esp")
+        self.assertEqual(message["origen"]["text"],                # the lead is translated too
+                         "‹esp› És un problema de «" + phrases.topic_name(topic, "esp") + "». "
+                         + topics.method_hint(topic, 0, "esp"))
 
         self.tutor.student["etapa"] = 2                            # stage 2: behind the button
         for _ in range(5):
@@ -1059,13 +1629,20 @@ class Scripts(WithServers):
                         view = call("/api/side-answer", {"letter": letter})
                         self.assertIsNotNone(view["problem"]["side"]["label"])
                 self.assertEqual(call("/api/teacher")["attempts"], 1)
+                view = call("/api/language", {"lang": "esp"})
+                self.assertEqual((view["student"]["lang_origen"], view["student"]["etapa"]), ("esp", 1))
+                self.assertEqual(call("/api/language", {"lang": "cat"})["student"]["etapa"], None)
                 with urllib.request.urlopen(base + "/", timeout=10) as page:
                     html = page.read().decode("utf-8")
                 self.assertIn("Ensenya el Cangur", html)
+                ui = call("/api/ui")                      # the page's own words, in the six languages
+                self.assertEqual(ui["langs"], list(phrases.LANGS))
+                self.assertEqual(set(ui["texts"]), set(ui_text.TEXTS))
                 self.assertNotIn("http://", html.replace("http://127.0.0.1", "").replace("http://www.w3.org/2000/svg", ""))   # nothing from the internet (the SVG namespace is a name, not a request)
                 self.assertNotIn("https://", html)
             finally:
                 server.shutdown()
+                server.server_close()
                 store.close()
 
 
@@ -1484,6 +2061,194 @@ class OcrPass2(unittest.TestCase):
         rows = self.rows(dup, dup)
         out = self.o.decide(rows, self.o.classify_targets(rows), {})
         self.assertTrue(out[("p", "cat")]["options_suspect"])
+
+
+# --- the language bridge: importing machine translations (invented problems only) ---
+
+import import_translations  # noqa: E402
+
+BRIDGE_OPTIONS = {"A": "8", "B": "9 pomes", "C": "10", "D": "12", "E": "14"}
+BRIDGE_CAT = "1. L'Anna té 3 bosses amb 4 pomes a cada bossa. Es menja 2 pomes. Quantes en queden?"
+BRIDGE_ENG = "1. Anna has 3 bags with 4 apples in each bag. She eats 2 apples. How many are left?"
+BRIDGE_ESP = "1. Anna tiene 3 bolsas con 4 manzanas en cada bolsa. Se come 2 manzanas. ¿Cuántas quedan?"
+
+
+def bridge_store(path, ids=("b1", "b2", "b3")):
+    store = Store(path)
+    for problem_id in ids:
+        store.run("INSERT INTO problems (id, level, topic, label, text_only, eligible, elo) "
+                  "VALUES (?, 0, 'aritmetica', 'C', 1, 1, 1000)", (problem_id,))
+        for lang, text in (("cat", BRIDGE_CAT), ("eng", BRIDGE_ENG)):
+            store.run("INSERT INTO texts (id, lang, text, options) VALUES (?, ?, ?, ?)",
+                      (problem_id, lang, text, json.dumps(BRIDGE_OPTIONS)))
+    return store
+
+
+def translated(problem_id="b1", language="es", text=BRIDGE_ESP, **fields):
+    options = dict(BRIDGE_OPTIONS, B="9 manzanas")
+    return {"id": problem_id, "language": language, "text": text, "options": options, **fields}
+
+
+class Translations(unittest.TestCase):
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.path = os.path.join(folder.name, "tutor.db")
+        self.store = bridge_store(self.path)
+        self.addCleanup(self.store.close)
+
+    def run_import(self, rows, **kwargs):
+        return import_translations.import_translations(self.store, rows, **kwargs)
+
+    def test_codes_of_two_and_three_letters(self):
+        report = self.run_import([
+            translated("b1", "es", translation_suspect=False, language_original="eng"),
+            translated("b2", "esp", translation_source="haiku"),
+            translated("b3", "ZH", text="1. 安娜有3个袋子，每袋4个苹果。她吃了2个。还剩几个？"),
+            translated("b1", "deu"), translated("b2", "xx")])
+        self.assertEqual(report["imported"], {"esp:haiku": 1, "esp:opus-mt": 1, "zho:machine": 1})
+        self.assertEqual(report["skipped"], {"language_not_allowed": 2})     # deu needs --allow
+        self.assertEqual(self.store.languages(), ["cat", "eng", "esp", "zho"])
+        self.assertEqual(self.store.text("b1", "esp")["source"], "opus-mt")
+        self.assertEqual(self.store.text("b2", "esp")["source"], "haiku")
+        self.assertEqual(self.store.text("b1", "cat")["source"], "official")
+        self.assertEqual(report["missing"]["esp"], {"eligible": 3, "with_text": 2, "without_text": 1})
+        self.assertEqual(report["missing"]["fra"]["with_text"], 0)
+        report = self.run_import([translated("b1", "deu")], allowed=("deu",))
+        self.assertEqual(report["imported"], {"deu:machine": 1})
+
+    def test_options_numbers_copied_words_translated(self):
+        row = translated()
+        row["options"]["A"] = "8 "                       # a numeric option comes back untouched
+        self.run_import([row])
+        self.assertEqual(self.store.text("b1", "esp")["options"],
+                         dict(BRIDGE_OPTIONS, B="9 manzanas"))
+
+    def test_which_translation_is_kept(self):
+        from_eng = translated(text=BRIDGE_ESP + " (eng)", language_original="eng",
+                              text_original=BRIDGE_ENG, translation_suspect=False)
+        from_cat = translated(text=BRIDGE_ESP + " (cat)", language_original="cat",
+                              text_original=BRIDGE_CAT, translation_suspect=False)
+        self.run_import([from_eng, from_cat])
+        self.assertIn("(cat)", self.store.text("b1", "esp")["text"])     # esp: from Catalan
+        self.run_import([dict(from_eng, language="zh"), dict(from_cat, language="zh")],
+                        allowed=("zho",))
+        self.assertIn("(eng)", self.store.text("b1", "zho")["text"])     # zho: from English
+        # a suspect row loses to a clean one, and is only used when there is nothing else
+        self.run_import([dict(from_cat, translation_suspect=True, text=BRIDGE_ESP + " (dubtosa)"),
+                         from_eng])
+        self.assertIn("(eng)", self.store.text("b1", "esp")["text"])
+        report = self.run_import([dict(from_cat, id="b2", translation_suspect=True)])
+        self.assertEqual(report["imported"], {"esp:opus-mt": 1})
+
+    def test_translations_that_change_the_maths_are_refused(self):
+        bad_option = translated("b2")
+        bad_option["options"]["C"] = "11"
+        fewer = translated("b3")
+        del fewer["options"]["E"]
+        report = self.run_import([
+            translated("b1", text=BRIDGE_ESP.replace("4 manzanas", "5 manzanas")),
+            bad_option, fewer,
+            translated("b1", "fr", text="1. 3 4 2"),                # far too short
+            translated("b2", "fr", text="   "),
+            translated("nope"),
+            translated("b3", "cat")])                               # never over an official text
+        self.assertEqual(report["rejected"], {"esp:numbers": 1, "esp:option_value": 1,
+                                              "esp:option_count": 1, "fra:length": 1, "fra:empty": 1})
+        self.assertEqual(report["skipped"], {"unknown_problem": 1, "language_not_allowed": 1})
+        self.assertEqual(report["imported"], {})
+        self.assertEqual(self.store.languages(), ["cat", "eng"])
+        self.assertEqual(self.store.text("b3", "cat")["text"], BRIDGE_CAT)
+
+    def test_import_twice_and_dry_run(self):
+        rows = [translated("b1"), translated("b2", "fr", text=BRIDGE_ESP)]
+        report = self.run_import(rows, dry_run=True)
+        self.assertEqual(sum(report["imported"].values()), 2)
+        self.assertEqual(self.store.languages(), ["cat", "eng"])           # nothing written
+        self.run_import(rows)
+        first = self.store.rows("SELECT * FROM texts ORDER BY id, lang")
+        again = self.run_import(rows)
+        self.assertEqual(again["imported"], {"esp:machine": 1, "fra:machine": 1})
+        self.assertEqual(self.store.rows("SELECT * FROM texts ORDER BY id, lang"), first)
+        self.assertEqual(again["missing"]["esp"]["with_text"], 1)
+
+    def test_another_translator_is_kept_unless_replace(self):
+        # A pilot translated by another tool stays: a new OPUS-MT run doesn't overwrite it
+        self.run_import([translated("b1", translation_source="haiku", text=BRIDGE_ESP + " (h)")])
+        opus = translated("b1", text=BRIDGE_ESP + " (o)", translation_suspect=False)
+        report = self.run_import([opus, translated("b2", translation_suspect=False)])
+        self.assertEqual(report["imported"], {"esp:opus-mt": 1})
+        self.assertEqual(report["skipped"], {"esp:kept_haiku": 1})
+        self.assertEqual(self.store.text("b1", "esp")["source"], "haiku")
+        self.assertEqual(report["missing"]["esp"]["with_text"], 2)
+        report = self.run_import([opus], replace=True)
+        self.assertEqual(report["imported"], {"esp:opus-mt": 1})
+        self.assertEqual(self.store.text("b1", "esp")["source"], "opus-mt")
+
+    def test_script_reports_counts_only(self):
+        source = os.path.join(os.path.dirname(self.path), "es.jsonl")
+        with open(source, "w", encoding="utf-8") as f:
+            f.write(json.dumps(translated("b1"), ensure_ascii=False) + "\n")
+        report = os.path.join(os.path.dirname(self.path), "report.json")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(import_translations.main([source, "--db", self.path, "--report", report]), 0)
+        with open(report, encoding="utf-8") as f:
+            written = f.read()
+        for text in (out.getvalue(), written):
+            self.assertNotIn("manzanas", text)                           # no problem text
+        self.assertEqual(json.loads(written)["imported"], {"esp:machine": 1})
+        with self.assertRaises(SystemExit):
+            import_translations.main([source + ".missing", "--db", self.path])
+
+    def test_demo_bridge_passes_the_checks(self):
+        # The invented problems in French, Arabic and Chinese (tests/demo_data.py --bridge):
+        # same numbers as the originals, so the import refuses none.
+        folder = os.path.dirname(self.path)
+        demo_data.write(folder, 30, bridge=True)
+        path = os.path.join(folder, "demo.db")
+        built = build_db(path, 1)                 # no embedding server: neighbours by rating
+        self.assertEqual(built.returncode, 0, built.stderr)
+        store = Store(path)
+        self.addCleanup(store.close)
+        with open(os.path.join(folder, "bridge.jsonl"), encoding="utf-8") as f:
+            rows = [json.loads(line) for line in f]
+        report = import_translations.import_translations(store, rows)
+        self.assertEqual(report["imported"], {"arb:demo": 30, "fra:demo": 30, "zho:demo": 30})
+        self.assertEqual(report["rejected"], {})
+        self.assertEqual(store.languages(), ["arb", "cat", "eng", "esp", "fra", "zho"])
+
+    def test_old_database_is_migrated(self):
+        import sqlite3
+        path = self.path + ".old"
+        old = sqlite3.connect(path)
+        old.executescript("""
+            CREATE TABLE texts (id TEXT, lang TEXT, text TEXT, options TEXT, PRIMARY KEY (id, lang));
+            CREATE TABLE student (id INTEGER PRIMARY KEY, name TEXT, lang_origen TEXT, level INTEGER,
+                elo_cat REAL, elo_origen REAL, etapa INTEGER, streak INTEGER);
+            CREATE TABLE attempts (n INTEGER PRIMARY KEY AUTOINCREMENT, student INTEGER,
+                problem_id TEXT, lang TEXT, shown TEXT, answer TEXT, correct INTEGER,
+                revealed INTEGER, helps INTEGER, seconds REAL, ts REAL);
+            INSERT INTO texts VALUES ('b1', 'cat', 'text', '{}');
+            INSERT INTO student VALUES (1, 'Test', 'esp', 1, 1100, 1180, 2, 3);
+            INSERT INTO attempts (student, problem_id, lang, shown, answer, correct, revealed, helps)
+                VALUES (1, 'b1', 'origen', 'both', 'C', 1, 0, 0), (1, 'b2', 'cat', 'cat', 'C', 1, 0, 0);
+        """)
+        old.commit()
+        old.close()
+        for _ in range(2):                      # opening it twice changes nothing more
+            store = Store(path)
+            self.assertEqual(store.text("b1", "cat")["source"], "official")
+            self.assertEqual([a["origin_lang"] for a in store.attempts()], ["esp", "esp"])
+            self.assertEqual(store.student_langs(), [{"student": 1, "lang": "esp", "elo": 1180,
+                                                      "etapa": 2, "streak": 3}])
+            student = store.student()
+            store.save_student(student)             # an insert by position would break here
+            store.add_attempt(1, "b3", "cat", "cat", "A", False, False, 0, 1.0)
+            store.run("DELETE FROM attempts WHERE problem_id = 'b3'")
+            store.add_hint("b1", 1, "une piste", None, False, lang="fra")
+            self.assertEqual(store.hints()[-1]["lang"], "fra")
+            store.close()
 
 
 if __name__ == "__main__":

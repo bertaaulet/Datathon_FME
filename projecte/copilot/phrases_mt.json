@@ -1,0 +1,417 @@
+{
+ "failed": [
+  [
+   "extern_obert",
+   "arb"
+  ],
+  [
+   "extern_obert_nivell",
+   "arb"
+  ],
+  [
+   "extern_sense_opcions",
+   "arb"
+  ],
+  [
+   "no_queden_origen",
+   "arb"
+  ],
+  [
+   "exemple_resposta",
+   "arb"
+  ],
+  [
+   "es_un_problema_de",
+   "arb"
+  ]
+ ],
+ "phrases": {
+  "ara_ho_veig": {
+   "arb": "آه، الآن أرى ذلك! ثمّ هو {label}.",
+   "eng": "Aah, now I see it! So it's {label}.",
+   "esp": "¡Aah, ahora lo veo! Entonces es {label}.",
+   "fra": "Aaah, je vois ça ! Alors, c'est {label}.",
+   "zho": "啊,现在我看到了!所以,这是{label}。"
+  },
+  "avis_extern": {
+   "arb": "لا يمكننا تأمين الإجابات للمشاكل الخارجية. تأكد من الحل للمصادر الرسمية أو لمعلمك.",
+   "eng": "We can't secure the answers for external problems. Confirm the solution to official sources or your teacher.",
+   "esp": "No podemos asegurar las respuestas para problemas externos. Confirma la solución en fuentes oficiales o con tu profesor.",
+   "fra": "On ne peut pas garantir les réponses aux problèmes externes. Confirmez la solution dans des sources officielles ou avec votre professeur.",
+   "zho": "我们无法找到解决外部问题的答案确认对官方消息来源或你的老师的解决方案。"
+  },
+  "banc_acabat": {
+   "arb": "لم يتبقى أي مشكلة لفعلها لقد انتهيت من البنك!",
+   "eng": "There's no trouble left to be done. You're done with the bank!",
+   "esp": "No quedan problemas para hacer. ¡Terminaste el banco!",
+   "fra": "Il n'y a plus de problèmes à faire. T'as fini ta banque !",
+   "zho": "没有什么麻烦可做。你对银行没兴趣了!"
+  },
+  "cangur_no_pensa": {
+   "arb": "لا أستطيع التفكير في الأمر",
+   "eng": "Can't think about it.",
+   "esp": "El Canguro no ha podido pensar (el modelo no responde).",
+   "fra": "Le Cangur n'a pas pu y penser (le modèle ne répond pas).",
+   "zho": "别想了"
+  },
+  "cangur_no_respon": {
+   "arb": "(كانغور) لا يستجيب الآن. حاول مرة أخرى.",
+   "eng": "Cangur doesn't respond right now. Try again.",
+   "esp": "El Canguro no responde ahora mismo. Inténtalo de nuevo.",
+   "fra": "Le Cangur ne répond pas en ce moment. Réessayer.",
+   "zho": "Cangur现在没有回应再试一次"
+  },
+  "correcte": {
+   "arb": "هذا صحيح!",
+   "eng": "That's right!",
+   "esp": "¡Correcto!",
+   "fra": "C'est exact !",
+   "zho": "没错!"
+  },
+  "es_un_problema_de": {
+   "eng": "It's a blue{topic} problem.",
+   "esp": "Es un problema de {topic}.",
+   "fra": "C'est un problème de \"{topic}\".",
+   "zho": "这是一个蓝色的{topic}问题。"
+  },
+  "espes": {
+   "arb": "أنا مُندفعة اليوم... دعنا نتركه هنا. شكراً لإختباره!",
+   "eng": "I'm pushed today... Let's leave it here. Thank you for testing it!",
+   "esp": "Hoy estoy espeso... Déjalo aquí. ¡Gracias por probarlo!",
+   "fra": "Aujourd'hui, j'ai l'impression... Laissez-le ici. Merci d'essayer !",
+   "zho": "我今天被逼着...就放在这吧谢谢你的测试!"
+  },
+  "etapa1_torna": {
+   "arb": "لنضع اللغتين جانباً لفترة أخرى",
+   "eng": "Let's put the two languages aside for a while again.",
+   "esp": "Volvamos a poner las dos lenguas de lado un rato.",
+   "fra": "Remettez les deux langues de côté un moment.",
+   "zho": "我们再把两种语言放在一边"
+  },
+  "etapa2": {
+   "arb": "أنت تبلي بلاءً حسناً! من الآن فصاعدا، سترى المشاكل في كاتالون، مع زر لرؤيتها في لغتك.",
+   "eng": "You're doing great! From now on, you'll see the problems in Catalan, with a button to see them in your language.",
+   "esp": "¡Lo haces muy bien! A partir de ahora verás los problemas en catalán, con un botón para verlos en tu lengua.",
+   "fra": "Tu t'en sors très bien ! Vous verrez maintenant les problèmes catalans, avec un bouton pour les voir dans votre langue.",
+   "zho": "你干得不错!从现在开始,你会看到加泰罗尼亚的问题 用一个按钮用你的语言来看"
+  },
+  "etapa3": {
+   "arb": "أنت لست بحاجة إلى الزر بعد الآن: الآن المشاكل كتالونية.",
+   "eng": "You do not need the button anymore: Now the problems are Catalan.",
+   "esp": "Ya no te necesita el botón: Ahora los problemas están en catalán.",
+   "fra": "Vous n'avez plus besoin du bouton : Les problèmes sont désormais en catalan.",
+   "zho": "您不再需要按钮 :现在的问题是加泰罗尼亚。"
+  },
+  "exemple_resposta": {
+   "eng": "Answer: {label}) {value}",
+   "esp": "Respuesta: {label}) {value}",
+   "fra": "Réponse : {label}) {value}",
+   "zho": "答复:{label}) {value}"
+  },
+  "extern_no_calcul": {
+   "arb": "لم أستطع حساب الإجابة لهذه المشكلة (النموذج لا يستجيب). جربي واحدة أخرى أو دعينا نعود لمشاكل البنك",
+   "eng": "I couldn't calculate the answer to this problem (the model does not respond). Try another one or let's get back to the bank's problems.",
+   "esp": "No pude calcular la respuesta de este problema (el modelo no responde). Prueba otro o volvamos a los problemas del banco.",
+   "fra": "Je n'ai pas pu calculer la réponse de ce problème (le modèle ne répond pas). Essayez un autre, ou revenons aux problèmes de banque.",
+   "zho": "我无法计算这个问题的答案(模型没有反应)。再试一次,否则我们回到银行的问题上来"
+  },
+  "extern_obert": {
+   "eng": "This problem isn't in my bank. It looks like kolab{topic} nodes. I calculate the answer while you read it, and then we do it like the others.",
+   "esp": "Este problema no está en mi banco. Parece de {topic}. Calculo la respuesta mientras lees, y luego lo hacemos como los demás.",
+   "fra": "Ce problème n'est pas à ma banque. On dirait \"{topic}\". Je calcule la réponse en le lisant, puis on le fait comme les autres.",
+   "zho": "这个问题不在我的银行里看起来像是Kolab{topic}节点你读的时候我计算答案 然后我们像其他人一样做"
+  },
+  "extern_obert_nivell": {
+   "eng": "This problem isn't in my bank. It looks like kolab{topic}36 (usually level: {level}. I calculate the answer while you read it, and then we do it like the others.",
+   "esp": "Este problema no está en mi banco. Parece de TABASA{topic}len (nivel aproximado: {level}). Calculo la respuesta mientras lees, y luego lo hacemos como los demás.",
+   "fra": "Ce problème n'est pas à ma banque. Il ressemble à « {topic} » (niveau approximatif : {level}. Je calcule la réponse en le lisant, puis on le fait comme les autres.",
+   "zho": "这个问题不在我的银行里看起来像Kolab{topic}36(通常级别:{level}号你读的时候我计算答案 然后我们像其他人一样做"
+  },
+  "extern_sense_opcions": {
+   "eng": "I couldn't read the five options, A)... E), so I can't correct your answer. It looks like a blue{topic} problem.",
+   "esp": "No pude leer las cinco opciones, A) ... E), así que no puedo corregirte la respuesta. Parece un problema de {topic}.",
+   "fra": "Je n'ai pas pu lire les cinq options, A)... E), je ne peux donc pas te corriger la réponse. Ça a l'air d'un problème de \"{topic}\".",
+   "zho": "我读不懂五个选项,A)...E,所以我无法纠正你的回答。它看起来像一个蓝色的{topic}问题。"
+  },
+  "fuita_curta": {
+   "arb": "هذا المسار قصير جداً وضّحْ قليلاً الفكرةَ.",
+   "eng": "This track is very short. Explain a little more the idea.",
+   "esp": "Esta pista es muy corta. Cuéntame un poco más la idea.",
+   "fra": "Cette piste est trop courte. Dites-moi un peu plus l'idée.",
+   "zho": "这条轨道很短。解释一下这个想法。"
+  },
+  "fuita_llarga": {
+   "arb": "هذا المسار طويل جداً قلها في جمل أو جملتين",
+   "eng": "This track is too long. Say it in one or two sentences.",
+   "esp": "Esta pista es demasiado larga. Dilo en una o dos frases.",
+   "fra": "Cette piste est trop longue. Dis-le dans une ou deux phrases.",
+   "zho": "这条轨道太长了一两句话就说"
+  },
+  "fuita_lletra": {
+   "arb": "مهلاً! قُلتَ رسالةَ الجوابَ. أعطِ تلميحاً بدون أن تقول أي خيار هو",
+   "eng": "Hey! You said the answer letter. Give a hint without saying what option it is.",
+   "esp": "¡Eh! Dijiste la letra de la respuesta. Da una pista sin decir qué opción es.",
+   "fra": "Ep ! Vous avez dit la lettre de la réponse. Une piste sans dire quelle option c'est.",
+   "zho": "糑你说的答案信。给一个提示,不说这是什么选择。"
+  },
+  "fuita_posicio": {
+   "arb": "مهلاً! قلت ما هو الخيار. يعطي تلميحاً دون الإشارة إليه",
+   "eng": "Hey! You said what choice it is. He gives a hint without pointing it out.",
+   "esp": "¡Eh! Dijiste qué opción es. Da una pista sin señalarla.",
+   "fra": "Ep ! Tu as dit quel choix c'est. Elle donne un indice sans la souligner.",
+   "zho": "糑你说它是什么选择。他给出了一个提示,没有指出来。"
+  },
+  "fuita_valor": {
+   "arb": "مهلاً! لقد كتبت النتيجة يفسّر كيف يصل إلى هناك، لا أن أقول له.",
+   "eng": "Hey! You wrote the result. Explains how it gets there, not to tell him.",
+   "esp": "¡Eh! Escribiste el resultado. Cuéntale como se llega, sin decirlo.",
+   "fra": "Ep ! Tu as écrit le résultat. Dites-moi comment ça se présente, sans le dire.",
+   "zho": "糑你写的结果。解释它是如何到达那里, 而不是告诉他。"
+  },
+  "gracies": {
+   "arb": "شكراً لك!",
+   "eng": "Thank you!",
+   "esp": "¡Gracias!",
+   "fra": "Merci !",
+   "zho": "谢谢!"
+  },
+  "gracies_companys": {
+   "arb": "شكراً لك! دليلك سيساعد الشركاء الآخرين",
+   "eng": "Thank you! Your lead will help other partners.",
+   "esp": "¡Gracias! Tu pista ayudará a otros compañeros.",
+   "fra": "Merci ! Ta piste va aider d'autres collègues.",
+   "zho": "谢谢!你的领头会帮助其他伙伴"
+  },
+  "hola": {
+   "arb": "مرحباً! أنا (كانغور). هل نحل المشاكل معاً؟ تحذير: أنا مخطئ، ربما عليك مساعدتي!",
+   "eng": "Hello! It's Cangur. We solve problems together? Warning: I'm wrong, maybe you'll have to help me!",
+   "esp": "¡Hola! Soy el Canguro. ¿Resolvemos problemas juntos? Aviso: ¡Yo me equivoco fuerza, quizás deberías ayudarme!",
+   "fra": "Bonjour ! Je suis le Cangur. On va résoudre des problèmes ensemble ? Aviso : J'ai tort, peut-être que tu vas devoir m'aider !",
+   "zho": "哈啰!这是坎古尔。我们一起解决问题?3⁄4 ̄ ̧漯B我错了,也许你得帮我!"
+  },
+  "ja_al_banc": {
+   "arb": "هذه المشكلة موجودة بالفعل في بنكي! دعونا نفعل ذلك معا.",
+   "eng": "That problem is already in my bank! Let's do it together.",
+   "esp": "¡Ese problema ya lo tengo en mi banco! Hagámoslo juntos.",
+   "fra": "Ce problème est sur ma banque ! Faisons-le ensemble.",
+   "zho": "这个问题已经在我的银行里了!让我们一起做吧。"
+  },
+  "jo_dic": {
+   "arb": "أَقُولُ {letter}.",
+   "eng": "I call it {letter}.",
+   "esp": "Yo digo {letter}.",
+   "fra": "Je dis {letter}.",
+   "zho": "我管它叫{letter}"
+  },
+  "jo_he_dit": {
+   "arb": "حسنا، قلت {answer}... (أَنا a {sure} % خزنة). هَلْ تُساعدُني؟ أعطني تلميحاً، لكن لا تخبرني بالإجابة!",
+   "eng": "Well, I said the {answer}... (I'm a {sure} % safe). Will you help me? Give me a hint, but don't tell me the answer!",
+   "esp": "Pues yo dije {answer}... (estoy un {sure}% seguro). ¿Me ayudas? ¡Dame una pista, pero no me digas la respuesta!",
+   "fra": "J'ai dit {answer}... (J'en suis un {sure} % sécurisé). Vous m'aidez ? Donne-moi un indice, mais ne me dis pas la réponse !",
+   "zho": "嗯,我说{answer}...(我是{sure}%的保险箱)你会帮我吗?给我个提示,但别告诉我答案!"
+  },
+  "mira_problema": {
+   "arb": "إنظرْ إلى هذه المشكلةِ! أنا أفكر في ذلك، أيضا... 🤔",
+   "eng": "Look at this problem! I'm thinking about it, too... 🤔",
+   "esp": "¡Mira este problema! Yo también lo estoy pensando... 🤔",
+   "fra": "Regarde ce problème ! Je le pense aussi... 🤔",
+   "zho": "看看这个问题!我也在考虑... 🤔"
+  },
+  "no_coincideix": {
+   "arb": "انها لا تطابق الاجابة التي حسبناها يمكنك أن تسأل عن دليل وتحاول مرة أخرى.",
+   "eng": "It doesn't match the answer we calculated. You can ask for a clue and try again.",
+   "esp": "No coincide con la respuesta que hemos calculado. Puedes pedir una pista y intentarlo de nuevo.",
+   "fra": "Il ne correspond pas à la réponse que nous avons calculée. Tu peux demander un indice et réessayer.",
+   "zho": "它不符合我们计算出来的答案。你可以问一个线索,再试一次。"
+  },
+  "no_entes": {
+   "arb": "لم أفهمك... هل يمكنك أن تشرح لي خلاف ذلك؟",
+   "eng": "I didn't understand you... Can you explain it to me otherwise?",
+   "esp": "No te he entendido... ¿Me lo puedes contar de otra manera?",
+   "fra": "Je ne t'ai pas compris... Pouvez-vous me le dire autrement ?",
+   "zho": "我听不懂你说什么...你能解释给我听吗?"
+  },
+  "no_es_aquesta": {
+   "arb": "ليس الأمر كذلك. يمكنك أن تسأل عن دليل وتحاول مرة أخرى.",
+   "eng": "It's not that. You can ask for a clue and try again.",
+   "esp": "No es esa. Puedes pedir una pista y intentarlo de nuevo.",
+   "fra": "Ce n'est pas ça. Tu peux demander un indice et réessayer.",
+   "zho": "不是那样的你可以问一个线索,再试一次。"
+  },
+  "no_queden_llengua": {
+   "arb": "لا توجد مشاكل متبقية في {llengua}. نحن بحاجة إلى إعداد البنك بهذه اللغة.",
+   "eng": "There's no problems left in {llengua}. We need to prepare the bank in this language.",
+   "esp": "No quedan problemas en {llengua}. Hay que preparar el banco en esta lengua.",
+   "fra": "Il n'y a plus de problèmes {llengua}. Il faut préparer la banque dans cette langue.",
+   "zho": "{llengua}没有问题了我们需要用这种语言为银行做准备。"
+  },
+  "no_queden_origen": {
+   "eng": "There's no problems left in {llengua} anymore. We continue in Catalan.",
+   "esp": "Ya no quedan problemas {llengua}. Continuemos en catalán.",
+   "fra": "{llengua} n'a plus de problèmes. Nous continuons le catalan.",
+   "zho": "{llengua}已经没有问题了我们继续加泰罗尼亚。"
+  },
+  "no_traduit": {
+   "arb": "هذه المشكلة لم تترجم إلى لغتك بعد.",
+   "eng": "This problem is not translated into your language yet.",
+   "esp": "Este problema aún no está traducido a tu lengua.",
+   "fra": "Ce problème n'est pas encore traduit dans votre langue.",
+   "zho": "这个问题还没有被翻译成您的语言。"
+  },
+  "pista": {
+   "arb": "دليل: Ascii {text} Mutz",
+   "eng": "A lead: ascii{text} Mutz",
+   "esp": "Una pista: AMPANS{text} Jox",
+   "fra": "Une piste : \"{text}\"",
+   "zho": "一条线索:ascii {text} 磁盘"
+  },
+  "pista_company": {
+   "arb": "دليل من شريك: Ascii {text} Mutz",
+   "eng": "A lead from a partner: ascii{text} Mutz",
+   "esp": "Una pista de un compañero: AMPANS{text} Jox",
+   "fra": "Une piste d'un partenaire : \"{text}\"",
+   "zho": "合作伙伴的线索:ascii {text} 磁盘"
+  },
+  "pista_semblant": {
+   "arb": "مسار لمشكله مشابهه: Ascii {text} Mutz",
+   "eng": "A track of a similar problem: ascii{text} Mutz",
+   "esp": "Una pista de un problema similar: AMPANS{text} Jox",
+   "fra": "Une piste de problème similaire : \"{text}\"",
+   "zho": "类似问题的轨迹 :ascii {text} 磁盘"
+  },
+  "repensant": {
+   "arb": "أم، أنا أفكار ثانية، ولكن أنا لست متأكدا بعد. أتقول لي خلاف ذلك؟",
+   "eng": "Mmm, I'm second thoughts, but I'm not sure yet. You tell me otherwise?",
+   "esp": "Mmm, me lo estoy reponiendo, pero aún no lo veo claro. ¿Me lo cuentas de otra manera?",
+   "fra": "Je réfléchis, mais je ne vois pas encore clair. Tu me dis ça autrement ?",
+   "zho": "嗯,我是第二个想法, 但我还不确定。你告诉我别的吗?"
+  },
+  "semblant_facil": {
+   "arb": "انظروا إلى هذه المشكلة متشابهة وسهلة:",
+   "eng": "Look at this problem similar and easier:",
+   "esp": "Mira este problema parecido y más fácil:",
+   "fra": "Regardez ce genre de problème et plus facile :",
+   "zho": "看看这个问题 相似和容易:"
+  },
+  "semblants_practicar": {
+   "arb": "وهنا مشاكل مماثلة من البنك إلى الممارسة.",
+   "eng": "Here are similar problems from the bank to practice.",
+   "esp": "Aquí tienes problemas parecidos del banco para practicar.",
+   "fra": "Il y a des problèmes similaires sur la banque pour s'entraîner.",
+   "zho": "从银行到实践,这里也有类似的问题。"
+  },
+  "solucio": {
+   "arb": "الجواب هو {label} {value}.",
+   "eng": "The answer is {label}) {value}.",
+   "esp": "La respuesta es la {label}) {value}.",
+   "fra": "La réponse est {label}) {value}.",
+   "zho": "答案是{label}{value}"
+  },
+  "solucio_extern": {
+   "arb": "وفقا لحساباتنا، الجواب هو {label} {value}.",
+   "eng": "According to our calculations, the answer is {label}) {value}.",
+   "esp": "Según nuestros cálculos, la respuesta es la {label}) {value}.",
+   "fra": "Selon nos calculs, la réponse est {label}) {value}.",
+   "zho": "根据我们的计算 答案是{label}{value}"
+  },
+  "tambe_be": {
+   "arb": "قلت أيضاً {label} هذا نجح مع كلانا. 🎉",
+   "eng": "I've also told {label}! This one worked out both of us. 🎉",
+   "esp": "¡Yo también dije {label}! Esta nos ha salido bien a ambos. 🎉",
+   "fra": "J'ai aussi dit {label} ! Ça s'est bien passé pour nous deux. 🎉",
+   "zho": "我还告诉了{label}!这一个工作了我们俩。 🎉"
+  }
+ },
+ "routes": {
+  "arb": [
+   "ca-en",
+   "en-ar"
+  ],
+  "eng": [
+   "ca-en"
+  ],
+  "esp": [
+   "ca-es"
+  ],
+  "fra": [
+   "ca-fr"
+  ],
+  "zho": [
+   "ca-en",
+   "en-zh"
+  ]
+ },
+ "source": "opus-mt",
+ "topics": {
+  "aritmetica": {
+   "arb": "الحساب والمشاكل مع الأرقام",
+   "eng": "Calculation and problems with numbers",
+   "esp": "Cálculo y problemas con números",
+   "fra": "Calculer et résoudre des problèmes avec des nombres",
+   "zho": "计算和数字问题"
+  },
+  "comptar": {
+   "arb": "العد والدمج",
+   "eng": "Counting and Merge",
+   "esp": "Contar y combinar",
+   "fra": "Compteur et combinaison",
+   "zho": "计算和合并"
+  },
+  "fraccions": {
+   "arb": "المراحل والنسب المئوية والنسب",
+   "eng": "Phases, percentages and proportions",
+   "esp": "Fracciones, porcentajes y proporciones",
+   "fra": "Fractions, pourcentages et proportions",
+   "zho": "阶段、百分比和比例"
+  },
+  "geometria": {
+   "arb": "الهندسة",
+   "eng": "Geometry",
+   "esp": "Geometría",
+   "fra": "Géométrie",
+   "zho": "几何学"
+  },
+  "logica": {
+   "arb": "منطقي",
+   "eng": "Logical",
+   "esp": "Lógica",
+   "fra": "Logique",
+   "zho": "逻辑"
+  },
+  "mesura": {
+   "arb": "القياس والسرعة",
+   "eng": "Measure and Speed",
+   "esp": "Medida y velocidad",
+   "fra": "Mesure et vitesse",
+   "zho": "测量和速度"
+  },
+  "nombres": {
+   "arb": "الأرقام والتقسيم",
+   "eng": "Numbers and Divisibility",
+   "esp": "Números y divisibilidad",
+   "fra": "Nombres et devisibilité",
+   "zho": "数字和可分性"
+  },
+  "patrons": {
+   "arb": "الأنماط والجبر",
+   "eng": "Patterns and Algebra",
+   "esp": "Patrones y álgebra",
+   "fra": "Motifs et algèbres",
+   "zho": "图案和代数"
+  },
+  "probabilitat": {
+   "arb": "الاحتمال",
+   "eng": "Probability",
+   "esp": "Probabilidad",
+   "fra": "Probabilité",
+   "zho": "概率"
+  },
+  "temps": {
+   "arb": "الوقت والتقويم",
+   "eng": "Time and Calendar",
+   "esp": "Tiempo y calendario",
+   "fra": "Heure et agenda",
+   "zho": "时间和日历"
+  }
+ }
+}

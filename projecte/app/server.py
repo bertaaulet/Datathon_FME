@@ -22,6 +22,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from copilot import ui_text  # noqa: E402
 from copilot.client import get  # noqa: E402
 from copilot.config import CONFIG, ROOT  # noqa: E402
 from copilot.store import Store, default_path  # noqa: E402
@@ -51,6 +52,7 @@ def make_handler(tutor, images_dir):
         "/api/hint": lambda b: tutor.hint(str(b.get("text", ""))[:1000]),
         "/api/leave-teaching": lambda b: tutor.leave_teaching(),
         "/api/reveal": lambda b: tutor.reveal(),
+        "/api/language": lambda b: tutor.set_language(str(b.get("lang", ""))[:8]),
         "/api/external": lambda b: tutor.external(str(b.get("text", ""))[:4000]),
     }
 
@@ -80,6 +82,8 @@ def make_handler(tutor, images_dir):
                 self.send(200, tutor.led_view())
             elif path == "/api/teacher":
                 self.send(200, tutor.teacher())
+            elif path == "/api/ui":       # the page's own words in the six languages, asked for once
+                self.send(200, ui_text.table())
             elif image and os.path.exists(os.path.join(images_dir, image.group(1))):
                 with open(os.path.join(images_dir, image.group(1)), "rb") as f:
                     self.send(200, f.read(), "image/png")
