@@ -4,6 +4,8 @@
 
 *[Read it in English](README.md)* · **[Arduino Project Hub](https://projecthub.arduino.cc/projects/393319ad-8147-4e19-a81e-407f25ed03be/preview)**
 
+**[▶ Mira el vídeo de la demo](docs/demo.mp4)** (4 min)
+
 ![La pantalla de benvinguda de l'alumne: "Ensenya el Cangur", amb el Cangur dibuixat amb punts LED](docs/img/benvinguda.png)
 
 ## La idea

@@ -2,7 +2,7 @@
 
 **Aprèn matemàtiques ensenyant-les.** Un tutor de matemàtiques que funciona del tot en una Arduino UNO Q, sense connexió, on la IA no és el professor sinó el company a qui l'alumne ha d'ensenyar. Fet per al repte de Qualcomm "Math on the Edge" de la Datathon FME 2026 (UPC).
 
-*[Read it in English](README.md)* · **[Arduino Project Hub](https://projecthub.arduino.cc/projects/393319ad-8147-4e19-a81e-407f25ed03be/preview)**
+**[▶ Mira el vídeo de la demo](../docs/demo.mp4)** · *[Read it in English](README.md)* · **[Arduino Project Hub](https://projecthub.arduino.cc/projects/393319ad-8147-4e19-a81e-407f25ed03be/preview)**
 
 > **Estat (15 de novembre de 2026):** funciona en una Arduino UNO Q de 4 GB amb el banc real de M3Kang. Tots els números d'aquest document s'han mesurat a la placa, si no es diu el contrari. El tutor, els dos servidors de models i la matriu LED arrenquen sols quan s'engega la placa.
 

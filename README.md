@@ -4,6 +4,8 @@
 
 *[Llegeix-ho en català](README.ca.md)* · **[Arduino Project Hub](https://projecthub.arduino.cc/projects/393319ad-8147-4e19-a81e-407f25ed03be/preview)**
 
+**[▶ Watch the demo video](docs/demo.mp4)** (4 min)
+
 ![The student's welcome screen: "Teach the Kangaroo", with the Kangaroo drawn in LED dots](docs/img/benvinguda.png)
 
 ## The idea
