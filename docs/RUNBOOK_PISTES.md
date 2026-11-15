@@ -16,7 +16,7 @@ Tot es fa des de la carpeta `projecte/` del repo, al mateix entorn (WSL o Window
 
 ```bash
 git fetch
-git checkout berta/pistes-flux-nou        # o main, si ja s'ha fusionat
+git checkout main && git pull
 python3 -m unittest discover -s tests     # ha d'acabar amb "OK"
 ls data/train.jsonl data/val.jsonl data/tutor.db
 cp data/tutor.db data/tutor-backup.db     # còpia de seguretat
@@ -24,6 +24,7 @@ cp data/tutor.db data/tutor-backup.db     # còpia de seguretat
 
 - [ ] Les proves diuen `OK`.
 - [ ] Hi ha `train.jsonl`, `val.jsonl` i `tutor.db` (si `train.jsonl` és de la primera volta d'OCR, avisa: s'hauria de fer amb el de la segona).
+- [ ] El `tutor.db` és **el que porta les traduccions del pont d'idioma** (la Irene les va importar a la base del seu portàtil; `STATUS.md`, "Pont d'idioma"). Si fas servir una altra còpia, demana-li aquesta o torna a importar-les amb `prep/import_translations.py` abans de continuar. El pas 2 no les esborra.
 
 ## 1. Engegar els dos servidors
 

@@ -1,6 +1,6 @@
 # Pistes: com funcionen (versió 2026-11-15)
 
-> Estat: **implementat al codi** (branca `berta/pistes-flux-nou`, provat amb el simulador). Falta preparar les dades (banc de l'agent, Cangur en català, τ) i mesurar-ho a la placa: vegeu el punt 6. Les decisions són a `DECISIONS.md` (2026-11-14 i 2026-11-15).
+> Estat: **implementat i a `main`**, integrat amb el pont d'idioma (provat amb el simulador). Falta preparar les dades (banc de l'agent, Cangur en català, τ) i mesurar-ho a la placa: vegeu el punt 6. Les decisions són a `DECISIONS.md` (2026-11-14 i 2026-11-15).
 
 ## En 30 segons
 - Cada alumne té **la seva placa**. No hi ha companys: el que escriu un alumne no ho veu ningú més.
@@ -21,6 +21,8 @@ Cada clic a "ajuda" puja un graó. Entre graó i graó pot tornar a respondre.
 | 5 | La solució (compta com a no resolt) | La solució "segons els nostres càlculs" + l'avís de sempre |
 
 Si falta alguna cosa (un problema sense pistes de l'agent, cap veí), surt la frase de mètode següent del tema, o se salta al graó 5.
+
+**Amb el pont d'idioma:** les frases de mètode surten en català i en la llengua d'origen segons l'etapa, i el problema semblant del graó 4 també segueix l'etapa. Les pistes de l'agent i la pista generada només existeixen en català: a les etapes 1 i 2 surten amb un avís traduït que ho diu, i el seu contingut no es tradueix.
 
 **D'on surt cada cosa**
 - **Tema i mètode:** `topics.py`. El tema es dedueix per paraules clau, i cada tema té 3 frases de mètode escrites per l'equip, iguals per a tots els problemes del tema.
@@ -45,7 +47,7 @@ Si falta alguna cosa (un problema sense pistes de l'agent, cap veí), surt la fr
 
 **τ** es calibra amb l'experiment **D2** (només problemes del cas 1): 25 problemes, cadascun amb una pista bona i una d'absurda. τ ha de ser prou alt perquè una pista absurda gairebé mai el convenci. Mentre no hi hagi D2, τ = 1,0 (provisional).
 
-**Idioma:** el Cangur llegeix **el problema, les instruccions i la pista en català** (`KANGAROO_LANG=cat`). No és perquè encerti (l'encert no importa: la resposta correcta ve de M3Kang o del harness), sinó perquè **entengui la pista**: és l'instrument que la mesura. `predict.py` i la resta segueixen en anglès (`MODEL_LANG=eng`). Les respostes precalculades porten l'idioma en què es van mesurar: si no coincideix, el tutor torna a preguntar al model (~10 s).
+**Idioma:** el Cangur llegeix **el problema i les instruccions en català** (`KANGAROO_LANG=cat`). L'alumne pot escriure la pista en qualsevol de les 6 llengües del pont, i el Cangur la llegeix tal com s'ha escrit, sense traduir-la; l'efecte d'una pista que no és en català **no s'ha mesurat** (protocol a `DECISIONS.md`). No és perquè encerti (l'encert no importa: la resposta correcta ve de M3Kang o del harness), sinó perquè **entengui la pista**: és l'instrument que la mesura. `predict.py` i la resta segueixen en anglès (`MODEL_LANG=eng`). Les respostes precalculades porten l'idioma en què es van mesurar: si no coincideix, el tutor torna a preguntar al model (~10 s).
 
 ## 3. Què es guarda
 - **El text d'una pista de l'alumne**, només si és d'un problema del banc, del **cas 1** (el Cangur no fingia) **i** l'ha convençut (Δ > τ). Serveix per a la vista del docent i per poder ampliar el banc més endavant.
