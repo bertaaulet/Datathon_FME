@@ -159,3 +159,10 @@ Els problemes 3, 9 i 10 toquen els mateixos fitxers (`app/index.html` i `copilot
 - **Causa:** una sola placa, diverses persones i sessions de Claude copiant-hi fitxers amb `adb push`, i cap manera de saber què hi ha desplegat.
 - **Arreglo proposat:** (1) abans de desplegar, escriure a `~/Datathon_FME/DESPLEGAT` qui, quina branca i quin commit, i mirar-ho abans de tocar res; (2) desplegar sempre des d'un commit, no des de canvis sense desar; (3) per reiniciar el tutor, només `sudo systemctl restart math-tutor`, mai `kill`.
 - **Com es comprova:** `cat ~/Datathon_FME/DESPLEGAT` diu el commit que hi ha, i coincideix amb `md5sum` dels fitxers.
+
+## 15. Un tall d'USB mata els experiments i la placa es reinicia sola
+
+- **Què passa:** el 2026-11-15, durant `dev-debias-rag1` (problema 32/50), a les 00:37:10 la connexió USB amb el portàtil va caure (`FUNCTIONFS_SUSPEND`), `adbd` va sortir amb error i systemd el va reiniciar. Amb ell van morir tmux i l'avaluació, que s'havien llançat des d'`adb shell`: no queda cap línia de final ni d'error al log. A les 00:57 la placa es va reiniciar sola, sense apagada neta (`last -x` diu "crash"); el 14 hi ha dues arrencades "crash" més (19:50 i 20:56).
+- **Causa:** (1) comprovada al journal: els processos llançats des d'`adb shell`, també amb `nohup` o dins de tmux, queden dins del grup d'`adbd` i moren quan systemd el reinicia. (2) Probable, no comprovada: alimentació insuficient o inestable per l'USB del portàtil (el portàtil que se suspèn, o el cable).
+- **Arreglo:** llançar les tasques llargues com a servei d'usuari, fora d'`adbd`: `XDG_RUNTIME_DIR=/run/user/1000 systemd-run --user --unit=<nom> bash <script>` (l'usuari té *linger*). Així es va acabar la ronda. Per al reinici: alimentació pròpia de la placa i evitar que el portàtil se suspengui.
+- **Com es comprova:** un experiment llançat amb `systemd-run --user` continua després de desendollar i tornar a endollar l'USB (`systemctl --user status <nom>`); `last -x reboot` sense arrencades "crash" noves.
