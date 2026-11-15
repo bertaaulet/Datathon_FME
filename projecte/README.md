@@ -36,7 +36,7 @@ P = 0.2 + 0.8 / (1 + 10 ^ ((R_problem − R_student) / 400))
 where 0.2 is a blind guess among five options. After each answer the student's rating moves by `K · (result − P)`.
 
 - **Problems have a fixed rating**, set once by `prep/build_tutor_db.py`: `1000 + 150 · level + 100 · third of the paper` (Kangaroo papers go from 3-point to 5-point questions). Students' answers never move it, so every student is measured on the same scale and one student can't shift the bank. The flip side: if this first guess is off, the student's rating inherits the error, so it has to be checked against the data.
-- **A student starts** at `1000 + 150 · level`, from the year they say they're in. `K` starts at 160 and shrinks to 40 (`K = max(40, 160 / (1 + answers / 8))`): fast to find the level, then steady. With simulated students starting 300 points off, a constant `K = 32` is still about 160 points off after 20 answers; this schedule, about 65.
+- **A student starts** at `1000 + 150 · level`, from the year they say they're in. `K` starts at 160 and shrinks to 40 (`K = max(40, 160 / (1 + answers / 8))`): fast to find the level, then steady. With simulated students starting 300 points off, a constant `K = 32` is still about 150 points off after 20 answers; this schedule, about 65.
 - **Only the first answer counts**, and asking for the solution counts as wrong. Help rungs and teaching the Kangaroo don't change the rating.
 - **Only bank problems move a rating.** Their answer is M3Kang's label. Outside problems (below) are stored apart and never move it.
 - **Two ratings per student** for the language bridge: `elo_cat` and `elo_origen`. Each answer moves only the one for the language it was read in (Catalan, or the student's language when it was on screen or the button was used).
@@ -214,7 +214,7 @@ The hint experiment, the leak filter's score and the time of each step go here t
 
 These are simulations of the method, not real students (`sim/students.py`, 200 simulated students per setting, an invented problem bank).
 
-- With a constant Elo step of 32, a student who starts 300 points from their level is still about 170 points off after 20 answers. With a step that starts large and shrinks, about 65. One Kangaroo level is 150 points. We use the second.
+- With a constant Elo step of 32, a student who starts 300 points from their level is still about 150 points off after 20 answers (140 to 172, depending on the starting point). With a step that starts large and shrinks, about 65 (58 to 84). One Kangaroo level is 150 points. We use the second.
 - A language gap of 200 points is measured as about 160 after 15 answers per language and about 185 after 30, and the middle half of students spans roughly 120 to 260. That's why the gap is shown only after 30 answers per language, and as a range.
 
 ## Error analysis

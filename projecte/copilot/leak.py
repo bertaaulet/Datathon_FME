@@ -91,6 +91,8 @@ END = rf"(?!{WORD_CHAR})"
 OPTION_NOUN = (r"(?:opci\w*|options?|answer|resposta|respuesta|reponse|lletra|letra|lettre|choix|"
                r"soluci\w*|solution|الجواب|الاجابه|الخيار|الحرف|الحل|答案|选项|选|答)")
 IS = r"(?:es|is|est|c['’]est|هو|هي|是|为|:|=)"
+# "la resposta bona és", "the right answer is", "la bonne réponse est"
+RIGHT = r"(?:bona|correcta|correcte|buena|correct|right|bonne|juste|exacta|exacte|صحيح|الصحيح|الصحيحه|正确)"
 POSITION_WORDS = [
     r"(?:primera|first|premiere|1a|1ª|1ere|الاولي|الاول)",
     r"(?:segona|segunda|second|seconde|deuxieme|2a|2ª|2e|الثانيه|الثاني)",
@@ -100,6 +102,11 @@ POSITION_WORDS = [
     r"الخامسه|الخامس|الاخيره|الاخير)",
 ]
 CHINESE_POSITION = ["一1", "二2", "三3", "四4", "五5"]
+PICK = (r"(?:tria|escull|marca|agafa|elige|escoge|choose|pick|select|mark|tick|choisis|"
+        r"choisissez|prends|coche)")
+# "la segona de la llista", "the first of them": still the option, as long as the sentence ends
+OF_THE_LIST = (r"(?:de\s+(?:la\s+llista|la\s+lista|la\s+liste|totes|todas|toutes|les\s+opcions|"
+               r"las\s+opciones|les\s+options)|of\s+(?:the\s+list|them|all|the\s+options))")
 MIDDLE = (r"(?:la del mig|la del medio|the middle one|la del centre|la del centro|celle du milieu|"
           r"(?:option|reponse) du milieu|(?:الخيار|الجواب|الاجابه)\s+(?:الاوسط|الوسطي)|"
           r"中间的?(?:那个|一个|选项|答案|项))")
@@ -252,7 +259,7 @@ def says_letter(hint, label, statements):
     if re.search(rf"\(\s*{letter}\s*\)|{START}{letter}\s*\)", lowered):
         return True
     # not before an apostrophe: "la resposta d'aquest problema" names no option
-    if re.search(rf"{START}{OPTION_NOUN}\s*{IS}?\s*(?:la\s+|the\s+|le\s+)?\(?{letter}{END}(?!['’])",
+    if re.search(rf"{START}{OPTION_NOUN}(?:\s+{RIGHT})?\s*{IS}?\s*(?:la\s+|the\s+|le\s+)?\(?{letter}{END}(?!['’])",
                  lowered):
         return True
     if re.search(rf"{START}(?:la|the|le)\s+{letter}{END}(?!['’])", lowered) or \
@@ -282,8 +289,10 @@ def says_position(hint, label):
         return True
     # "és la tercera", "it's the third one", "c'est la troisième": the ordinal alone ends
     # the sentence. "la tercera bossa" goes on with a noun, and passes.
-    if re.search(rf"(?:\b{IS}|it\s+is|it['’]s)\s+(?:la|el|the|le)\s+{word}(?:\s+one)?\s*(?:[.!?,;]|$)",
+    if re.search(rf"(?:\b{IS}|it\s+is|it['’]s|\b{PICK})\s+(?:la|el|the|le)\s+{word}(?:\s+one)?\s*(?:[.!?,;]|$)",
                  lowered) or re.search(rf"\bthe\s+{word}\s+one\b", lowered):
+        return True
+    if re.search(rf"\b(?:la|el|the|le)\s+{word}\s+{OF_THE_LIST}\s*(?:[.!?,;]|$)", lowered):
         return True
     nth = CHINESE_POSITION[LETTERS.index(label)]
     if re.search(rf"第[{nth}]个?(?:选项|答案|项)|[选答]第[{nth}]", lowered):
@@ -309,9 +318,17 @@ def says_value(hint, label, options, statements):
     text = _words(value)
     if len(text) < (2 if CJK.search(text) else 3):
         return False
-    if any(text in _words(statement) for statement in statements):
+    if any(_contains(_words(statement), text) for statement in statements):
         return False
-    return text in _words(hint)
+    return _contains(_words(hint), text)
+
+
+def _contains(text, part):
+    """part in text, as whole words: "y c" is not in "y com". Chinese has no spaces and
+    Arabic joins the article to the word (الأخضر), so there any substring counts."""
+    if OTHER_SCRIPT.search(part):
+        return part in text
+    return f" {part} " in f" {text} "
 
 
 def _words(text):

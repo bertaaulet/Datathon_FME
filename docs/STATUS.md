@@ -84,6 +84,18 @@ Conclusions: no preguntar al model sense opcions; el `letter_bias.json` d'aquest
 
 Lectura: el biaix del fitxer reparteix millor les lletres (treu el pic de D), però no guanya encerts de manera fiable (+1). El RAG dobla el temps i no millora: amb la resposta del veí, el model s'enganxa a la B (34/50); amb la lletra, cau al 12%. `dev-debias-rag1` es va tallar al problema 32 per la caiguda USB i es va repetir sencer: les 32 primeres lletres van sortir idèntiques (és determinista). Els CSV per problema no es pugen; `ablations.csv` té les xifres agregades. Les files `nou-nodebias` (28%) i `nou-debias` (24%) d'`ablations.csv` són d'una tanda anterior interrompuda, amb `data/val.jsonl` (amb opcions, lletres no equilibrades) i l'índex sense `--skip-suspect`: no es comparen amb aquesta taula.
 
+## Experiments al portàtil (sense placa ni model)
+Fets per l'Elsa (amb Claude) i repetits per la Berta (amb Claude) sobre `main` (`1d1fc0b`), amb les dades de la segona volta d'OCR. Només xifres agregades; els casos i els temes de referència no es pugen.
+
+| Experiment | Resultat |
+| --- | --- |
+| C1 · Filtre de fuites (`copilot/leak.py`, 100 fuites i 100 pistes netes, totes en català) | Amb el codi de `main`: 63/100 fuites detectades i 98/100 netes acceptades. Amb les correccions de `berta/experiments-portatil`: **67/100 i 99/100**. Per tipus: lletra 25/25, posició 15/15, valor 27/30, indirecta 0/30 (no les pot veure per disseny). Les 3 de valor que passen: dues perquè el número ja surt a l'enunciat (el filtre ho permet a propòsit) i una per una opció mal llegida per l'OCR. El fals positiu que queda: un número en lletres a l'enunciat ("els quatre jugadors"). Les xifres després de les correccions estan mesurades amb els mateixos casos que les han motivat: són optimistes |
+| C2 · Temes (`copilot/topics.py` contra 100 temes de referència de l'agent) | 100/100 referències vàlides; `topics.py` coincideix amb el tema principal o l'alternatiu en **65/100** |
+| C3 · Simulació de l'Elo (`sim/students.py`, 200 alumnes simulats per punt de partida, banc inventat) | Error després de 20 respostes, començant a 300 punts: K fix = 32, **147** (140–172); K decreixent, **65** (58–84). El README i `elo.py` deien "about 160/170" per a K = 32: corregit a ~150. La bretxa d'idioma del README (163 i 185; 121–261) es reprodueix |
+| C4 · Problemes sense opcions (`prep/options_coverage.py`, validació) | **205/280 problemes (73,2%)** tenen les 5 opcions, igual en eng i cat. Els 75 restants no arriben al model i reben la D, que n'encerta 20 (26,7%). Pitjor al nivell 2 (51,7% amb opcions) |
+
+Revisió humana de mostra (Berta, 20 línies de cada, triades a l'atzar amb llavor 42): **20/20 etiquetes de fuites i 20/20 temes correctes**. La de Codex havia donat 19/20 i 19/20.
+
 ## Bloquejos i riscos
 - **Lliuraments sense començar**, i són el que veurà el jurat.
 - **Una sola placa:** experiments de `predict.py`, la mesura final amb el test i les proves del tutor l'han de compartir. Desplegaments que es trepitgen: `PROBLEMES.md` 14.
@@ -98,6 +110,7 @@ Lectura: el biaix del fitxer reparteix millor les lletres (treu el pic de D), pe
 - Quan es fa el dashboard Tukey.
 - L'ordre d'ús de la placa fins a la presentació.
 - Si es reconstrueix `tutor.db` amb les dades de la segona volta d'OCR.
+- Si es manté la taula per temes del dashboard: `topics.py` només coincideix amb la referència en 65/100 (C2).
 - Les tres propostes de Claude a `DECISIONS.md` (port 8090, temes per paraules clau, K de l'Elo), el llindar de D4, l'idioma del README.
 
 ## Resolt
