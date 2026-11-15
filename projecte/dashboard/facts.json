@@ -1,0 +1,61 @@
+{
+  "_about": "Aggregated numbers that do not come from results/eval-*.csv. Each block names where it was measured and where the full record is. No problem text and no per-problem labels.",
+  "models": {
+    "set": "dev100: 100 validation problems, 20 per correct letter",
+    "where": "Off the board: PC with an RTX 3060 (PyTorch / llama.cpp b12311) and Ollama",
+    "source": "resultados_finetune_canguro/INFORME.md and RESULTADOS_AGREGADOS.txt (Marc, 2026-11-15)",
+    "rows": [
+      {"key": "qwen", "label": "Qwen 0.8B, el model de la placa", "mode": "Respon una lletra", "hits": 20, "n": 100,
+       "board": "measured", "board_seconds": 7.6, "board_note": "mesurat a la placa (mitjana)"},
+      {"key": "qwen_ft", "label": "Qwen 0.8B amb fine-tuning", "mode": "Respon una lletra", "hits": 23, "n": 100,
+       "board": "measured", "board_seconds": 7.6, "board_note": "el mateix cost que l'original",
+       "paired": {"only_orig": 17, "only_ft": 20, "p": 0.743}},
+      {"key": "gemma", "label": "Gemma 12B", "mode": "Respon una lletra", "pct": 27.6, "n": 100,
+       "note": "mitjana de 5 rotacions de les opcions",
+       "board": "no_fit", "board_note": "no hi cap: 12B paràmetres per a 4 GB de RAM"},
+      {"key": "qwen3_4b", "label": "Qwen3 4B", "mode": "Raona abans de respondre", "hits": 27, "n": 50,
+       "note": "50 problemes, 10 de cada lletra, en ordre barrejat",
+       "board": "estimated", "tokens": 1900, "board_seconds": 330,
+       "board_note": "estimat: ~1.900 tokens a 5,8 tokens/s a la placa"}
+    ],
+    "letters": {
+      "set": "dev100, llama.cpp with eval.py --debias off",
+      "orig": {"A": 28, "B": 4, "C": 0, "D": 66, "E": 2},
+      "ft": {"A": 12, "B": 21, "C": 20, "D": 19, "E": 28}
+    }
+  },
+  "leak": {
+    "where": "Laptop, copilot/leak.py on 100 leaking and 100 clean hints in Catalan (experiment C1)",
+    "source": "docs/STATUS.md, section 'Experiments al portàtil'",
+    "types": [
+      {"label": "Diu la lletra", "stopped": 25, "n": 25},
+      {"label": "Diu la posició", "stopped": 15, "n": 15},
+      {"label": "Diu el valor", "stopped": 27, "n": 30},
+      {"label": "Ho insinua", "stopped": 0, "n": 30}
+    ],
+    "clean": {"accepted": 99, "n": 100}
+  },
+  "elo": {
+    "where": "Simulation: sim/students.py, 200 simulated students per starting point",
+    "source": "docs/STATUS.md, experiment C3",
+    "answers": 20,
+    "rows": [
+      {"label": "K fix (32)", "median": 147, "lo": 140, "hi": 172},
+      {"label": "K decreixent", "median": 65, "lo": 58, "hi": 84}
+    ]
+  },
+  "vision": {
+    "where": "Board, temporary vision server (Qwen 3.5 0.8B + mmproj f16), 10 English problems without options and with a figure",
+    "source": "docs/RESULTATS_NIT_FINAL.md, block B",
+    "image_hits": 4, "prior_hits": 5, "n": 10, "mean_seconds": 36.1
+  },
+  "hintgen": {
+    "where": "Board, prep/hintgen_timing.py on 3 invented problems (B3)",
+    "source": "docs/STATUS.md, 'Pista generada a la placa'",
+    "seconds": [28.3, 34.1]
+  },
+  "tutor": {
+    "checks_passed": 67, "checks": 67,
+    "source": "docs/RESULTATS_NIT_FINAL.md, block A (tutor_smoke.py on the board)"
+  }
+}
