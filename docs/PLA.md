@@ -328,7 +328,7 @@ Aquesta és la llista completa, agrupada per àrees. Inclou tot el pla del proje
 - [ ] Comprovar el README clonant el repo en una carpeta nova
 - [ ] `LICENSE` amb els noms i els crèdits, citant M3Kang
 - [ ] Arduino Project Hub amb les sis seccions, amb fotos i captures de l'equip
-- [ ] Repo públic: les comprovacions de `publish-project`, cap secret, i confirmar si es poden publicar `descripcio_main_challenge/` i `descripcio_side_challenge/`
+- [x] Repo públic: comprovacions de `publish-project` fetes el 15/11 (cap fitxer de M3Kang ni a l'arbre ni a l'historial, cap secret). `descripcio_main_challenge/` i `descripcio_side_challenge/` retirades del repo: són material dels organitzadors
 - [ ] Enviar els enllaços de GitHub i del Project Hub als organitzadors
 - [ ] Pitch de 3 minuts: el problema (20 s), la demo (90 s), els números (40 s) i què hem après (30 s). Les xifres de PISA, comprovades
 - [ ] Demo: problemes provats el mateix dia, Wi-Fi apagat, dos assajos amb cronòmetre i un vídeo de reserva

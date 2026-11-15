@@ -1,2 +1,20 @@
 CLAUDE.local.md
 .claude/settings.local.json
+
+# M3Kang data and OCR working files: research licence only, never commit
+*.jsonl
+!projecte/data/sample_problems.jsonl
+!projecte/prep/hintgen_problems.jsonl
+report.json
+revisio_mostra.csv
+RESUM_OCR_*.md
+imatges_visio_nit/
+capturas_pont_idioma/
+
+# Organizers' material: kept locally, not ours to publish
+descripcio_main_challenge/
+descripcio_side_challenge/
+
+# Demo videos and screenshots may show real M3Kang problems: add them one by one, checked
+*.mp4
+*.mov
