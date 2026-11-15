@@ -48,7 +48,7 @@ python prep/pick_images.py --images data/_imgs/images --out data/images data/dev
 ### 2. Portar-ho a la placa
 
 Copieu a `~/Datathon_FME/projecte/` de la placa (amb `adb push` o `scp`):
-- el codi: `copilot/pipeline.py`, `predict.py`, `eval.py`, `config.env`;
+- el codi: `copilot/pipeline.py`, `predict.py`, `eval.py`. **No copieu `config.env`**: el de la placa té valors propis (`HINTGEN=off`, `KANGAROO_LANG=cat`). Afegiu-hi només les línies de visió (`PREDICT_VISION` … `MMPROJ_SHA256`) al final;
 - els fitxers de la placa: `board/07_vision.sh`, `board/systemd/math-vision.service`;
 - la carpeta `data/images/`.
 
@@ -82,6 +82,8 @@ python3 eval.py --input data/dev50.jsonl --only-figure --vision figure --limit 2
 A la taula "By whether the image was sent" hi ha de sortir `1`, i cap temps per sobre de 57 s.
 
 ### 5. Placa: l'experiment (uns 35–60 min)
+
+Llanceu les comandes llargues dins d'un script amb `XDG_RUNTIME_DIR=/run/user/1000 systemd-run --user --unit=visio bash ~/visio.sh`, no directament des d'`adb shell`: si cau l'USB, moririen (`PROBLEMES.md` 15).
 
 Feu servir els **mateixos** paràmetres que la configuració triada a la segona ronda (per exemple `--debias auto`, `--rag …`), i canvieu només `--vision`.
 
