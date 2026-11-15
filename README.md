@@ -2,7 +2,7 @@
 
 **Learn maths by teaching it.** A maths tutor that lives on an Arduino UNO Q, works without internet, and keeps every student's data on the board.
 
-*[Llegeix-ho en català](README.ca.md)*
+*[Llegeix-ho en català](README.ca.md)* · **[Arduino Project Hub](https://projecthub.arduino.cc/projects/393319ad-8147-4e19-a81e-407f25ed03be/preview)**
 
 ![The student's welcome screen: "Teach the Kangaroo", with the Kangaroo drawn in LED dots](docs/img/benvinguda.png)
 

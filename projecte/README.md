@@ -2,7 +2,7 @@
 
 **Learn maths by teaching it.** A maths tutor that runs entirely on an Arduino UNO Q, offline, where the AI isn't the teacher but the classmate the student has to teach. Built for the Qualcomm challenge "Math on the Edge" at the Datathon FME 2026 (UPC).
 
-*[Llegeix-ho en català](README.ca.md)*
+*[Llegeix-ho en català](README.ca.md)* · **[Arduino Project Hub](https://projecthub.arduino.cc/projects/393319ad-8147-4e19-a81e-407f25ed03be/preview)**
 
 > **Status (15 November 2026):** running on an Arduino UNO Q 4 GB with the real M3Kang bank. Every number below was measured on the board unless it says otherwise. The tutor, the two model servers and the LED matrix start on their own when the board boots.
 
