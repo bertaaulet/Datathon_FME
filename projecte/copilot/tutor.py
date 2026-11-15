@@ -115,6 +115,7 @@ class Tutor:
         self.messages = []
         self.busy = False
         self.failed_topic = None
+        self.chosen_topic = None          # the topic the student asked to practise, if any
         self.frame = led.text("?")
         self.frame_version = 0
 
@@ -255,6 +256,7 @@ class Tutor:
                 if lang_origen == LANG or lang_origen not in self._offered():
                     lang_origen = ""        # "I already speak Catalan": no bridge, stage 3 at once
                 has_origin = bool(lang_origen)
+                self.chosen_topic = None
                 self.student = {"id": 1, "name": name.strip()[:40], "lang_origen": lang_origen,
                                 "level": int(level or 0), "elo_cat": rating, "elo_origen": rating,
                                 "etapa": 1 if has_origin else 3, "streak": 0}
@@ -358,6 +360,12 @@ class Tutor:
                         shown, counts_for, notice = "cat", "cat", "no_queden_origen"
                     elif shown != "cat" or (translated and self.student["etapa"] == 2):
                         candidates = translated
+                if self.chosen_topic:       # the student's own choice: only that topic,
+                    same = [found for found in candidates if found[2] == self.chosen_topic]
+                    if same:
+                        candidates = same
+                    else:                   # until it runs out
+                        self.chosen_topic = None
                 rating = self.student["elo_origen" if counts_for == "origen" else "elo_cat"]
                 chosen = elo.pick(candidates, rating, topic=self.failed_topic)
                 if not chosen:
@@ -398,6 +406,8 @@ class Tutor:
                 "ref": None, "ref_done": False, "teach_wait": False, "tries": 0, "bar": None,
                 "taught": False, "solved": False, "external": False,
                 "generated": None, "generated_used": False,
+                # already answered once (the failed list): this time it moves no rating
+                "retry": self.store.seen(1, problem_id),
             }
             # Measured ahead of time (prep/kangaroo_baseline.py), in the language the Kangaroo
             # reads now: a database measured in another language is asked again, live.
@@ -464,6 +474,12 @@ class Tutor:
                                    round(time.time() - current["started"], 1), external=True,
                                    origin_lang=self._origin())
             self.failed_topic = None if correct else current["row"]["topic"]
+            return
+        if current.get("retry"):    # the first time already counted: no rating, no bridge step
+            self.store.add_attempt(1, current["id"], "cat", current["shown"], letter, correct,
+                                   current["revealed"], current["helps"],
+                                   round(time.time() - current["started"], 1),
+                                   origin_lang=self._origin() or "", retry=True)
             return
         own = current["counts_for"] == "origen" or current["revealed"]
         key = "elo_origen" if own else "elo_cat"
@@ -1004,6 +1020,46 @@ class Tutor:
                                    "text": self.outside["problem"]["text"],
                                    "options": self.outside["problem"]["options"]}
             return view
+
+    def progress(self):
+        """The student's own summary: first answers, the failed list and the topic to practise.
+        No problem text and no answer: a topic and a level for each failed problem."""
+        with self.lock:
+            student = self.student
+            origin = self._origin() if student else ""
+            bridge_on = bool(origin) and student["etapa"] in (1, 2)
+
+            def named(key):
+                key = key or topics.DEFAULT
+                return {"key": key, "topic": topics.name(key),
+                        "topic_origen": phrases.topic_name(key, origin) if bridge_on else None}
+
+            attempts = self.store.attempts() if student else []
+            left = {found[2] or topics.DEFAULT for found in self.store.candidates(1, LANG)}
+            streak = 0
+            for attempt in reversed(attempts):
+                if not attempt["correct"]:
+                    break
+                streak += 1
+            groups = {}
+            for attempt in attempts:
+                groups.setdefault(attempt["topic"] or topics.DEFAULT, []).append(attempt["correct"])
+            by_topic = [dict(named(key), n=len(results), correct=sum(results))
+                        for key, results in sorted(groups.items())]
+            failed = [dict(named(row["topic"]), id=row["id"], level=row["level"],
+                           fixed=bool(row["fixed"]))
+                      for row in (self.store.failed() if student else [])]
+            return {"attempts": len(attempts), "correct": sum(a["correct"] for a in attempts),
+                    "streak": streak, "by_topic": by_topic, "failed": failed,
+                    # only the topics that still have a problem the student hasn't seen
+                    "topics": [named(key) for key in topics.NAMES if key in left],
+                    "topic": self.chosen_topic}
+
+    def set_topic(self, key):
+        """Practise one topic from the next problem on ('' or an unknown key: every topic)."""
+        with self.lock:
+            self.chosen_topic = key if key in topics.NAMES else None
+            return self.progress()
 
     def led_view(self):
         with self.lock:

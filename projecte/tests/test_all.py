@@ -826,6 +826,41 @@ class TutorFlow(WithServers):
         self.assertEqual(len(row["neighbours"]), 5)
         self.assertEqual(self.store.meta("neighbours"), "embeddings")
 
+    def test_failed_list_and_retry(self):
+        self.tutor.start("Test", "", 1)
+        self.assertEqual(self.tutor.progress()["failed"], [])
+        problem_id = self.tutor.next()["problem"]["id"]
+        self.tutor.answer(self.wrong_letter())
+        progress = self.tutor.progress()
+        self.assertEqual([row["id"] for row in progress["failed"]], [problem_id])
+        self.assertFalse(progress["failed"][0]["fixed"])
+        self.assertEqual((progress["attempts"], progress["correct"], progress["streak"]), (1, 0, 0))
+        self.assertNotIn("label", progress["failed"][0])       # no answer and no text in the list
+        # trying it again moves no rating and is not a new attempt
+        rating, counted = self.tutor.student["elo_cat"], len(self.store.attempts())
+        view = self.tutor.next(problem_id)
+        self.assertEqual(view["problem"]["id"], problem_id)
+        self.tutor.answer(self.tutor.current["label"])
+        self.assertEqual(self.tutor.student["elo_cat"], rating)
+        self.assertEqual(len(self.store.attempts()), counted)
+        progress = self.tutor.progress()
+        self.assertTrue(progress["failed"][0]["fixed"])
+        self.assertEqual((progress["attempts"], progress["correct"]), (1, 0))
+        # and it is never chosen again by itself
+        self.assertNotIn(problem_id, [found[0] for found in self.store.candidates(1)])
+
+    def test_chosen_topic(self):
+        self.tutor.start("Test", "", 1)
+        available = {found[2] for found in self.store.candidates(1, "cat")}
+        topic = sorted(available)[-1]
+        self.assertEqual(self.tutor.set_topic(topic)["topic"], topic)
+        self.tutor.next()
+        self.assertEqual(self.tutor.current["row"]["topic"], topic)
+        self.assertIsNone(self.tutor.set_topic("not-a-topic")["topic"])
+        # only topics with a problem left are offered
+        left = {found[2] for found in self.store.candidates(1, "cat")}
+        self.assertEqual({row["key"] for row in self.tutor.progress()["topics"]}, left)
+
     def test_wrong_then_help_ladder(self):
         self.tutor.start("Test", "", 1)
         view = self.tutor.next()
