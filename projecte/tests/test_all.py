@@ -1242,6 +1242,16 @@ class TutorFlow(WithServers):
         gap = self.tutor.teacher()["gap"]
         self.assertFalse(gap["ready"])                             # too few answers to say
 
+    def test_stage_three_is_only_catalan(self):
+        # no problem shown only in the home language once the bridge is over
+        self.tutor.start("Test", "esp", 1)
+        self.tutor.student["etapa"] = 3
+        for _ in range(7):
+            view = self.tutor.next()
+            self.assertEqual((view["problem"]["shown"], view["problem"]["origen"]), ("cat", None))
+            self.assertEqual(self.tutor.current["counts_for"], "cat")
+            self.tutor.answer(self.tutor.current["label"])
+
     def method_message(self, view):
         return next(m for m in reversed(view["messages"]) if m["text"].startswith("És un problema de"))
 

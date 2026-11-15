@@ -269,6 +269,8 @@ class Tutor:
             return "cat", "cat"
         if self.student["etapa"] == 1:
             return "both", "origen"
+        if self.student["etapa"] >= 3:      # "only Catalan" (docs/DECISIONS.md, 2026-11-14)
+            return "cat", "cat"
         answered = len(self.store.attempts())
         return ("origen", "origen") if answered % 3 == 2 else ("cat", "cat")
 
