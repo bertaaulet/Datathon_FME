@@ -332,4 +332,4 @@ The code is under the MIT license (see `LICENSE`). It builds on the organizers' 
 
 ## The team
 
-Marc Igual, Irene Miralles, Berta Vidal and Berta Aulet. Built at the Datathon FME 2026 (UPC).
+Berta Aulet, Irene Miralles, Marc Igual and Berta Vidal.
