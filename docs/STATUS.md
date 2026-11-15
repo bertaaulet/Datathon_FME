@@ -1,6 +1,6 @@
 # Estat actual
 
-_Última actualització: 2026-11-15 00:05 — Berta (amb Claude)_
+_Última actualització: 2026-11-15 01:25 — Irene (amb Claude): pont d'idioma, branca `irene/pont-idioma`. La resta, de les 00:05 (Berta)._
 
 ## Fase
 - **Tutor:** funciona a la placa amb el banc real (`tutor.db`, 601 problemes utilitzables, el Cangur precalculat), arrenca sol amb la placa i amb la matriu LED, i els problemes externs segueixen el mateix recorregut que els del banc (provat amb problemes inventats).
@@ -23,8 +23,14 @@ Les tasques s'assignen en veu alta a l'equip; aquí només hi ha què queda i de
 | --- | --- | --- | --- |
 | `predict.py` | Calibració, guardrails, biaix per lot, expressió (descartada), RAG amb pregunta + valor correcte, biaix robust | Segona ronda d'experiments; triar la configuració de `config.env`; `letter_bias.json` bo a la placa; confirmar amb el conjunt de pràctica; anàlisi d'errors; placa a punt per al *last call* | La placa |
 | Pistes (Berta) | Infraestructura (lots, validació, importació, rànquing, similitud, pistes de mètode en 6 llengües). **Decidit: sense pistes de companys** (un alumne per placa) | Redissenyar el graó 3 (banc i externs), l'ensenyament del Cangur i l'idioma; treure les pistes de companys del codi; banc de pistes de l'agent; τ (D2); pistes generades pel model | `tutor.db` i la placa per a D2 |
-| Tutor (Teach) | Escala d'ajuda, Cangur, pont d'idioma, Elo de l'alumne (el dels problemes és fix), problemes externs, interfície nova, servei i reinici | Problemes 11–14 de `PROBLEMES.md`; revisar l'Elo i el pont d'idioma; reconstruir `tutor.db` amb les dades noves de l'OCR (si es vol) | — |
+| Tutor (Teach) | Escala d'ajuda, Cangur, pont d'idioma en 6 llengües (a la branca, vegeu sota), Elo de l'alumne (el dels problemes és fix), problemes externs, interfície nova, servei i reinici | Problemes 11–14 de `PROBLEMES.md`; revisar l'Elo; importar les traduccions a `tutor.db` i desplegar el pont a la placa; reconstruir `tutor.db` amb les dades noves de l'OCR (si es vol) | Que acabi la traducció `cat→es` |
 | Lliuraments | — | README, `LICENSE`, xifres de PISA, pitch, vídeo de reserva, Project Hub, dashboard Tukey | Resultats per als números |
+
+## Pont d'idioma (branca `irene/pont-idioma`, sense pujar ni fusionar)
+- **Fet i provat al portàtil** (124 proves, totes amb dades inventades i servidors simulats): importació de traduccions a `tutor.db` amb controls (números, opcions, llargada; una traducció d'un altre traductor es manté si no es passa `--replace`), estat per llengua (`student_lang`: Elo, etapa i ratxa), avís quan falta la traducció (mai es canvia al català en silenci), opcions en la llengua d'origen, canvi de llengua sense perdre el progrés, frases del Cangur segons l'etapa, filtre de fuites en 6 llengües, i la marca "traducció automàtica" amb la procedència a l'enunciat, a cada frase del xat i a l'avís dels problemes externs. Interfície revisada al navegador amb una base inventada (àrab de dreta a esquerra, xinès, etapa 2 amb el botó).
+- **Frases del Cangur:** `copilot/phrases_mt.json` (OPUS-MT, sense tocar) + `copilot/phrases_fix.json` (correccions escrites per un LLM on la revisió va trobar errors: sentit contrari a `etapa1_torna`, l'avís dels externs il·legible en xinès, paraules inventades al costat dels marcadors, l'àrab sense 6 frases, tu i vous barrejats). Un control automàtic descarta les traduccions amb aquests símptomes. Resultat: les 43 frases i els 10 temes en les 5 llengües. **Cap parlant nadiu les ha revisades.**
+- **Traduccions dels problemes** (`translate_ocr.py`, fora del repo): fr, zh i ar acabades; `cat→es` en curs a l'hora d'escriure. Prova en sec sobre una **còpia** de `tutor.db`: es poden fer servir arb 486/601, zho 485/601 i fra 591/601 problemes (rebutjades pels controls: arb 243, zho 321, fra 15). esp ja hi és (567/601, d'una tanda anterior). La `tutor.db` de l'aplicació no s'ha tocat.
+- **Pendent:** importar quan acabi `cat→es` (primer a una còpia); fusionar la branca; desplegar a la placa i comprovar-hi temps, mida de `tutor.db` i el flux; mesurar a la placa l'efecte de les pistes escrites en altres llengües (protocol a `DECISIONS.md`). **No verificat:** la qualitat lingüística de cap traducció.
 
 ## Placa
 - **Muntatge:** passos 0–8 fets. llama.cpp `2cbe0ec`, serveis `math-llm` (8081), `math-embed` (8082) i `math-tutor` (8090, a `0.0.0.0`), tots habilitats. Accés per `adb shell` (USB). Repo a la placa: còpia dels fitxers a `~/Datathon_FME/projecte`, sense token.
