@@ -27,7 +27,7 @@ Cada clic a "ajuda" puja un graó. Entre graó i graó pot tornar a respondre.
 - **Problema semblant:** un dels 5 veïns calculats al portàtil, el primer més fàcil (Elo més baix). Va al final perquè, si s'assembla molt, és gairebé la solució.
 
 ## 2. L'alumne encerta: ensenyar el Cangur
-1. El Cangur diu l'opció **equivocada** més probable segons el model ("Jo he dit la B…"). Sempre comença equivocat a propòsit. Si el model ja preferia la correcta, no hi ha res a ensenyar.
+1. El Cangur diu l'opció que el model troba **més probable** (les probabilitats es calculen per endavant amb una pista neutra; no es toquen). Si és incorrecta (78 % del banc), "Jo he dit la B…" i l'alumne li ensenya. Si és la correcta (22 %), "Jo també he dit la C!" i no hi ha res a ensenyar.
 2. L'alumne escriu una pista d'una frase.
 3. **Filtre de fuites:** si diu la lletra, la posició o el resultat, es rebutja, se li explica per què i no perd cap intent.
 4. El Cangur torna a llegir el problema, ara amb la pista.
@@ -39,7 +39,7 @@ Cada clic a "ajuda" puja un graó. Entre graó i graó pot tornar a respondre.
 
 **τ** es calibra amb l'experiment **D2**: 25 problemes, cadascun amb una pista bona i una d'absurda. τ ha de ser prou alt perquè una pista absurda gairebé mai el convenci. Mentre no hi hagi D2, τ = 1,0 (provisional).
 
-**Idioma:** el Cangur llegeix **el problema i la pista en català** (`KANGAROO_LANG=cat`). No és perquè encerti (ja comença equivocat), sinó perquè **entengui la pista**: és l'instrument que la mesura. `predict.py` i la resta segueixen en anglès (`MODEL_LANG=eng`).
+**Idioma:** el Cangur llegeix **el problema i la pista en català** (`KANGAROO_LANG=cat`). No és perquè encerti (l'encert no importa: la resposta correcta ve de M3Kang o del harness), sinó perquè **entengui la pista**: és l'instrument que la mesura. `predict.py` i la resta segueixen en anglès (`MODEL_LANG=eng`).
 
 ## 3. Què es guarda
 - **El text d'una pista de l'alumne**, només si és d'un problema del banc **i** ha convençut el Cangur (Δ > τ). Serveix per a la vista del docent i per poder ampliar el banc més endavant.
