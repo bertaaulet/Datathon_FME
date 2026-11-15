@@ -1960,6 +1960,19 @@ class Translations(unittest.TestCase):
         self.assertEqual(self.store.rows("SELECT * FROM texts ORDER BY id, lang"), first)
         self.assertEqual(again["missing"]["esp"]["with_text"], 1)
 
+    def test_another_translator_is_kept_unless_replace(self):
+        # A pilot translated by another tool stays: a new OPUS-MT run doesn't overwrite it
+        self.run_import([translated("b1", translation_source="haiku", text=BRIDGE_ESP + " (h)")])
+        opus = translated("b1", text=BRIDGE_ESP + " (o)", translation_suspect=False)
+        report = self.run_import([opus, translated("b2", translation_suspect=False)])
+        self.assertEqual(report["imported"], {"esp:opus-mt": 1})
+        self.assertEqual(report["skipped"], {"esp:kept_haiku": 1})
+        self.assertEqual(self.store.text("b1", "esp")["source"], "haiku")
+        self.assertEqual(report["missing"]["esp"]["with_text"], 2)
+        report = self.run_import([opus], replace=True)
+        self.assertEqual(report["imported"], {"esp:opus-mt": 1})
+        self.assertEqual(self.store.text("b1", "esp")["source"], "opus-mt")
+
     def test_script_reports_counts_only(self):
         source = os.path.join(os.path.dirname(self.path), "es.jsonl")
         with open(source, "w", encoding="utf-8") as f:

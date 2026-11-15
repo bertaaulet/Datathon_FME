@@ -20,7 +20,9 @@ against the official text of the same problem, and refused when:
 Options without words (numbers, units) are copied from the original, not translated.
 When a problem comes translated more than once, one is kept: not marked suspect if
 possible, then from Catalan for esp and fra, from English for arb and zho, then the
-first file given. An official M3Kang text is never replaced.
+first file given. An official M3Kang text is never replaced, and a machine translation
+already in the database from another translator (say, a reviewed pilot) is kept unless
+--replace is given: only the same translator's rows are written again.
 
 Running it again changes nothing. The report has counts only, never problem text. The
 translations derive from M3Kang (research licence): never commit them or the database.
@@ -106,18 +108,22 @@ def check(row, lang, originals):
     return reason, None
 
 
-def import_translations(store, rows, allowed=PLANNED, default_source="machine", dry_run=False):
-    """Check the rows and write the good ones. Returns the report (counts only)."""
+def import_translations(store, rows, allowed=PLANNED, default_source="machine", dry_run=False,
+                        replace=False):
+    """Check the rows and write the good ones. Returns the report (counts only).
+
+    replace: also overwrite a machine translation from another translator.
+    """
     report = {"rows": len(rows), "imported": Counter(), "rejected": Counter(),
               "skipped": Counter(), "missing": {}}
     official = defaultdict(dict)          # id -> lang -> official version
-    machine = set()                       # (id, lang) already there from a translator
+    machine = {}                          # (id, lang) -> translator, already there
     for row in store.rows("SELECT id, lang, text, options, source FROM texts"):
         if (row["source"] or "official") == "official":
             official[row["id"]][row["lang"]] = {"lang": row["lang"], "text": row["text"],
                                                 "options": json.loads(row["options"] or "{}")}
         else:
-            machine.add((row["id"], row["lang"]))
+            machine[(row["id"], row["lang"])] = row["source"]
     known = {row["id"] for row in store.rows("SELECT id FROM problems")}
 
     candidates = defaultdict(list)
@@ -153,6 +159,10 @@ def import_translations(store, rows, allowed=PLANNED, default_source="machine", 
             continue
         row, options = chosen
         source = source_of(row, default_source)
+        before = machine.get((problem_id, lang))
+        if before and before != source and not replace:
+            report["skipped"][f"{lang}:kept_{before}"] += 1
+            continue
         report["imported"][f"{lang}:{source}"] += 1
         writes.append((problem_id, lang, row["text"].strip(),
                        json.dumps(options, ensure_ascii=False), source))
@@ -162,7 +172,7 @@ def import_translations(store, rows, allowed=PLANNED, default_source="machine", 
 
     # Problems the tutor can use that still have no text in each planned language
     eligible = {row["id"] for row in store.rows("SELECT id FROM problems WHERE eligible = 1")}
-    written = {(w[0], w[1]) for w in writes} | machine
+    written = {(w[0], w[1]) for w in writes} | set(machine)
     for lang in sorted(set(allowed) | {lang for _id, lang in written}):
         have = sum(1 for problem_id in eligible
                    if lang in official[problem_id] or (problem_id, lang) in written)
@@ -183,6 +193,8 @@ def main(argv=None):
     p.add_argument("--source", default="machine",
                    help="who translated the rows that don't say it (default: machine)")
     p.add_argument("--dry-run", action="store_true", help="check and count, write nothing")
+    p.add_argument("--replace", action="store_true",
+                   help="overwrite machine translations from another translator too")
     p.add_argument("--report", default=os.path.join(ROOT, "results", "translations-import.json"),
                    help="where to write the counts ('' for nowhere)")
     args = p.parse_args(argv)
@@ -205,7 +217,7 @@ def main(argv=None):
     refused = Counter(str(row.get("language")) for row in rows if not language(row.get("language"), allowed))
     store = Store(args.db)
     try:
-        report = import_translations(store, rows, allowed, args.source, args.dry_run)
+        report = import_translations(store, rows, allowed, args.source, args.dry_run, args.replace)
     finally:
         store.close()
 
