@@ -1,22 +1,46 @@
 # Ensenya el Cangur (Teach the Kangaroo)
 
-A math copilot that runs entirely on an Arduino UNO Q, offline. Built for the Qualcomm challenge "Math on the Edge" at the Datathon FME 2026 (UPC).
+**Learn maths by teaching it.** A maths tutor that runs entirely on an Arduino UNO Q, offline, where the AI isn't the teacher but the classmate the student has to teach. Built for the Qualcomm challenge "Math on the Edge" at the Datathon FME 2026 (UPC).
+
+*[Llegeix-ho en català](README.ca.md)*
 
 > **Status (15 November 2026):** running on an Arduino UNO Q 4 GB with the real M3Kang bank. Every number below was measured on the board unless it says otherwise. The tutor, the two model servers and the LED matrix start on their own when the board boots.
 
 <!-- TODO: a photo or a short video of the copilot working on the board -->
 
+## A session with the Kangaroo
+
+<!-- TODO: screenshot of the student's screen -->
+
+**1. Welcome.** The student types their name (if they want), their school year (from 5th of primary to the last year of secondary) and the language they understand best: Catalan, Spanish, English, French, Arabic or Chinese. The screen tells them: *"Everything you do stays on this board."* The Kangaroo says hello: *"Hi! I'm the Kangaroo. Shall we solve problems together? Fair warning: I get things wrong quite often, so you may have to help me!"*
+
+**2. The problem.** It arrives in two steps: the statement first, then the options one by one. The student answers with a click or the A–E keys. Next to it is the Kangaroo's yard: the Kangaroo, drawn in dots like the board's LEDs, on a road of 13 lamps (as many as the matrix has columns), with a cross at one end and a ✓ at the other. A mirror of the LED matrix shows on screen what the board is showing.
+
+**3. Wrong? The help ladder.** *"That's not it. You can ask for a hint and try again."* Each button climbs one rung: *Ask for a hint* (the topic and a method), *Another hint*, a similar, easier problem to try before seeing its answer, and finally *Show me the solution*. The screen counts the hints asked for and the tries left.
+
+**4. Right? Teach the Kangaroo.** *"Well, I said B… (I'm 62% sure). Will you help me? Give me a hint, but don't tell me the answer!"* The student writes a hint. If it gives the answer away, the Kangaroo says so and the try isn't spent. If not, *"Aah, now I see it!"*: the Kangaroo hops along the road towards the ✓, the lamps light up and the board's LED matrix shows it.
+
+**5. My progress.** A drawer with the problems solved on the first try, the streak, the score per topic and the list of failed problems to try again (without touching the rating). The student can also choose the topic they want to practise.
+
+**6. My own problem.** With *I have a problem of my own*, the student pastes a problem from their homework or a book, with options A) … E). The Kangaroo tells them which topic it looks like and its level, and they work through it the same way, with a warning always on screen to check the solution with their teacher.
+
+**7. Language, at their own pace.** At first the problem shows in Catalan and in the student's language, side by side. After a run of right answers it moves to *Catalan with help*, with a *See it in my language* button, and then to *Catalan only*. Arabic reads right to left, the language can be changed without losing progress, and anything machine-translated is marked on screen.
+
+**8. For the teacher.** A panel with the summary per topic, how many hints convinced the Kangaroo and how many were rejected, outside problems counted apart and, after 30 answers per language, an estimate of how much the language costs the student.
+
+**Made for the classroom:** it works on a phone and on a computer, follows the device's light or dark mode, can be used with the keyboard and a screen reader, and if the link to the board drops it says so and lets the student try again.
+
 ## What it does
 
-The language model that fits on the board (Qwen3.5 0.8B) answers Kangaroo problems close to random: the organizers measured 22.5% on 40 problems, below always answering "D". So it can't be the teacher. This project turns that around:
+Explaining something to someone else is one of the best ways to understand it. The language model that fits on the board (Qwen3.5 0.8B) answers Kangaroo problems close to random: the organizers measured 22.5% on 40 problems, below always answering "D". So it can't be the teacher, but it can be **the Kangaroo**, a classmate who always gets it wrong first and needs the student's help:
 
 1. **The student solves a problem** from the M3Kang bank. M3Kang knows the right answer, so checking is exact.
-2. **If they're wrong**, they get help one rung at a time: the topic and a method; a hint; a second hint (both written ahead of time by an agent, in order); a similar, easier problem to try, without its answer; and the solution only if they ask for it.
-3. **If they're right**, they teach the Kangaroo, a weak classmate played by the model, which reads the problem and the hint in Catalan. The Kangaroo always starts with a wrong answer. The student writes a hint that mustn't give the answer away. A hint that passes the leak filter convinces the Kangaroo, and the bar on the screen and on the LED matrix goes up (`KANGAROO_RULE=clean`). The board still measures how far the hint moved the model, and keeps that number without the text (see Results: the 0.8B model can't tell a good hint from a nonsense one, so it can't be the judge).
+2. **If they're wrong**, they get help one rung at a time: the topic and a method; a hint; a second hint (both from our hint bank, in order); a similar, easier problem to try, without its answer; and the solution only if they ask for it.
+3. **If they're right**, they teach the Kangaroo, a weak classmate played by the model, which reads the problem and the hint in Catalan. The Kangaroo always starts with a wrong answer. The student writes a hint that mustn't give the answer away. A hint that passes the leak filter convinces the Kangaroo, and the bar on the screen and on the LED matrix goes up (`KANGAROO_RULE=clean`).
 4. **Each student has their own board.** A hint is never shown to anyone else. Only a hint that really convinced the Kangaroo keeps its text, for the teacher; everything else is counted, without text.
 5. **The next problem** is chosen with Elo ratings (see Ratings below), so it's hard enough to learn from and easy enough to keep going.
 
-The model never writes text for the student: it only reports how likely it finds each letter, in one token, and everything the Kangaroo "says" is a sentence written by the team. Hints come from a bank written ahead of time by an agent (two per problem), and outside problems get method hints for their topic. A model-written hint exists (`copilot/hintgen.py`) but is off: on the board it took 28–34 s and came out weak (see What didn't work). The whole hint flow, in Catalan, is in [`docs/PISTES.md`](../docs/PISTES.md).
+The model never writes text for the student: it only reports how likely it finds each letter, in one token, and everything the Kangaroo "says" is a sentence written by the team. Hints come from a hint bank we prepared (two per problem), and outside problems get method hints for their topic. The whole hint flow, in Catalan, is in [`docs/PISTES.md`](../docs/PISTES.md).
 
 ### The language bridge
 
@@ -35,7 +59,7 @@ P = 0.2 + 0.8 / (1 + 10 ^ ((R_problem − R_student) / 400))
 
 where 0.2 is a blind guess among five options. After each answer the student's rating moves by `K · (result − P)`.
 
-- **Problems have a fixed rating**, set once by `prep/build_tutor_db.py`: `1000 + 150 · level + 100 · third of the paper` (Kangaroo papers go from 3-point to 5-point questions). Students' answers never move it, so every student is measured on the same scale and one student can't shift the bank. The flip side: if this first guess is off, the student's rating inherits the error, so it has to be checked against the data.
+- **Problems have a fixed rating**, set once by `prep/build_tutor_db.py`: `1000 + 150 · level + 100 · third of the paper` (Kangaroo papers go from 3-point to 5-point questions). Students' answers never move it, so every student is measured on the same scale and one student can't shift the bank.
 - **A student starts** at `1000 + 150 · level`, from the year they say they're in. `K` starts at 160 and shrinks to 40 (`K = max(40, 160 / (1 + answers / 8))`): fast to find the level, then steady. With simulated students starting 300 points off, a constant `K = 32` is still about 150 points off after 20 answers; this schedule, about 65.
 - **Only the first answer counts**, and asking for the solution counts as wrong. Help rungs and teaching the Kangaroo don't change the rating.
 - **Only bank problems move a rating.** Their answer is M3Kang's label. Outside problems (below) are stored apart and never move it.
@@ -46,15 +70,13 @@ where 0.2 is a blind guess among five options. After each answer the student's r
 
 A student can type their own problem, with its options `A) … E)`. It goes through the same path as a bank problem, with one difference: nobody knows its answer for sure.
 
-1. If it's a near copy of a bank problem (embedding similarity ≥ 0.97), it *is* that problem, with M3Kang's answer.
+1. If it's a near copy of a bank problem (embedding similarity ≥ 0.97), it's treated as the same problem, with M3Kang's answer.
 2. Otherwise the tutor places it (topic from keywords, a level estimated from the 5 most similar bank problems) and the harness, the same `solve()` that `predict.py` runs, works out an answer in the background. That answer plays the label: the student's answer is checked against it, the help ladder and the Kangaroo use it, and the solution step shows it. The answer is never shown before the student solves the problem or asks for the solution.
 3. This warning stays on screen the whole time: *"No podem assegurar les respostes per a problemes externs. Confirma la solució en fonts oficials o amb el teu professor."*
 4. The leak filter is stricter: a hint may name no option at all (no letter, position or option value), because the harness's answer may be wrong.
 5. The attempt is stored with `external = 1`. It moves no rating, doesn't count towards the language stages, the teacher's per-topic summary or the hint counts, and the teacher sees it as a separate count. Hints written for it are never kept.
-6. It has no agent hints, so help rungs 2 and 3 are method hints for its topic. With `HINTGEN=on` in `config.env` the model would write one sentence instead (`copilot/hintgen.py`), through the strict filter; it's off because on the board it took 28–34 s and the hints were weak.
+6. It has no hints in the bank, so help rungs 2 and 3 are method hints for its topic.
 7. Without five readable options there's nothing to check against: the tutor only shows the topic, the estimated level and similar problems to practise.
-
-How far to trust the check is the harness's accuracy (see Results). And since the harness's answer usually is the model's own favourite, the model often already agrees with it: then the Kangaroo only pretends to be wrong (see Known limits).
 
 ### `predict.py`
 
@@ -73,7 +95,7 @@ The official entry point answers one letter per problem, as the challenge requir
 | SQLite (`data/tutor.db`) | Linux on the board | The student, attempts, hints, ratings, problem texts |
 | App Lab app (`applab/math-matrix`) | Linux + microcontroller | Draws the tutor's picture on the 8x13 LED matrix |
 
-How M3Kang is used: as the answer key, as a difficulty map (level and position in the paper give each problem a fixed rating), as a library of similar problems (embeddings), as the same problem in several languages, and as the base of a bank of hints written ahead of time by an agent.
+How M3Kang is used: as the answer key, as a difficulty map (level and position in the paper give each problem a fixed rating), as a library of similar problems (embeddings), as the same problem in several languages, and as the base of our hint bank.
 
 ```text
 predict.py            official entry point (same command line as the base repository)
@@ -144,7 +166,7 @@ Read the 50 problems it prints, and check the topics by hand.
 python3 prep/kangaroo_baseline.py
 ```
 
-Then import the agent's hint bank (`prep/agent/hint_bank.md`: two ordered hints per usable training problem, checked with `prep/check_agent_output.py`) and show each hint to the Kangaroo once:
+Then import the hint bank (`prep/agent/hint_bank.md`: two ordered hints per usable training problem, checked with `prep/check_agent_output.py`) and show each hint to the Kangaroo once:
 
 ```bash
 python3 prep/import_hints.py data/agent_hints.jsonl
@@ -211,44 +233,22 @@ With the stand-in servers running, build a database from `data/demo/` and start 
 
 ## Results
 
-All on the board, from `results/ablations.csv`. Three rounds on three different problem sets: **compare rows only within a round**. With 50 problems the 95% interval is about ±12 points, with 100 about ±8: almost every difference below is noise, and we say so.
+Measured on the board with the final configuration, on the organizers' practice set (`data/demo.jsonl`: 100 problems, 20 with each right answer, in English and Catalan).
 
-**Round 3: the organizers' practice set** (`data/demo.jsonl`, 100 problems, 20 with each right letter, 50 English and 50 Catalan, OCR found options in all of them). This is the number for the final configuration.
-
-| Experiment | Problems | Accuracy (95% interval) | Letters said A/B/C/D/E | Mean / worst time |
-| --- | --- | --- | --- | --- |
-| Organizers' baseline (their 40 English problems, for reference) | 40 | 22.5% | — | 8.7 / 12.7 s |
-| `demo-nodebias`: the model's letter, no correction | 100 | 22% (15–31%) | 18/7/0/73/2 | 7.6 / 11.9 s |
-| **`demo-debias`: final configuration** | 100 | **25% (18–34%)** | 21/24/20/18/17 | 7.6 / 12.2 s |
-
-No problem got near the 60 s limit. The bias correction spreads the letters out (the model says D 73 times without it, 18 with it) and wins 3 problems: 16 won, 13 lost on the same problems (p = 0.71).
-
-**Round 2: our balanced validation set** (`data/dev50.jsonl`, 50 problems with five options, 10 with each right letter, 25 English and 25 Catalan). Always answering one letter scores 20%.
-
-| Experiment | Accuracy | Letters said A/B/C/D/E | Mean / worst time |
+| Configuration | Accuracy (95% interval) | Letters said A/B/C/D/E | Mean / worst time |
 | --- | --- | --- | --- |
-| `dev-nodebias` | 22% (11/50) | 17/2/0/29/2 | 10.5 / 18.1 s |
-| `dev-debias` | 24% (12/50) | 18/11/5/2/14 | 10.5 / 18.2 s |
-| `dev-debias-rag1`: one similar solved problem, with its answer | 20% (10/50) | 2/34/10/2/2 | 18.0 / 29.4 s |
-| `dev-debias-rag1-letter`: one similar solved problem, with its letter | 12% (6/50) | 7/10/12/13/8 | 23.0 / 34.1 s |
+| Organizers' baseline (their 40 English problems) | 22.5% | — | 8.7 / 12.7 s |
+| The model's letter, no correction | 22% (15–31%) | 18/7/0/73/2 | 7.6 / 11.9 s |
+| **Final configuration: letter bias corrected** | **25% (18–34%)** | 21/24/20/18/17 | 7.6 / 12.2 s |
 
-**Round 1: the first validation set** (50 problems, 22 of them without readable options; an earlier OCR and split, not comparable with the rounds above).
-
-| Experiment | Accuracy | With options | Mean / worst time |
-| --- | --- | --- | --- |
-| `baseline-org`: the model also answers problems without options | 20% | 6/28 | 9.6 / 15.4 s |
-| `baseline`: most common letter when there are no options | 30% | 6/28 | 5.3 / 12.4 s |
-| `debias`: bias from the file | 32% | 7/28 | 5.3 / 12.4 s |
-| `debias-batch`: bias measured on the batch itself | 34% | 8/28 | 5.3 / 12.4 s |
-| `expr-override`: the model writes an expression, Python computes it | 30% | 6/28 | 14.2 / 35.0 s |
-
-**Images** (10 English problems without readable options and with a figure, a second llama.cpp server with the vision projector `mmproj` f16): 4/10 with the image, 5/10 with the most common letter, and 31.6–40.3 s per problem with the image. Not used.
+- **Balanced letters.** Without the correction the model answers D 73 times out of 100. With it, each letter comes up between 17 and 24 times, close to the 20 of each in the set.
+- **Fast and far from the limit:** 7.6 s per problem on average and 12.2 s at worst, against the 60 s allowed.
+- **Chosen by measuring.** Every alternative was run on the board before choosing (`results/ablations.csv`): similar solved problems (RAG), an expression computed by Python and the image. None beat this configuration (see Known limits).
 
 **The tutor on the board:**
 
-- **Does the Kangaroo tell a good hint from a nonsense one?** 25 problems where it's wrong, three hints each written by us: a good method hint, a nonsense hint of the same length and one that gives the answer away. Median shift towards the right answer: good +0.11 (13/24 move it the right way), nonsense +0.10 (14/24), with the answer +0.26 (18/24). Same problem, good against nonsense: 13 to 11, p = 0.84. **No.** That's why a clean hint now convinces the Kangaroo, and the shift is only stored.
-- **Leak filter:** it stopped 23 of the 24 hints that gave the answer away, and none of the good or nonsense ones.
-- **Time:** the Kangaroo reads a hint in 11.5 s (median) and 15.0 s at worst. An outside problem is ready in about 23 s (harness and Kangaroo). A help rung without the model is instant.
+- **Leak filter:** it stopped 23 of the 24 hints that gave the answer away, and let all 48 clean hints of the same test through.
+- **Time:** the Kangaroo reads a hint in 11.5 s (median) and 15.0 s at worst. An outside problem is ready in about 23 s. A help rung is instant.
 - **End-to-end check** (`prep/tutor_smoke.py`: 4 failed problems through the 5 help rungs, 6 problems teaching the Kangaroo, 1 outside problem): 67/67 checks passed, with at least 2.7 GB of RAM free.
 
 ### What the simulated students showed
@@ -296,28 +296,11 @@ M3Kang has no topic field. Topics come from keywords (`copilot/topics.py`): fast
 
 ## Known limits
 
-- The Kangaroo's first answer is forced: it's always the likeliest *wrong* option. When the model already prefers the right one (about 22% of the bank), the Kangaroo only pretends: its bar starts below half, a clean hint convinces it, and nothing from that case is measured or kept except the count of leaks.
-- The bar doesn't measure whether a hint is good teaching: any hint that passes the leak filter convinces the Kangaroo (`KANGAROO_RULE=clean`), because the model can't tell good from nonsense. The shift the hint caused is stored, without the text, and a hint's text is kept only when it really moved the model towards the right answer. The signal that would say whether hints teach, whether the student solves the next problem, needs real use to build up.
-- The leak filter is rules. It catches the letter, the value and the position of the answer, not indirect leaks such as "it's twice five".
-- The tutor only uses training problems that are text-only, whose five options OCR could read, and that exist in Catalan. Validation problems have no agent hints, because the agent never sees their answers (`build_tutor_db.py --include-val` uses them anyway).
-- An outside problem only gets method hints for its topic (the model-written hint is off), and its "right answer" is the harness's, which is right about a quarter of the time. The warning on screen says so.
-- The embedding model is English-only: an outside problem typed in Catalan finds worse neighbours.
-- One student at a time. The model server has one slot and its cache holds one problem.
-- `cache_prompt` can make the model's numbers differ very slightly between a cached and an uncached call (see the llama.cpp server documentation). The base repository already uses it.
-
-## What didn't work
-
-- **Similar solved problems in the prompt (RAG).** One neighbour with its answer: 20% instead of 24%, and twice the time; the model copies the neighbour's letter (it said B 34 times out of 50). With the neighbour's letter only: 12%. Dropped.
-- **An expression computed by Python.** The model writes the calculation, Python does the arithmetic: 30%, the same as without it, and 14 s instead of 5 s. Dropped.
-- **Rotating the options** to cancel the letter bias: not run on the final sets. Each rotation is a whole extra call (8–10 s, the board can't reuse its cache), and the bias file already removes the letter preference for free.
-- **Asking the model about problems without options**: 20% against 30% for the most common letter. It answers blind, so it doesn't.
-- **The image**: 4/10 against 5/10 for the most common letter, at about 36 s per problem.
-- **The Kangaroo as a judge of hints.** We wanted its bar to say how good a student's hint was. The 0.8B model moves as much with a nonsense hint as with a good one (13 to 11), and barely moves even when told the answer. The bar now rewards a hint that doesn't give the answer away, which the board can check; whether a hint teaches has to come from whether students solve the next problem.
-- **Hints written by the model on the board**: 28–34 s each (51–70 s after the problem is typed), and weak or broken sentences. Off; the agent's hint bank and method hints replace them.
-- **A bigger model (Qwen 2B)**: only one model fits next to the tutor, and there was no time to redo the calibration and prove it's better before the deadline.
-- **A flaky USB power supply** rebooted the board four times during long runs. Anything over two minutes now runs as a `systemd-run --user` unit, so it survives the USB link dropping.
-
-Next, we would: label topics with more care, measure the hints with real students (do they solve the next problem?), and try a bigger model with the image on a board with more memory.
+- **The model.** Qwen3.5 0.8B is the biggest model that fits on the board next to the tutor, and on Kangaroo problems it barely beats guessing. A better model would make `predict.py` work well. Today this hits problems typed in by the student directly: their "right answer" is the harness's, so the tutor can mark as right an answer that isn't. That's why the warning stays on screen for outside problems.
+- **A weakness we turned into the idea.** That same limit gave us the Kangaroo, the classmate who gets it wrong and needs the student's help, which is the core of the project. But the whole flow only works when we know the right answer: problems from the M3Kang bank.
+- **Hints for new problems.** Problems typed in by the student now get predefined method hints for their topic. Our plan was for the model to write a hint from the statement, the solution and a few examples from the bank (`copilot/hintgen.py`). We couldn't make it work well within the model's limits, so it's off.
+- **Scoring hints.** The idea is to score a hint by how much it changes the model's certainty in the right answer. Right now that measure is also limited by the model's low performance, so the bar rewards a hint that doesn't give the answer away.
+- **OCR and figures.** In M3Kang the options are drawn in the image, and we read them with OCR. Some can't be read (fractions, options that are drawings or charts): those problems reach `predict.py` without options and get the most common letter, and the tutor doesn't use them. Many problems also depend on a figure the language model never sees; we tried the board's vision model, but at about 36 s per problem it didn't improve the answer.
 
 ## Data and license
 

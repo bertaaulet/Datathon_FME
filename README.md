@@ -1,29 +1,42 @@
-# Ensenya el Cangur (Teach the Kangaroo)
+# Ensenya el Cangur · Teach the Kangaroo
 
-A math copilot that runs entirely on an Arduino UNO Q 4 GB, offline. Built for the Qualcomm challenge "Math on the Edge" at the Datathon FME 2026 (UPC).
+**Learn maths by teaching it.** A maths tutor that lives on an Arduino UNO Q, works without internet, and keeps every student's data on the board.
 
-A student solves Kangaroo problems from the M3Kang dataset. When they're wrong, they get help one rung at a time, never the answer first. When they're right, they teach the Kangaroo, a weak classmate played by a small language model on the board, with a hint that mustn't give the answer away. A bridge between languages helps students who don't yet read Catalan well. The LED matrix shows the Kangaroo's reaction.
+*[Llegeix-ho en català](README.ca.md)*
 
-**The full documentation is in [`projecte/README.md`](projecte/README.md):** what it does, the architecture, how to replicate it on a board, the results measured on the board, the error analysis, and what didn't work.
+<!-- TODO: photo or GIF of the board, the web page and the LED matrix -->
 
-## What's where
+## The idea
 
-| Folder | What it holds |
-| --- | --- |
-| [`projecte/`](projecte/) | All the code: `predict.py` (the official entry point), the tutor, the LED matrix app, board setup scripts, tests and the decisions dashboard |
-| [`projecte/docs/SETUP.md`](projecte/docs/SETUP.md) | The organizers' guide to set up the board, the models and M3Kang |
-| [`docs/`](docs/) | The team's working notes, in Catalan: status, decisions, problems found on the board, plans and board runbooks |
+Explaining something to someone else is one of the best ways to understand it. So here, the AI isn't the teacher. **It's the classmate.**
 
-## Results in one line
+The language model that fits on the board (Qwen3.5 0.8B) gets Kangaroo problems right about as often as a guess. Instead of hiding that, we made it a character: **the Kangaroo**, a classmate who always gets the problem wrong first and needs the student's help.
 
-On the organizers' 100 practice problems, `predict.py` answers **25%** (95% interval 18–34%) in 7.6 s on average, against 22.5% for the organizers' baseline and 20% for guessing. The details, and why the model plays a classmate instead of a teacher, are in [`projecte/README.md`](projecte/README.md#results).
+## How it works
+
+1. **Solve.** The student gets a real Kangaroo competition problem from M3Kang, chosen for their level.
+2. **Stuck? Climb the ladder.** Help comes one rung at a time: the topic and a method, a hint, a second hint, a similar and easier problem, and the solution only if they ask for it. Never the answer first.
+3. **Got it? Teach the Kangaroo.** The Kangaroo answers wrong. The student writes a hint to help it, without giving the answer away. If the hint is good enough, the Kangaroo gets it, and its bar goes up on the screen and on the board's LED matrix.
+4. **Next.** An Elo rating picks the next problem: hard enough to learn from, easy enough to keep going.
+
+## Why it matters
+
+- **Private by design.** Everything runs on the board, offline. No account, no cloud, nothing leaves the classroom.
+- **Language shouldn't be the barrier.** A student who doesn't read Catalan well yet sees the problem in their own language next to Catalan, then with a button, then in Catalan only. Two ratings per student tell the teacher how much is language and how much is maths.
+- **M3Kang does the heavy lifting.** It's the answer key, the difficulty map, the source of similar problems and the same problem in many languages. The model never has to be right.
+
+## On the board
+
+- Plug it in: in under a minute the tutor, both models and the LED matrix are ready.
+- The Kangaroo reads a hint in 11.5 s (median); help rungs are instant.
+- `predict.py`, the official answer for the challenge: **25%** on the organizers' practice set, against 22.5% for their baseline. Not a significant difference, and we say so: it's exactly why the model plays the student, not the teacher.
+
+The full story, how to build it, every measurement and its limits: **[`projecte/README.md`](projecte/README.md)**.
 
 ## Data and license
 
-M3Kang is for research use only: this repository holds none of its problems, images or labels. See the [dataset card](https://huggingface.co/datasets/qualcomm/M3Kang) and Torres-Camps et al., 2026, [arXiv:2601.16218](https://arxiv.org/abs/2601.16218).
-
-The code is under the [MIT license](LICENSE). It builds on the organizers' base repository, [mpous/datathon-UPC-maths-qualcomm-arduino-unoq](https://github.com/mpous/datathon-UPC-maths-qualcomm-arduino-unoq).
+M3Kang is for research use only: this repository holds none of its problems, images or labels ([dataset card](https://huggingface.co/datasets/qualcomm/M3Kang), Torres-Camps et al., 2026, [arXiv:2601.16218](https://arxiv.org/abs/2601.16218)). Code under the [MIT license](LICENSE), built on the organizers' [base repository](https://github.com/mpous/datathon-UPC-maths-qualcomm-arduino-unoq).
 
 ## The team
 
-Berta Aulet, Irene Miralles, Marc Igual and Berta Vidal.
+Berta Aulet, Irene Miralles, Marc Igual and Berta Vidal · Datathon FME 2026 (UPC), Qualcomm challenge "Math on the Edge".

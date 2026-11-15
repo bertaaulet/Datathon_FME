@@ -6,7 +6,7 @@ _Última actualització: 2026-11-15 10:40 — Berta (amb Claude): dashboard Tuke
 - **Tutor:** funciona a la placa amb el banc real (`tutor.db`, 601 problemes utilitzables, el Cangur precalculat), arrenca sol amb la placa i amb la matriu LED, i els problemes externs segueixen el mateix recorregut que els del banc (provat amb problemes inventats).
 - **`predict.py`:** primera ronda (validació antiga) i **segona ronda amb `dev50` feta a la placa** (taules de sota). Cap configuració surt del soroll; el RAG no ajuda i dobla el temps. **Pas 4 fet** (conjunt de pràctica, `data/demo.jsonl`: `demo-debias` 25/100) i **configuració final triada**: per defecte, debias amb `letter_bias.json`, sense RAG.
 - **Test final:** 20 problemes nous, executats amb el nostre `predict.py` **a la nostra placa** després del *last call* de les 12:00 (detall a `PLA.md`).
-- **Lliuraments** (README, `LICENSE`, pitch, vídeo, Project Hub): sense començar. **Dashboard Tukey fet** (`python3 dashboard/build.py` → `dashboard/dashboard.html`, [`DASHBOARD.md`](DASHBOARD.md)).
+- **Lliuraments:** README i `LICENSE` fets (README en anglès i català, a l'arrel i a `projecte/`). Pitch, vídeo i Project Hub en curs. **Dashboard Tukey fet** (`python3 dashboard/build.py` → `dashboard/dashboard.html`, [`DASHBOARD.md`](DASHBOARD.md)).
 - La presentació és **diumenge**. El pla és a [`PLA.md`](PLA.md), i els problemes trobats a la placa a [`PROBLEMES.md`](PROBLEMES.md).
 
 ## Ara mateix
@@ -26,7 +26,7 @@ Les tasques s'assignen en veu alta a l'equip; aquí només hi ha què queda i de
 | `predict.py` | Calibració, guardrails, biaix per lot, expressió (descartada), RAG amb pregunta + valor correcte, biaix robust | Segona ronda d'experiments; triar la configuració de `config.env`; `letter_bias.json` bo a la placa; confirmar amb el conjunt de pràctica; anàlisi d'errors; placa a punt per al *last call* | La placa |
 | Pistes (Berta) | Flux nou a `main` i desplegat (616 problemes, 1.232 pistes de l'agent, Cangur en català). D2 a la placa: el 0.8B no distingeix pistes bones d'absurdes (13–11, p = 0,84) → **`KANGAROO_RULE=clean`** (qualsevol pista neta convenç) i **`HINTGEN=off`** (branca `berta/docs-pistes-main`) | Fet: `berta/docs-pistes-main` fusionada i última prova a la placa ([`PROVES_FINALS_PISTES.md`](PROVES_FINALS_PISTES.md), 67/67). Pendent: revisió humana d'una mostra de pistes | La placa lliure |
 | Tutor (Teach) | Escala d'ajuda, Cangur, pont d'idioma, Elo de l'alumne (el dels problemes és fix), problemes externs, interfície nova, servei i reinici | Problemes 11–14 de `PROBLEMES.md`; revisar l'Elo i el pont d'idioma; reconstruir `tutor.db` amb les dades noves de l'OCR (si es vol) | — |
-| Lliuraments | Dashboard Tukey (5 panells, registre de decisions, 16 comprovacions) | README, `LICENSE`, xifres de PISA, pitch, vídeo de reserva, Project Hub | — |
+| Lliuraments | Dashboard Tukey (5 panells, registre de decisions, 16 comprovacions) | Xifres de PISA, pitch, vídeo de reserva, Project Hub (README i `LICENSE` fets) | — |
 
 ## Pont d'idioma i pistes (desplegat a la placa el 2026-11-15)
 - **Desplegat (03:01):** el servei `math-tutor` corre amb el codi de `c786d64` (pont d'idioma + flux nou de pistes; `main` només hi afegeix `prep/options_coverage.py` i documents) i la `tutor.db` nova. `api/state` respon 200. Instal·lat amb `install-pistes.sh` (verifica la base, atura el servei, canvia la carpeta i torna enrere sol si no arrenca). Còpia completa anterior a la placa: `~/Datathon_FME/projecte-backup-pistes-20261115-020117` (hora de la placa). S'hi han portat de l'oficial `data/` (train/val/dev/test, `priors.json` bo) i `results/`; el `priors.json` de git queda com `data/priors.json.from-git`.
@@ -111,7 +111,7 @@ Fets per l'Elsa (amb Claude) i repetits per la Berta (amb Claude) sobre `main` (
 Revisió humana de mostra (Berta, 20 línies de cada, triades a l'atzar amb llavor 42): **20/20 etiquetes de fuites i 20/20 temes correctes**. La de Codex havia donat 19/20 i 19/20.
 
 ## Bloquejos i riscos
-- **Lliuraments sense començar**, i són el que veurà el jurat.
+- **Lliuraments** (pitch, vídeo, Project Hub): és el que veurà el jurat.
 - **Una sola placa:** experiments de `predict.py`, la mesura final amb el test i les proves del tutor l'han de compartir. Desplegaments que es trepitgen: `PROBLEMES.md` 14.
 - **Abast:** `PLA.md` té moltes tasques obertes. Cal decidir què es fa per diumenge i què s'explica com a "no fet".
 - **Les opcions del test final passen per l'OCR:** els problemes amb figura o mal llegits es queden sense opcions i reben la lletra de reserva. Cal mesurar-ho amb el conjunt de pràctica.
