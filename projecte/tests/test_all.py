@@ -520,6 +520,14 @@ class Leaks(unittest.TestCase):
         text = ["三角形的边长是 a、b 和 c，求周长。"]
         self.assertIsNone(self.check("把 a、b 和 c 加起来就行了", "C", self.OPTIONS_97, text))
 
+    def test_ordinal_alone_is_a_position(self):
+        for hint in ("és la tercera", "Es la tercera, oi?", "it's the third one", "the third one",
+                     "c'est la troisième !", "la respuesta es la tercera"):
+            self.assertEqual(self.check(hint, "C", self.OPTIONS_97), "posicio", hint)
+        for hint in ("la tercera bossa té més pomes", "the third bag has more apples",
+                     "es la tercera vez que cuentas", "c'est la troisième boîte qui compte"):
+            self.assertIsNone(self.check(hint, "C", self.OPTIONS_97), hint)
+
 
 class Phrases(unittest.TestCase):
     """The Kangaroo's templates (copilot/phrases.py), in the six languages."""

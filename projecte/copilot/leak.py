@@ -277,6 +277,11 @@ def says_position(hint, label):
     if re.search(rf"\b{word}\s+{OPTION_NOUN}", lowered) or \
             re.search(rf"\b{OPTION_NOUN}\s+(?:\w+\s+)?{word}\b", lowered):
         return True
+    # "és la tercera", "it's the third one", "c'est la troisième": the ordinal alone ends
+    # the sentence. "la tercera bossa" goes on with a noun, and passes.
+    if re.search(rf"(?:\b{IS}|it\s+is|it['’]s)\s+(?:la|el|the|le)\s+{word}(?:\s+one)?\s*(?:[.!?,;]|$)",
+                 lowered) or re.search(rf"\bthe\s+{word}\s+one\b", lowered):
+        return True
     nth = CHINESE_POSITION[LETTERS.index(label)]
     if re.search(rf"第[{nth}]个?(?:选项|答案|项)|[选答]第[{nth}]", lowered):
         return True
