@@ -43,6 +43,8 @@ def main():
     p.add_argument("--index", default=os.path.join(ROOT, "data", "index.db"))
     args = p.parse_args()
 
+    if not hintgen.enabled():
+        sys.exit("HINTGEN is off in config.env: the tutor never writes a hint, there is nothing to time.")
     if not os.path.exists(args.index):
         sys.exit(f"No {args.index}: build it first (build_index.py), or the problem has no neighbours.")
     with open(args.problems, encoding="utf-8") as f:

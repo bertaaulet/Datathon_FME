@@ -37,6 +37,7 @@ NEUTRAL_HINTS = {"cat": "Pensa-ho bé.", "eng": "Think carefully."}
 NEUTRAL_HINT = NEUTRAL_HINTS.get(KANGAROO_LANG, NEUTRAL_HINTS["eng"])   # a hint that says nothing
 HELP_RUNGS = 5        # method, hint, another hint, a similar problem, the solution
 FEIGNED_BAR = 0.35    # where the bar starts when the Kangaroo only pretends to be wrong
+CONVINCED_BAR = 0.85  # the least the bar shows once the Kangaroo says it understood
 MAX_TRIES = int(CONFIG.get("HINT_MAX_TRIES", 3))
 HINT_MAX_CHARS = int(CONFIG.get("HINT_MAX_CHARS", 200))
 LANG_NAMES = langs.CATALAN                      # each language's name, in Catalan
@@ -67,6 +68,27 @@ def kangaroo(probs, label):
     answer = max(wrong, key=lambda letter: (wrong[letter], -LETTERS.index(letter)))
     margin = math.log(max(probs[label], 1e-9)) - math.log(max(wrong[answer], 1e-9))
     return {"answer": answer, "sure": probs[answer], "margin": margin, "feigned": margin >= 0}
+
+
+def KANGAROO_RULE():
+    """When a hint convinces the Kangaroo (config.env, read at each hint):
+
+      clean   any hint that passes the leak filter (default since 2026-11-15: D2 showed the
+              0.8B model doesn't tell a good hint from a nonsense one, so the board only
+              judges what it can: explaining without giving the answer away)
+      delta   the hint moved the margin by more than tau
+      strict  delta > tau AND the model now prefers the right answer (the original rule)
+    """
+    rule = str(CONFIG.get("KANGAROO_RULE", "clean")).strip().lower()
+    return rule if rule in ("clean", "delta", "strict") else "clean"
+
+
+def convinces(rule, moved, feigned, delta, tau, margin):
+    if rule == "clean":
+        return True
+    if rule == "delta":
+        return margin > 0 if feigned else delta > tau
+    return moved
 
 
 def bar_value(margin):
@@ -560,20 +582,20 @@ class Tutor:
             feigned = current["ref"]["feigned"]
             delta = state["margin"] - current["ref"]["margin"]
             tau = self._tau()
-            if feigned:
-                # The model already preferred the right answer: delta measures nothing. The
-                # hint passed the filter; it convinces if it didn't confuse the model.
-                convinced = state["margin"] > 0
-            else:
-                convinced = delta > tau and state["margin"] > 0
+            # What the model really did: the strict measure. In a feigned case delta measures
+            # nothing; the hint counts if it didn't confuse the model.
+            moved = state["margin"] > 0 if feigned else (delta > tau and state["margin"] > 0)
+            convinced = convinces(KANGAROO_RULE(), moved, feigned, delta, tau, state["margin"])
             if not current["external"]:
-                # Only numbers, except the text of a hint that really convinced the Kangaroo
+                # Only numbers, except the text of a hint that really moved the model
                 self.store.add_hint_event(current["id"], "convinced" if convinced else "not_convinced",
                                           feigned=feigned, delta=None if feigned else delta)
-                if convinced and not feigned:
+                if moved and not feigned:
                     self.store.add_hint(current["id"], 1, text, delta, True, lang=langs.guess(text))
             previous = current.get("bar")
             current["bar"] = bar_value(state["margin"])
+            if convinced:   # the bar always ends past half when the Kangaroo says it understood
+                current["bar"] = max(current["bar"], CONVINCED_BAR)
             self._show(led.bar(current["bar"], previous))
             if convinced:
                 current["taught"] = True
