@@ -408,6 +408,23 @@ class Leaks(unittest.TestCase):
                              ("Mira la tercera opció", "posicio"), ("És la del mig", "posicio")]:
             self.assertEqual(self.check(hint), reason, hint)
 
+    def test_right_answer_and_picked_position_are_caught(self):
+        # Found by the laptop measurement of the filter (docs/STATUS.md, C1)
+        for hint, reason in [("La resposta correcta és C.", "lletra"), ("The right answer is C", "lletra"),
+                             ("La respuesta buena es la C", "lletra"), ("Escull la tercera.", "posicio"),
+                             ("Just pick the third one.", "posicio"), ("Elige la tercera", "posicio"),
+                             ("És la tercera de la llista.", "posicio"), ("La tercera de totes.", "posicio"),
+                             ("It's the third of them.", "posicio")]:
+            self.assertEqual(self.check(hint), reason, hint)
+        for hint in ["Tria la tercera bossa i compta les pomes.", "Marca la primera fila de la taula.",
+                     "La primera de totes les bosses té 4 pomes.", "Escull un bon mètode per comptar."]:
+            self.assertIsNone(self.check(hint), hint)
+
+    def test_value_in_words_matches_whole_words(self):
+        options = {"A": "x : y", "B": "y : x", "C": "1 : 1", "D": "x : 2y", "E": "y : c"}
+        self.assertIsNone(self.check("Fes servir x i y com a costats del rectangle.", "E", options))
+        self.assertEqual(self.check("La raó que surt és y : c, fixa-t'hi.", "E", options), "valor")
+
     def test_clean_hints_pass(self):
         for hint in ["Primer calcula quantes pomes hi ha en total i després resta.",
                      "Multiplica les bosses per les pomes de cada bossa.",

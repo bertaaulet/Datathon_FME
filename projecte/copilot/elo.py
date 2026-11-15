@@ -13,7 +13,7 @@ and one student's answers can't shift the bank (docs/DECISIONS.md).
 K starts large and shrinks: a new student's rating should move fast, a settled
 one shouldn't jump on every answer. The schedule was chosen with simulated
 students (sim/students.py): with a constant K of 32, a student who starts 300
-points off is still about 160 points off after 20 answers; with this schedule,
+points off is still about 150 points off after 20 answers; with this schedule,
 about 65 (median over 200 simulated students per starting point).
 """
 GUESS = 0.2
