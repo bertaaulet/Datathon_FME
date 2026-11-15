@@ -4,6 +4,8 @@
 
 ## Resum
 
+> **Nota (15 nov):** aquest resum i la taula "Estat actual del codi" són del 14 de novembre, abans de les proves a la placa. L'estat i els resultats actuals són a [`STATUS.md`](STATUS.md).
+
 Tot el codi del projecte "Ensenya el Cangur" està escrit, però **encara no tenim cap resultat real**: no s'ha executat res amb M3Kang ni a la placa. Les 35 proves automàtiques només s'han passat contra un model simulat.
 
 El pla té dues apostes. La primera és construir un **harness** que porti `predict.py` molt per sobre del 22,5% actual. La segona és que el model de la placa generi pistes. El 22,5% és el punt de partida i no l'acceptem com a límit: cada etapa del harness es mesura per separat. Els **problemes externs funcionen igual que els del banc**: el harness calcula la resposta, i el tutor sempre mostra un avís que diu que no la podem assegurar. Explicarem amb transparència què funciona i què no.
