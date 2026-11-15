@@ -1,6 +1,6 @@
 # Pistes: com funcionen (versió 2026-11-15)
 
-> Estat: **implementat i a `main`**, integrat amb el pont d'idioma (provat amb el simulador). Falta preparar les dades (banc de l'agent, Cangur en català, τ) i mesurar-ho a la placa: vegeu el punt 6. Les decisions són a `DECISIONS.md` (2026-11-14 i 2026-11-15).
+> Estat: **implementat, dades preparades i desplegat a la placa** (616 problemes, 1.232 pistes de l'agent, Cangur en català). D2 i la pista generada mesurats a la placa; paràmetres definitius des del 2026-11-15 04:30 (`KANGAROO_RULE=clean`, `HINTGEN=off`). Última prova: [`PROVES_FINALS_PISTES.md`](PROVES_FINALS_PISTES.md). Les decisions són a `DECISIONS.md` (2026-11-14 i 2026-11-15).
 
 ## En 30 segons
 - Cada alumne té **la seva placa**. No hi ha companys: el que escriu un alumne no ho veu ningú més.
@@ -27,7 +27,7 @@ Si falta alguna cosa (un problema sense pistes de l'agent, cap veí), surt la fr
 **D'on surt cada cosa**
 - **Tema i mètode:** `topics.py`. El tema es dedueix per paraules clau, i cada tema té 3 frases de mètode escrites per l'equip, iguals per a tots els problemes del tema.
 - **Pistes de l'agent:** 2 per problema del banc, ordenades (pas 1: per on començar; pas 2: el pas següent), escrites per Claude al portàtil i passades pel filtre de fuites. Només hi ha problemes del train al banc del tutor, perquè l'agent no veu mai la resposta d'un problema de validació.
-- **Pista generada (problemes nous):** després de la resposta del harness i de la referència del Cangur, la placa agafa el problema del banc més semblant que tingui pistes (1 veí) i li demana al Qwen: "per a aquest problema, una bona pista era X; escriu-ne una per al nou" (`copilot/hintgen.py`, sense les opcions). Passa pel filtre estricte. Estimat ~37 s, a mesurar. `HINTGEN=off` la desactiva.
+- **Pista generada (problemes nous):** després de la resposta del harness i de la referència del Cangur, la placa agafa el problema del banc més semblant que tingui pistes (1 veí) i li demana al Qwen: "per a aquest problema, una bona pista era X; escriu-ne una per al nou" (`copilot/hintgen.py`, sense les opcions). Passa pel filtre estricte. **Desactivada (`HINTGEN=off`)**: a la placa va trigar 28–34 s (51–70 s des que s'entra el problema) i les pistes eren fluixes o trencades. Els problemes nous mostren frases de mètode als graons 2 i 3.
 - **Problema semblant:** un dels 5 veïns calculats al portàtil, el primer més fàcil (Elo més baix). Va al final perquè, si s'assembla molt, és gairebé la solució.
 
 ## 2. L'alumne encerta: ensenyar el Cangur
@@ -42,15 +42,17 @@ Si falta alguna cosa (un problema sense pistes de l'agent, cap veí), surt la fr
    - Abans: correcta 10 %, B 40 % → lluny de la correcta.
    - Després: correcta 35 %, B 25 % → ara la prefereix.
    - Δ = quant s'ha mogut cap a la correcta.
-6. Si Δ supera el **llindar τ** i ara prefereix la correcta: "Aaah, ara ho veig!". Si s'ha mogut una mica: "M'ho expliques d'una altra manera?". Si no: "No t'he entès…". Té 3 intents.
-7. **Cas 2:** el model ja sabia la resposta, així que el Δ no diu res. Es convenç si la pista passa el filtre i el model continua preferint la correcta. La barra LED arrenca per sota de la meitat i salta al valor real quan es convenç.
+6. **Quan es convenç** (`KANGAROO_RULE` a `config.env`). Per defecte, `clean`: **amb qualsevol pista que passi el filtre de fuites**, al primer intent ("Aaah, ara ho veig!"), i la barra puja com a mínim a 0,85. El model llegeix igualment la pista (~12,5 s a la placa) i el Δ es desa com a dada. Les altres regles: `delta` (Δ > τ) i `strict` (Δ > τ i ara prefereix la correcta; si no: "M'ho expliques d'una altra manera?" / "No t'he entès…", 3 intents).
+7. **Cas 2:** el model ja sabia la resposta, així que el Δ no diu res. La barra arrenca per sota de la meitat.
 
-**τ** es calibra amb l'experiment **D2** (només problemes del cas 1): 25 problemes, cadascun amb una pista bona i una d'absurda. τ ha de ser prou alt perquè una pista absurda gairebé mai el convenci. Mentre no hi hagi D2, τ = 1,0 (provisional).
+**Per què `clean`:** el D2 a la placa (24 problemes) va mostrar que el Qwen 0.8B no distingeix una pista bona d'una d'absurda (13 a 11, p = 0,84; mediana de Δ +0,11 i +0,10) i que gairebé no canvia d'opinió ni quan li diuen la resposta (1/24): parteix d'un marge mediana de −1,69 i una pista el mou ±0,1–0,5. La placa no pot jutjar si una pista és bona; sí que pot comprovar que no dona la resposta.
+
+**τ = 0,49**, calibrat amb el **D2** a la placa (9 de cada 10 pistes absurdes mouen el Cangur menys que això). Amb `clean`, només decideix quin text es guarda.
 
 **Idioma:** el Cangur llegeix **el problema i les instruccions en català** (`KANGAROO_LANG=cat`). L'alumne pot escriure la pista en qualsevol de les 6 llengües del pont, i el Cangur la llegeix tal com s'ha escrit, sense traduir-la; l'efecte d'una pista que no és en català **no s'ha mesurat** (protocol a `DECISIONS.md`). No és perquè encerti (l'encert no importa: la resposta correcta ve de M3Kang o del harness), sinó perquè **entengui la pista**: és l'instrument que la mesura. `predict.py` i la resta segueixen en anglès (`MODEL_LANG=eng`). Les respostes precalculades porten l'idioma en què es van mesurar: si no coincideix, el tutor torna a preguntar al model (~10 s).
 
 ## 3. Què es guarda
-- **El text d'una pista de l'alumne**, només si és d'un problema del banc, del **cas 1** (el Cangur no fingia) **i** l'ha convençut (Δ > τ). Serveix per a la vista del docent i per poder ampliar el banc més endavant.
+- **El text d'una pista de l'alumne**, només si és d'un problema del banc, del **cas 1** (el Cangur no fingia) **i** ha mogut el model de debò (Δ > τ i ara prefereix la correcta), sigui quina sigui `KANGAROO_RULE`. Serveix per a la vista del docent i per poder ampliar el banc més endavant.
 - **Comptadors sense text** (taula `hint_events`), per al dashboard i la vista del docent: pistes rebutjades per fuita (i per quin motiu), pistes que no han convençut el Cangur i pistes que sí, i quantes eren de casos fingits. En el cas 2 no es desa el Δ.
 - Les pistes dels problemes nous **no es guarden ni es compten**.
 - `tutor.db` té text de M3Kang: **mai es puja a Git**.
@@ -63,7 +65,8 @@ Si falta alguna cosa (un problema sense pistes de l'agent, cap veí), surt la fr
 ## 5. Configuració i scripts
 | Què | On |
 |---|---|
-| `KANGAROO_LANG=cat`, `HINT_TAU`, `HINT_MAX_TRIES`, `HINTGEN`, `HINTGEN_MAX_TOKENS` | `projecte/config.env` |
+| `KANGAROO_LANG=cat`, `KANGAROO_RULE=clean`, `HINT_TAU`, `HINT_MAX_TRIES`, `HINTGEN=off`, `HINTGEN_MAX_TOKENS` | `projecte/config.env` |
+| Prova de cap a cap a la placa | `prep/tutor_smoke.py` |
 | Banc de l'agent: instruccions i validació (camp `step`) | `prep/agent/hint_bank.md`, `prep/check_agent_output.py` |
 | Importar el banc | `prep/import_hints.py data/agent_hints.jsonl` |
 | Respostes del Cangur, en català | `prep/kangaroo_baseline.py` (`--redo` si canvia l'idioma) |
@@ -76,11 +79,8 @@ Els passos de les dades, per a qui els executi, són a [`RUNBOOK_PISTES.md`](RUN
 
 | Què | On | Qui |
 |---|---|---|
-| Revisar i fusionar `berta/pistes-flux-nou` | Repo | Berta |
-| Reconstruir `tutor.db` (només train elegibles) amb `build_tutor_db.py` | Portàtil | Berta |
-| Banc de l'agent: 2 pistes ordenades per problema elegible → `check_agent_output.py` → revisar-ne 20 → `import_hints.py` | Portàtil | Berta |
-| Recalcular el Cangur en català (`kangaroo_baseline.py --redo`, ~5 min al portàtil) i `kangaroo_agent_hints.py` | Portàtil | Berta |
-| D2: pistes bones, absurdes i amb fuita per a 25 problemes (agent) → `hint_experiment.py` → τ | Placa (~25 min) | Berta + placa |
-| Mesurar el temps de la pista generada (1 veí) i provar-la amb els problemes inventats | Placa | Berta + placa |
-| Recorregut sencer a la placa (5 graons, cas fingit, pista generada, matriu LED) | Placa | Berta + placa |
+| ~~Fusionar el codi; refer `tutor.db`; banc de l'agent; Cangur en català; D2; temps de la pista generada~~ | Fet (Irene, 2026-11-15) | — |
+| Fusionar `berta/docs-pistes-main` (regla `KANGAROO_RULE`, `HINTGEN=off`, `tutor_smoke.py`) | Repo | Berta |
+| Última prova a la placa amb els paràmetres definitius ([`PROVES_FINALS_PISTES.md`](PROVES_FINALS_PISTES.md)), inclosa la matriu LED | Placa (~25 min) | Qui tingui la placa |
+| Revisió humana d'una mostra de pistes de l'agent (ara només la de Codex) | Portàtil | — |
 | Panell de pistes al dashboard (`agent-hints-kangaroo.csv`, `hints-*.csv`) | Repo | — |

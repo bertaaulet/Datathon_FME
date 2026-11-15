@@ -796,6 +796,9 @@ class TutorFlow(WithServers):
 
     def setUp(self):
         super().setUp()
+        # Most tests check the measuring machinery: the strict rule, and the written hint on
+        # (config.env ships clean and off; test_rules covers the other rules)
+        CONFIG["KANGAROO_RULE"], CONFIG["HINTGEN"] = "strict", "on"
         self.assertEqual(self.build.returncode, 0, self.build.stderr)
         self.path = os.path.join(self.folder.name, f"{self.id().split('.')[-1]}.db")
         with open(self.template, "rb") as source, open(self.path, "wb") as target:
@@ -895,6 +898,32 @@ class TutorFlow(WithServers):
         self.assertEqual(current["model"]["text"], self.store.text(current["id"], "cat")["text"])
         self.tutor.hint("Compta-les totes amb calma, una per una.")
         self.assertEqual(self.model.calls[-1]["hint"], "Compta-les totes amb calma, una per una.")
+
+    def test_clean_rule_any_clean_hint_convinces(self):
+        CONFIG["KANGAROO_RULE"] = "clean"
+        self.tutor.start("Test", "", 1)
+        self.teachable()
+        current = self.tutor.current
+        view = self.tutor.hint(f"És la {current['label']}")          # a leak still doesn't
+        self.assertEqual(view["phase"], "teach")
+        self.store.set_meta("tau", "100")                           # nothing moves the model that far
+        view = self.tutor.hint("zzzz qqqq xxxx kkkk")
+        self.assertEqual(view["phase"], "done")                      # but a clean hint convinces
+        self.assertGreaterEqual(view["problem"]["bar"], 0.85)
+        self.assertEqual(self.store.student_hints(), [])             # its text isn't kept: it didn't move it
+        self.assertEqual(self.store.hint_counts()["convinced"], 1)
+        self.assertIsNotNone(self.store.hint_events()[-1]["delta"])   # the measure is still stored
+
+    def test_delta_rule(self):
+        from copilot.tutor import convinces
+        self.assertTrue(convinces("delta", False, False, 0.6, 0.49, -1.0))   # moved enough, still wrong
+        self.assertFalse(convinces("delta", False, False, 0.3, 0.49, 0.5))
+        self.assertTrue(convinces("delta", True, True, 0.0, 0.49, 0.2))      # feigned: kept the right one
+        self.assertFalse(convinces("strict", False, False, 0.6, 0.49, -1.0))
+        self.assertTrue(convinces("clean", False, False, -2.0, 0.49, -3.0))
+        CONFIG["KANGAROO_RULE"] = "nonsense"
+        from copilot.tutor import KANGAROO_RULE
+        self.assertEqual(KANGAROO_RULE(), "clean")                          # an unknown value falls back
 
     def test_feigned_kangaroo(self):
         """The model already prefers the right answer: the Kangaroo pretends, nothing is kept."""
