@@ -70,6 +70,8 @@ Si falta alguna cosa (un problema sense pistes de l'agent, cap veí), surt la fr
 | Pista dels problemes nous | `copilot/hintgen.py` |
 
 ## 6. Pendents
+Els passos de les dades, per a qui els executi, són a [`RUNBOOK_PISTES.md`](RUNBOOK_PISTES.md).
+
 | Què | On | Qui |
 |---|---|---|
 | Revisar i fusionar `berta/pistes-flux-nou` | Repo | Berta |
