@@ -332,4 +332,4 @@ The code is under the MIT license (see `LICENSE`). It builds on the organizers' 
 
 ## The team
 
-`TODO`: names.
+Berta Aulet, Irene Miralles, Marc Igual and Berta Vidal.

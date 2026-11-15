@@ -26,4 +26,4 @@ The code is under the [MIT license](LICENSE). It builds on the organizers' base 
 
 ## The team
 
-`TODO`: names.
+Berta Aulet, Irene Miralles, Marc Igual and Berta Vidal.
