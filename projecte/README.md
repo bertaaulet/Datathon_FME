@@ -38,7 +38,7 @@ Explaining something to someone else is one of the best ways to understand it. T
 4. **Each student has their own board.** A hint is never shown to anyone else. Only a hint that really convinced the Kangaroo keeps its text, for the teacher; everything else is counted, without text.
 5. **The next problem** is chosen with Elo ratings (see Ratings below), so it's hard enough to learn from and easy enough to keep going.
 
-The model never writes text for the student: it only reports how likely it finds each letter, in one token, and everything the Kangaroo "says" is a sentence written by the team. Hints come from a hint bank we prepared (two per problem), and outside problems get method hints for their topic. The whole hint flow, in Catalan, is in [`docs/PISTES.md`](../docs/PISTES.md).
+The model never writes text for the student: it only reports how likely it finds each letter, in one token, and everything the Kangaroo "says" is a sentence written by the team. Hints come from a hint bank we prepared (two per problem), and outside problems get method hints for their topic.
 
 ### The language bridge
 

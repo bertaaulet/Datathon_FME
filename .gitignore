@@ -18,3 +18,10 @@ descripcio_side_challenge/
 # Demo videos and screenshots may show real M3Kang problems: add them one by one, checked
 *.mp4
 *.mov
+
+# Team working notes: kept locally, not part of the delivery
+CLAUDE.md
+pla_projecte.md
+docs/*
+!docs/img/
+!docs/DASHBOARD.md

@@ -38,7 +38,7 @@ Explicar una cosa a algú altre és una de les millors maneres d'entendre-la. El
 4. **Cada alumne té la seva placa.** Una pista no es mostra mai a ningú més. Només una pista que de debò ha convençut el Cangur en conserva el text, per al docent; tota la resta es compta, sense text.
 5. **El problema següent** es tria amb puntuacions Elo (vegeu Puntuacions), perquè sigui prou difícil per aprendre i prou fàcil per continuar.
 
-El model no escriu mai text per a l'alumne: només diu com de probable troba cada lletra, en un sol token, i tot el que "diu" el Cangur és una frase escrita per l'equip. Les pistes surten d'un banc de pistes que hem preparat (dues per problema), i els problemes externs reben pistes de mètode del seu tema. Tot el flux de pistes, en català, és a [`docs/PISTES.md`](../docs/PISTES.md).
+El model no escriu mai text per a l'alumne: només diu com de probable troba cada lletra, en un sol token, i tot el que "diu" el Cangur és una frase escrita per l'equip. Les pistes surten d'un banc de pistes que hem preparat (dues per problema), i els problemes externs reben pistes de mètode del seu tema.
 
 ### El pont d'idioma
 
