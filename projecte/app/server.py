@@ -53,6 +53,7 @@ def make_handler(tutor, images_dir):
         "/api/leave-teaching": lambda b: tutor.leave_teaching(),
         "/api/reveal": lambda b: tutor.reveal(),
         "/api/language": lambda b: tutor.set_language(str(b.get("lang", ""))[:8]),
+        "/api/topic": lambda b: tutor.set_topic(str(b.get("topic", ""))[:40]),
         "/api/external": lambda b: tutor.external(str(b.get("text", ""))[:4000]),
     }
 
@@ -82,6 +83,8 @@ def make_handler(tutor, images_dir):
                 self.send(200, tutor.led_view())
             elif path == "/api/teacher":
                 self.send(200, tutor.teacher())
+            elif path == "/api/progress":
+                self.send(200, tutor.progress())
             elif path == "/api/ui":       # the page's own words in the six languages, asked for once
                 self.send(200, ui_text.table())
             elif image and os.path.exists(os.path.join(images_dir, image.group(1))):

@@ -51,7 +51,8 @@ CREATE TABLE IF NOT EXISTS attempts (
     seconds REAL, ts REAL,
     external INTEGER DEFAULT 0, -- 1: a problem from outside the bank, checked against the
                                 -- harness's answer; never moves a rating or a bank count
-    origin_lang TEXT            -- the student's home language then ('' for none); NULL: older row
+    origin_lang TEXT,           -- the student's home language then ('' for none); NULL: older row
+    retry INTEGER DEFAULT 0     -- 1: a problem tried again from the failed list; moves no rating
 );
 CREATE TABLE IF NOT EXISTS hints (
     n INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -83,6 +84,7 @@ MIGRATIONS = [
     ("texts", "source", "TEXT DEFAULT 'official'"),
     ("attempts", "origin_lang", "TEXT"),
     ("hints", "lang", "TEXT"),
+    ("attempts", "retry", "INTEGER DEFAULT 0"),
 ]
 # Older databases may still have the columns of the shared-hint version (relevance, dups,
 # vec, rejected, shown, solved_after) and a ref_vectors table: they are left as they are
@@ -219,20 +221,43 @@ class Store:
         return self.rows("SELECT * FROM student_lang WHERE student = ? ORDER BY lang", (student_id,))
 
     def add_attempt(self, student_id, problem_id, lang, shown, answer, correct, revealed,
-                    helps, seconds, external=False, origin_lang=""):
+                    helps, seconds, external=False, origin_lang="", retry=False):
         self.run("INSERT INTO attempts (student, problem_id, lang, shown, answer, correct, "
-                 "revealed, helps, seconds, ts, external, origin_lang) "
-                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                 "revealed, helps, seconds, ts, external, origin_lang, retry) "
+                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                  (student_id, problem_id, lang, shown, answer, int(correct), int(revealed),
-                  helps, seconds, time.time(), int(bool(external)), origin_lang or ""))
+                  helps, seconds, time.time(), int(bool(external)), origin_lang or "",
+                  int(bool(retry))))
 
     def attempts(self, student_id=1, external=False):
         """The student's attempts, oldest first. Bank problems only, unless external=True
-        (then only the outside ones): the two never mix in ratings or counts."""
+        (then only the outside ones): the two never mix in ratings or counts. A problem
+        tried again from the failed list (retry = 1) is never counted here."""
         return self.rows("SELECT a.*, p.topic, p.level FROM attempts a "
                          "LEFT JOIN problems p ON p.id = a.problem_id "
-                         "WHERE a.student = ? AND COALESCE(a.external, 0) = ? ORDER BY a.n",
+                         "WHERE a.student = ? AND COALESCE(a.external, 0) = ? "
+                         "AND COALESCE(a.retry, 0) = 0 ORDER BY a.n",
                          (student_id, int(bool(external))))
+
+    def seen(self, student_id, problem_id):
+        """Whether the student has already answered this bank problem."""
+        return bool(self.one("SELECT 1 AS x FROM attempts WHERE student = ? AND problem_id = ? "
+                             "AND COALESCE(external, 0) = 0", (student_id, problem_id)))
+
+    def failed(self, student_id=1):
+        """Bank problems whose first answer was wrong, newest first, each one once:
+        [{id, topic, level, fixed}], fixed = 1 once a later retry got it right."""
+        rows = self.rows(
+            "SELECT a.problem_id AS id, p.topic, p.level, COALESCE((SELECT MAX(r.correct) "
+            "FROM attempts r WHERE r.student = a.student AND r.problem_id = a.problem_id "
+            "AND COALESCE(r.retry, 0) = 1), 0) AS fixed "
+            "FROM attempts a JOIN problems p ON p.id = a.problem_id "
+            "WHERE a.student = ? AND COALESCE(a.external, 0) = 0 AND COALESCE(a.retry, 0) = 0 "
+            "AND a.correct = 0 ORDER BY a.n DESC", (student_id,))
+        once = {}
+        for row in rows:
+            once.setdefault(row["id"], row)
+        return list(once.values())
 
     # --- hints -------------------------------------------------------------
 
