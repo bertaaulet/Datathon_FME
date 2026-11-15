@@ -6,8 +6,6 @@
 
 > **Status (15 November 2026):** running on an Arduino UNO Q 4 GB with the real M3Kang bank. Every number below was measured on the board unless it says otherwise. The tutor, the two model servers and the LED matrix start on their own when the board boots.
 
-<!-- TODO: a photo or a short video of the copilot working on the board -->
-
 ## A session with the Kangaroo
 
 ![The student's welcome screen: name, school year and language](../docs/img/benvinguda.png)

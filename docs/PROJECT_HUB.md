@@ -24,7 +24,7 @@ _2026-11-15. Esborrany preparat a partir de `projecte/README.md` (versió de `ma
 - **Duration:** about 6 hours on a board already set up with the organizers' steps 0–12
 - **Tags:** Arduino UNO Q, LLM, edge AI, llama.cpp, education, math, offline, LED matrix
 - **License:** MIT
-- **Code:** <https://github.com/bertaaulet/Datathon_FME> (the code is in `projecte/`)
+- **Code:** <https://github.com/bertaaulet/ensenya-el-cangur> (the code is in `projecte/`)
 
 ## B. Components and supplies
 

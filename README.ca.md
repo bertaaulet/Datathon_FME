@@ -6,8 +6,6 @@
 
 ![La pantalla de benvinguda de l'alumne: "Ensenya el Cangur", amb el Cangur dibuixat amb punts LED](docs/img/benvinguda.png)
 
-<!-- TODO: vídeo de la demo -->
-
 ## La idea
 
 Explicar una cosa a algú altre és una de les millors maneres d'entendre-la. Per això, aquí la IA no és el professor. **És el company.**

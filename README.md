@@ -6,8 +6,6 @@
 
 ![The student's welcome screen: "Teach the Kangaroo", with the Kangaroo drawn in LED dots](docs/img/benvinguda.png)
 
-<!-- TODO: demo video -->
-
 ## The idea
 
 Explaining something to someone else is one of the best ways to understand it. So here, the AI isn't the teacher. **It's the classmate.**

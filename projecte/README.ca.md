@@ -6,8 +6,6 @@
 
 > **Estat (15 de novembre de 2026):** funciona en una Arduino UNO Q de 4 GB amb el banc real de M3Kang. Tots els números d'aquest document s'han mesurat a la placa, si no es diu el contrari. El tutor, els dos servidors de models i la matriu LED arrenquen sols quan s'engega la placa.
 
-<!-- TODO: una foto o un vídeo curt del copilot funcionant a la placa -->
-
 ## Una sessió amb el Cangur
 
 ![La pantalla de benvinguda de l'alumne: nom, curs i llengua](../docs/img/benvinguda.png)
