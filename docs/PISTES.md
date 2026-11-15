@@ -46,8 +46,8 @@ Cada clic a "ajuda" puja un graó. Entre graó i graó pot tornar a respondre.
 **Idioma:** el Cangur llegeix **el problema i la pista en català** (`KANGAROO_LANG=cat`). No és perquè encerti (l'encert no importa: la resposta correcta ve de M3Kang o del harness), sinó perquè **entengui la pista**: és l'instrument que la mesura. `predict.py` i la resta segueixen en anglès (`MODEL_LANG=eng`).
 
 ## 3. Què es guarda
-- **El text d'una pista de l'alumne**, només si és d'un problema del banc, del **cas 1** (el Cangur no fingia) **i** l'ha convençut (Δ > τ).
-- Les pistes del **cas 2** no es guarden mai; només es compten a part. Serveix per a la vista del docent i per poder ampliar el banc més endavant.
+- **El text d'una pista de l'alumne**, només si és d'un problema del banc, del **cas 1** (el Cangur no fingia) **i** l'ha convençut (Δ > τ). Serveix per a la vista del docent i per poder ampliar el banc més endavant.
+- Les pistes del **cas 2** no es guarden mai; només es compten a part.
 - **Comptadors sense text**, per al dashboard: pistes rebutjades per fuita (i per quin motiu), pistes que no han convençut el Cangur i pistes que sí.
 - Les pistes dels problemes nous **no es guarden**.
 - `tutor.db` té text de M3Kang: **mai es puja a Git**.
