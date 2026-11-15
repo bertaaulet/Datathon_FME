@@ -273,6 +273,86 @@ class Guardrails(WithServers):
         self.assertIsNone(calib.letter_bias())
 
 
+class Vision(WithServers):
+    """PREDICT_VISION: the image goes to the vision server only when it can help, and any
+    missing piece (image, server, time) or a failed call falls back to the text-only way."""
+
+    def setUp(self):
+        super().setUp()
+        self.tmp = tempfile.TemporaryDirectory()
+        self.saved_url, self.saved_dirs = pipeline.VISION_URL, list(pipeline.IMAGE_DIRS)
+        pipeline.VISION_URL = self.url          # the stand-in plays both servers
+        pipeline.IMAGE_DIRS[:] = [self.tmp.name]
+        pipeline._vision_up.clear()
+        self.model.vision, self.model.images = True, 0
+        CONFIG["PREDICT_VISION"], CONFIG["PREDICT_IMAGES"] = "figure", ""
+        self.figure = dict(SAMPLE, id="fig1", language="eng", text_only=False)
+        with open(os.path.join(self.tmp.name, "fig1_eng.png"), "wb") as f:
+            f.write(b"\x89PNG\r\n\x1a\nnot a real picture")
+
+    def tearDown(self):
+        pipeline.VISION_URL = self.saved_url
+        pipeline.IMAGE_DIRS[:] = self.saved_dirs
+        pipeline._vision_up.clear()
+        self.model.vision = False
+        self.tmp.cleanup()
+
+    def solve(self, problem, **kwargs):
+        return pipeline.solve(problem, llm_url=self.url, **kwargs)
+
+    def test_off_sends_nothing(self):
+        CONFIG["PREDICT_VISION"] = "off"
+        result = self.solve(self.figure)
+        self.assertEqual((result["vision"], result["stage"], self.model.images), (0, "model", 0))
+
+    def test_figure_sends_the_image(self):
+        result = self.solve(self.figure)
+        self.assertEqual((result["vision"], result["stage"], result["calls"]), (1, "vision", 1))
+        self.assertEqual(self.model.images, 1)
+        self.assertIn(result["answer"], tuple("ABCDE"))
+
+    def test_text_only_problem_stays_text(self):
+        result = self.solve(dict(self.figure, text_only=True))
+        self.assertEqual((result["vision"], self.model.images), (0, 0))
+        CONFIG["PREDICT_VISION"] = "all"
+        self.assertEqual(self.solve(dict(self.figure, text_only=True))["vision"], 1)
+
+    def test_no_options_asks_the_picture_instead_of_the_prior(self):
+        problem = {"id": "fig1", "language": "eng", "text": "Which shape comes next?", "text_only": False}
+        result = self.solve(problem)
+        self.assertEqual((result["vision"], result["stage"]), (1, "vision"))
+        CONFIG["PREDICT_VISION"] = "off"
+        self.assertEqual(self.solve(problem)["stage"], "prior")
+
+    def test_server_without_vision(self):
+        self.model.vision = False
+        result = self.solve(self.figure)
+        self.assertEqual((result["vision"], result["stage"], self.model.images), (0, "model", 0))
+
+    def test_failed_vision_call_falls_back_to_text(self):
+        self.model.fail_next = 1
+        result = self.solve(self.figure)
+        self.assertEqual((result["vision"], result["vision_failed"], result["stage"], result["status"]),
+                         (0, 1, "model", "ok"))
+
+    def test_no_time_no_picture(self):
+        CONFIG["VISION_SECONDS"] = "40"
+        result = self.solve(self.figure, time_limit=30)
+        self.assertEqual((result["vision"], self.model.images), (0, 0))
+        self.assertEqual(result["stage"], "model")
+
+    def test_no_rotations_with_a_picture(self):
+        CONFIG["PREDICT_ROTATIONS"] = "2"
+        self.assertEqual(self.solve(self.figure)["calls"], 1)
+
+    def test_image_lookup(self):
+        self.assertTrue(pipeline.image_path(self.figure).endswith("fig1_eng.png"))
+        self.assertIsNone(pipeline.image_path({"id": "nope", "language": "eng"}))
+        self.assertIsNone(pipeline.image_path({"id": "../fig1", "language": "eng"}))
+        self.assertIsNone(pipeline.image_path({"id": "zz", "language": "eng", "image": "../fig1_eng.png"}))
+        self.assertTrue(pipeline.image_path({"id": "zz", "language": "eng", "image": "fig1_eng.png"}))
+
+
 class Expressions(WithServers):
     def test_evaluate_is_safe_and_exact(self):
         from copilot import mathexpr

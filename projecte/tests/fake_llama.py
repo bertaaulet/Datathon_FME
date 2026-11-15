@@ -43,6 +43,8 @@ class Model:
         self.last_prompt = ""
         self.calls = []
         self.fail_next = 0              # answer this many requests with an error
+        self.vision = False             # what /props says: can it see images?
+        self.images = 0                 # requests that carried an image
         self.lock = threading.Lock()
 
     def learn(self, problems):
@@ -107,6 +109,10 @@ def fake_expression(model, question, options):
 
 
 def completion(model, request):
+    content = request["messages"][-1]["content"]
+    if isinstance(content, list) and any(part.get("type") == "image_url" for part in content):
+        with model.lock:
+            model.images += 1
     question, options, hint, full = read_prompt(request["messages"])
     if str(request.get("grammar", "")).startswith("root ::= [^"):   # a hint (copilot/hintgen.py)
         with model.lock:
@@ -187,7 +193,7 @@ def handler_for(model, kind):
             if self.path == "/health":
                 self.send(200, {"status": "ok"})
             elif self.path == "/props":
-                self.send(200, {"modalities": {"vision": False}})
+                self.send(200, {"modalities": {"vision": model.vision}})
             else:
                 self.send(404, {"error": "not found"})
 

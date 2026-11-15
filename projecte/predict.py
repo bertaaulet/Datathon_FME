@@ -21,6 +21,7 @@ import os
 import re
 import sys
 
+from copilot import pipeline
 from copilot.calib import end_of_run_bias
 from copilot.config import CONFIG, ROOT
 from copilot.pipeline import FALLBACK, rescore, solve
@@ -80,6 +81,14 @@ def main():
             print(f"No retrieval ({type(error).__name__}: {error}). "
                   f"Build the index with: python3 build_index.py", file=sys.stderr)
             index = None
+
+    # Vision (experiment): images may also come in an images/ folder next to the input
+    here = os.path.dirname(os.path.abspath(args.input))
+    pipeline.IMAGE_DIRS[:] = [os.path.join(here, "images"), here]
+    if pipeline.vision_mode() != "off":
+        up = pipeline.vision_ready()
+        print(f"Vision: {pipeline.vision_mode()}, server {'up' if up else 'off: text only'}",
+              file=sys.stderr)
 
     problems = read_problems(args.input)
     batch = CONFIG.get("PREDICT_DEBIAS", "auto").lower() == "batch"

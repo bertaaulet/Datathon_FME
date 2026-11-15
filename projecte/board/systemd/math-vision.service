@@ -1,0 +1,13 @@
+[Unit]
+Description=Math on the Edge: the same model with its image projector (llama.cpp, port @VISION_PORT@)
+After=local-fs.target math-llm.service
+
+[Service]
+Type=simple
+User=@USER@
+ExecStart=@LLAMA_SERVER@ -m @LLM_PATH@ --mmproj @MMPROJ_PATH@ --image-max-tokens @VISION_IMAGE_TOKENS@ --host 127.0.0.1 --port @VISION_PORT@ --threads @LLM_THREADS@ --ctx-size @LLM_CTX@ --parallel 1 --cache-ram 0 --ctx-checkpoints 2 --jinja --reasoning off --reasoning-budget 0
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -9,20 +9,28 @@ official run measures. The steps, each switched in config.env:
 4. Ask again with the options rotated, while there's time, and average
    (PREDICT_ROTATIONS). The question is cached, so a pass only re-reads the options.
 
+Vision (PREDICT_VISION, an experiment): a problem that needs its picture is sent with
+the image to the vision server instead. Without the image, the server or the time,
+or if that call fails, it goes the text-only way above.
+
 Whatever goes wrong, solve() returns a letter: the official run never stops.
 Guardrails: the input is cleaned first (clean_problem), every call is planned
 with the board's speed before it's made (estimate_seconds), a problem too long
 to read in time is shortened instead of timing out, and the answer is always
 the best one found so far (result["stage"] says which step gave it).
 """
+import base64
+import json
 import math
+import os
 import socket
 import time
 import urllib.error
+import urllib.request
 
 from . import mathexpr
 from .calib import letter_bias, prior_letter
-from .config import CONFIG
+from .config import CONFIG, ROOT
 from .llm import EXPR_MAX_TOKENS, LETTERS, URL, correct_value, expression, letter_probs, split_problem
 
 TIME_LIMIT = float(CONFIG["TIME_LIMIT_SECONDS"])
@@ -34,6 +42,69 @@ CHARS_PER_TOKEN = float(CONFIG.get("CHARS_PER_TOKEN", 3.0))
 PROMPT_OVERHEAD = 60  # tokens: system prompt and chat template
 # Rotation s shows the option s places further on in position A. Far apart first.
 SHIFTS = (2, 4, 1, 3)
+
+VISION_URL = f"http://127.0.0.1:{CONFIG.get('VISION_PORT', '8083')}/v1/chat/completions"
+IMAGE_DIRS = []            # more folders to look in (predict.py adds the input's folder)
+MAX_IMAGE_BYTES = 4_000_000
+_vision_up = {}            # server base URL -> can it see images? Asked once per run
+
+
+def vision_mode():
+    mode = str(CONFIG.get("PREDICT_VISION", "off") or "off").strip().lower()
+    return mode if mode in ("figure", "all") else "off"
+
+
+def needs_picture(problem):
+    """The text alone can't be enough: the data says there's a figure, or OCR found no 5 options."""
+    if problem.get("text_only") is False:
+        return True
+    _question, options = split_problem(problem)
+    return not all(letter in options for letter in LETTERS)
+
+
+def image_path(problem):
+    """The problem's PNG, or None. Looks for the input's "image" field, then <id>_<language>.png."""
+    folders = list(IMAGE_DIRS)
+    configured = CONFIG.get("PREDICT_IMAGES", "data/images") or ""
+    if configured:
+        folders.append(configured if os.path.isabs(configured) else os.path.join(ROOT, configured))
+    candidates = []
+    named = problem.get("image")
+    if isinstance(named, str) and named.strip() and ".." not in named.replace("\\", "/").split("/"):
+        candidates.append(named if os.path.isabs(named) else None)
+        candidates += [os.path.join(folder, named) for folder in folders]
+    name = f"{problem.get('id', '')}_{problem.get('language', '')}.png"
+    if os.path.basename(name) == name and not name.startswith("."):
+        candidates += [os.path.join(folder, name) for folder in folders]
+    for path in candidates:
+        if path and os.path.isfile(path):
+            return path
+    return None
+
+
+def vision_ready(url=None, timeout=2.0):
+    """True if the server answers and says it can see images (llama-server /props)."""
+    base = (url or VISION_URL).split("/v1/")[0]
+    if base not in _vision_up:
+        try:
+            with urllib.request.urlopen(base + "/props", timeout=timeout) as response:
+                props = json.loads(response.read().decode("utf-8"))
+            _vision_up[base] = bool((props.get("modalities") or {}).get("vision"))
+        except Exception:
+            _vision_up[base] = False
+    return _vision_up[base]
+
+
+def pick_image(problem):
+    """(image as base64, vision server URL) to send with this problem, or (None, None)."""
+    mode = vision_mode()
+    if mode == "off" or (mode == "figure" and not needs_picture(problem)):
+        return None, None
+    path = image_path(problem)
+    if not path or os.path.getsize(path) > MAX_IMAGE_BYTES or not vision_ready():
+        return None, None
+    with open(path, "rb") as f:
+        return base64.b64encode(f.read()).decode("ascii"), VISION_URL
 
 
 def rotation(shift):
@@ -178,11 +249,19 @@ def solve(problem, index=None, k=0, exclude_id=None, image_b64=None, llm_url=URL
     result = {"answer": FALLBACK, "status": "ok", "prompt_tokens": 0, "retrieved": "",
               "examples": [], "probs": {}, "calls": 0, "letters_found": 0,
               "passes": [], "full": False, "stage": "fallback", "shortened": False,
-              "expr": "", "expr_value": None, "expr_letter": ""}
+              "expr": "", "expr_value": None, "expr_letter": "", "vision": 0, "vision_failed": 0}
     try:
         problem = clean_problem(problem)
         result["answer"], result["stage"] = prior_letter(problem), "prior"
-        _solve(problem, result, start, index, k, exclude_id, image_b64, llm_url, time_limit)
+        text_url = llm_url
+        if image_b64 is None:
+            try:
+                image_b64, vision_url = pick_image(problem)
+            except Exception:  # an unreadable image: text only
+                image_b64, vision_url = None, None
+            if image_b64:
+                llm_url = vision_url
+        _solve(problem, result, start, index, k, exclude_id, image_b64, llm_url, time_limit, text_url)
     except (socket.timeout, TimeoutError):
         result["status"] = "timeout"
     except urllib.error.URLError as error:
@@ -198,13 +277,16 @@ def solve(problem, index=None, k=0, exclude_id=None, image_b64=None, llm_url=URL
     return result
 
 
-def _solve(problem, result, start, index, k, exclude_id, image_b64, llm_url, time_limit):
+def _solve(problem, result, start, index, k, exclude_id, image_b64, llm_url, time_limit, text_url=URL):
     def left():
         return time_limit - (time.perf_counter() - start) - MARGIN
 
     question, options = split_problem(problem)
     full = all(letter in options for letter in LETTERS)
     result["full"] = full
+    if image_b64 and left() < float(CONFIG.get("VISION_SECONDS", 40)):
+        image_b64, llm_url = None, text_url    # not enough time to read a picture: text only
+    result["vision"] = int(bool(image_b64))
     blind = not options and not image_b64
     if blind and CONFIG.get("PREDICT_NO_OPTIONS", "prior").lower() == "prior":
         return  # the letters mean nothing to the model: keep the most common one
@@ -218,6 +300,8 @@ def _solve(problem, result, start, index, k, exclude_id, image_b64, llm_url, tim
     options_chars = sum(len(v) + 4 for v in options.values())
     example_chars = sum(len(e.get("text", "")) + 40 for e in examples)
     room = left() - estimate_seconds(example_chars) + estimate_seconds(0)
+    if image_b64:  # the picture's tokens are read too
+        room -= float(CONFIG.get("VISION_IMAGE_TOKENS", 128)) / READ_TPS
     short = fit_text(question, options_chars, room)
     if short is None:
         return  # not even a short version fits: keep the prior
@@ -227,8 +311,21 @@ def _solve(problem, result, start, index, k, exclude_id, image_b64, llm_url, tim
 
     bias = letter_bias() if full else None
     began = time.perf_counter()
-    first = letter_probs(problem, examples, timeout=max(left(), 1.0), image_b64=image_b64,
-                         url=llm_url, bias=bias)
+    try:
+        first = letter_probs(problem, examples, timeout=max(left(), 1.0), image_b64=image_b64,
+                             url=llm_url, bias=bias)
+    except Exception:
+        if not image_b64:
+            raise
+        # The vision server failed: answer the text-only way if that still makes sense
+        image_b64, llm_url = None, text_url
+        result.update(vision=0, vision_failed=1)
+        if not options and CONFIG.get("PREDICT_NO_OPTIONS", "prior").lower() == "prior":
+            return
+        if left() < estimate_seconds(len(problem.get("text", "")) + options_chars + example_chars):
+            return
+        began = time.perf_counter()
+        first = letter_probs(problem, examples, timeout=max(left(), 1.0), url=llm_url, bias=bias)
     slowest = time.perf_counter() - began
     # A rotation reads the whole prompt again (the board's cache can't reuse it):
     # plan it as the slower of the measured first call and the estimate
@@ -240,7 +337,8 @@ def _solve(problem, result, start, index, k, exclude_id, image_b64, llm_url, tim
     result["passes"].append((LETTERS, first["probs"]))
     result.update(calls=1, letters_found=first["found"],
                   prompt_tokens=first["timings"].get("prompt_n", 0),
-                  probs=first["probs"], answer=best_letter(first["probs"]), stage="model")
+                  probs=first["probs"], answer=best_letter(first["probs"]),
+                  stage="vision" if image_b64 else "model")
     result["model_answer"] = result["answer"]  # the letter call alone, before the expression
 
     # The model writes an expression, Python computes it (only for numeric options)
@@ -259,7 +357,8 @@ def _solve(problem, result, start, index, k, exclude_id, image_b64, llm_url, tim
                 apply_expression(result)
                 return  # Python is sure: don't spend time on rotations
 
-    wanted = int(CONFIG.get("PREDICT_ROTATIONS", 0) or 0) if full else 0
+    # A rotation with a picture would read the picture again (~30 s): never
+    wanted = int(CONFIG.get("PREDICT_ROTATIONS", 0) or 0) if full and not image_b64 else 0
     for shift in SHIFTS[:max(wanted, 0)]:
         if left() < max(slowest, planned) * 1.1:
             break

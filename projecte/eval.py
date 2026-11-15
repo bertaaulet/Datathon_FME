@@ -24,11 +24,13 @@ from collections import Counter, defaultdict
 from copilot import topics
 from copilot.calib import end_of_run_bias, problem_level
 from copilot.config import CONFIG
+from copilot import pipeline
 from copilot.pipeline import TIME_LIMIT, rescore, solve
 
 DETAIL_FIELDS = ["id", "language", "level", "has_options", "label", "answer", "correct", "seconds",
                  "status", "prompt_tokens", "retrieved", "topic", "calls", "raw_answer", "stage",
-                 "shortened", "expr", "expr_value", "expr_letter", "letters_found"]
+                 "shortened", "expr", "expr_value", "expr_letter", "letters_found", "text_only",
+                 "vision", "vision_failed"]
 LOG_FIELDS = ["time", "name", "commit", "machine", "input", "languages", "n", "rag_k", "accuracy",
               "mean_s", "worst_s", "over_limit", "settings", "details"]
 
@@ -62,7 +64,8 @@ def detail_row(row):
             row["retrieved"], row["topic"], row["calls"], row["raw_answer"], row.get("stage", ""),
             int(bool(row.get("shortened"))), row.get("expr", ""),
             "" if row.get("expr_value") is None else f"{row['expr_value']:g}", row.get("expr_letter", ""),
-            row.get("letters_found", "")]
+            row.get("letters_found", ""), "" if row.get("text_only") is None else int(bool(row["text_only"])),
+            row.get("vision", 0), row.get("vision_failed", 0)]
 
 
 def table(title, groups):
@@ -99,6 +102,11 @@ def main():
                    help="how the computed option is used (overrides PREDICT_EXPR_MODE)")
     p.add_argument("--no-options", choices=["prior", "model"], default=None,
                    help="what to do without readable options (overrides PREDICT_NO_OPTIONS)")
+    p.add_argument("--vision", choices=["off", "figure", "all"], default=None,
+                   help="send the image to the vision server (overrides PREDICT_VISION)")
+    p.add_argument("--images", default=None, help="folder with <id>_<language>.png (PREDICT_IMAGES)")
+    p.add_argument("--only-figure", action="store_true",
+                   help="only problems with a figure (text_only false): to compare with and without vision")
     args = p.parse_args()
 
     # The solver reads these when it answers, so one run can try a setting
@@ -115,6 +123,15 @@ def main():
         CONFIG["PREDICT_EXPRESSION"] = args.expression
     if args.expr_mode is not None:
         CONFIG["PREDICT_EXPR_MODE"] = args.expr_mode
+    if args.vision is not None:
+        CONFIG["PREDICT_VISION"] = args.vision
+    if args.images is not None:
+        CONFIG["PREDICT_IMAGES"] = args.images
+    here = os.path.dirname(os.path.abspath(args.input))   # as predict.py: images/ next to the input
+    pipeline.IMAGE_DIRS[:] = [os.path.join(here, "images"), here]
+    vision = pipeline.vision_mode()
+    if vision != "off" and not pipeline.vision_ready():
+        raise SystemExit("--vision: the vision server isn't up. Start it with ./board/07_vision.sh start")
     if args.rag is None:
         args.rag = int(CONFIG.get("PREDICT_RAG_K", 0) or 0)
     if args.rag_format is not None:
@@ -127,7 +144,8 @@ def main():
                 + f"logprobs_top={CONFIG.get('LOGPROBS_TOP', 64)} "
                 f"expression={CONFIG.get('PREDICT_EXPRESSION', 'off')}"
                 + (f"/{CONFIG.get('PREDICT_EXPR_MODE', 'override')}"
-                   if CONFIG.get('PREDICT_EXPRESSION', 'off') == 'on' else ""))
+                   if CONFIG.get('PREDICT_EXPRESSION', 'off') == 'on' else "")
+                + (f" vision={vision}/{CONFIG.get('VISION_IMAGE_TOKENS', 128)}tok" if vision != "off" else ""))
 
     with open(args.input, encoding="utf-8") as f:
         problems = [json.loads(line) for line in f if line.strip()]
@@ -138,6 +156,8 @@ def main():
         problems = [x for x in problems if x["language"] in languages]
     if args.only_with_options:
         problems = [x for x in problems if len(x.get("options") or {}) == 5]
+    if args.only_figure:
+        problems = [x for x in problems if x.get("text_only") is False]
     random.Random(42).shuffle(problems)  # the same sample every run, so runs compare
     if args.limit:
         problems = problems[:args.limit]
@@ -215,10 +235,12 @@ def main():
 
     for field, title in (("language", "By language"), ("level", "By level"),
                          ("topic", "By topic (keywords: check it by hand before you trust it)"),
-                         ("has_options", "By whether OCR found the options")):
+                         ("has_options", "By whether OCR found the options"),
+                         ("text_only", "By text_only (False = has a figure)"),
+                         ("vision", "By whether the image was sent")):
         groups = defaultdict(list)
         for r in rows:
-            groups[r[field]].append(r["correct"])
+            groups[r.get(field)].append(r["correct"])
         table(title, groups)
 
     asked = [r for r in rows if r.get("expr")]
@@ -241,7 +263,8 @@ def main():
         if new:
             writer.writerow(LOG_FIELDS)
         writer.writerow([stamp, name, git_commit(), machine_name(),
-                         args.input + (" (with options)" if args.only_with_options else ""),
+                         args.input + (" (with options)" if args.only_with_options else "")
+                         + (" (figures)" if args.only_figure else ""),
                          args.languages or "all",
                          len(rows), args.rag, f"{accuracy:.1f}", f"{statistics.mean(seconds):.1f}",
                          f"{max(seconds):.1f}", over, settings, detail_path])
