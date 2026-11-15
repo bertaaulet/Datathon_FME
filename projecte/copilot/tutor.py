@@ -818,7 +818,9 @@ class Tutor:
         for message in self.messages:
             origen = message.get("origen")
             message = {k: v for k, v in message.items() if k != "origen"}
-            if origen and (not origen["behind_button"] or revealed):
+            if origen and self.student and self.student["etapa"] in (1, 2) \
+                    and origen["lang"] == self._origin() \
+                    and (not origen["behind_button"] or revealed):
                 message["origen"] = {"lang": origen["lang"], "text": origen["text"],
                                      "source": origen.get("source")}
             out.append(message)
@@ -843,10 +845,11 @@ class Tutor:
             current = self.current
             if current:
                 origin = self._origin()
-                own = current["shown"] in ("both", "origen") or current["revealed"]
+                bridge_on = bool(origin) and student["etapa"] in (1, 2)
+                shown = current["shown"] if bridge_on else "cat"
+                own = bridge_on and (shown in ("both", "origen") or current["revealed"])
                 solved = current["solved"] or current["solution_shown"]
                 own_options = current.get("options_origen")
-                bridge_on = bool(origin) and student["etapa"] in (1, 2)
                 view["problem"] = {
                     "id": current["id"],
                     "level": "?" if current["row"]["level"] is None else current["row"]["level"],
@@ -856,15 +859,17 @@ class Tutor:
                                        "source": phrases.provenance("avis_extern", origin)}
                     if current["external"] and bridge_on else None,
                     "topic": topics.name(current["row"]["topic"]),
-                    "shown": current["shown"],
+                    "topic_origen": phrases.topic_name(current["row"]["topic"], origin) if bridge_on else None,
+                    "shown": shown,
                     # the letters never change; a problem shown only in the student's
                     # language has its options in that language too
-                    "options": own_options if current["shown"] == "origen" and own_options
+                    "options": own_options if shown == "origen" and own_options
                     else current["options"],
-                    "options_origen": own_options if own and current["shown"] != "origen" else None,
+                    "options_origen": own_options if own and shown != "origen" else None,
+                    "options_origen_missing": bool(own and current["origen"] and not own_options),
                     # 'official' is M3Kang's own text; anything else is a machine translation
                     "origen_source": (current["origen"] or {}).get("source") if own else None,
-                    "cat": current["cat"]["text"] if current["shown"] != "origen" else None,
+                    "cat": current["cat"]["text"] if shown != "origen" else None,
                     "origen": (current["origen"] or {}).get("text") if own else None,
                     "origen_image": self._image(current["id"], origin) if own and origin else None,
                     "origen_lang": origin if own else None,

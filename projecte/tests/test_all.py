@@ -12,6 +12,7 @@ import csv
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -25,7 +26,7 @@ sys.path.insert(0, HERE)
 
 import demo_data  # noqa: E402
 import fake_llama  # noqa: E402
-from copilot import calib, elo, hintsim, langs, led, leak, llm, phrases, pipeline, topics  # noqa: E402
+from copilot import calib, elo, hintsim, langs, led, leak, llm, phrases, pipeline, topics, ui_text  # noqa: E402
 from copilot.config import CONFIG  # noqa: E402
 from copilot.store import Store  # noqa: E402
 from copilot.tutor import NEUTRAL_HINT, Tutor, bar_value, kangaroo  # noqa: E402
@@ -86,6 +87,8 @@ class WithServers(unittest.TestCase):
     def tearDownClass(cls):
         cls.llm.shutdown()
         cls.embed.shutdown()
+        cls.llm.server_close()
+        cls.embed.server_close()
         CONFIG.clear()
         CONFIG.update(cls.saved)
 
@@ -683,6 +686,27 @@ class Phrases(unittest.TestCase):
                          (1, 1, 1))
 
 
+class PageWords(unittest.TestCase):
+    """The page's buttons, labels and notices (copilot/ui_text.py), in the six languages."""
+
+    def test_every_text_in_every_language(self):
+        self.assertEqual(ui_text.check(), [])
+        self.assertEqual(ui_text.LANGS, phrases.LANGS)
+        for key, by_lang in ui_text.TEXTS.items():
+            for lang in ("arb", "zho"):            # no Latin words left in Arabic or Chinese, but A-E
+                self.assertFalse(re.search(r"[A-Za-z]{2,}", re.sub(r"\{\w+\}|Enter|Shift", "", by_lang[lang])),
+                                 (key, lang))
+
+    def test_the_page_uses_only_known_keys(self):
+        with open(os.path.join(ROOT, "app", "index.html"), encoding="utf-8") as f:
+            html = f.read()
+        marked = set(re.findall(r'data-ui(?:-aria)?="(\w+)"', html))
+        self.assertLessEqual(marked, set(ui_text.TEXTS), marked - set(ui_text.TEXTS))
+        # every key is used: quoted in the page, or built there ("level" + i, "stage" + key)
+        used = set(re.findall(r'"(\w+)"', html)) | {f"level{i}" for i in range(8)} | {f"stage{i}" for i in (1, 2, 3)}
+        self.assertEqual(set(ui_text.TEXTS) - used, set())          # nothing in the table goes unused
+
+
 class Ratings(unittest.TestCase):
     def test_expected(self):
         self.assertAlmostEqual(elo.expected(1000, 1000), 0.6)
@@ -1022,6 +1046,40 @@ class TutorFlow(WithServers):
         self.assertEqual((again.student["etapa"], again.student["elo_origen"]),
                          (2, spanish["elo_origen"]))
 
+    def test_switching_a_solved_problem_removes_previous_language(self):
+        self.tutor.start("Test", "esp", 1)
+        self.teachable()
+        self.assertTrue(any("origen" in m for m in self.tutor.view()["messages"]))
+        view = self.tutor.set_language("cat")
+        self.assertEqual(view["problem"]["shown"], "cat")
+        for key in ("origen", "origen_lang", "options_origen", "topic_origen"):
+            self.assertIsNone(view["problem"][key], key)
+        self.assertTrue(all("origen" not in m for m in view["messages"]))
+        view = self.tutor.set_language("fra")
+        self.assertTrue(all(m.get("origen", {}).get("lang") != "esp" for m in view["messages"]))
+
+    def test_missing_translated_options_are_explicit(self):
+        self.store.run("UPDATE texts SET options = '{}' WHERE lang = 'esp'")
+        self.tutor.start("Test", "esp", 1)
+        view = self.tutor.next()
+        self.assertTrue(view["problem"]["options_origen_missing"])
+        self.assertEqual(set(view["problem"]["options"]), set("ABCDE"))
+        self.assertFalse(self.tutor.set_language("cat")["problem"]["options_origen_missing"])
+
+    def test_promotion_to_stage_three_hides_existing_translations(self):
+        self.tutor.start("Test", "esp", 1)
+        self.tutor.student.update(etapa=2, streak=3)
+        self.tutor.next()
+        self.tutor.reveal()
+        # Reveal some chat, then make the answer count as unaided, to exercise the
+        # presentation of a current problem at the instant it reaches stage three.
+        self.assertTrue(any("origen" in m for m in self.tutor.view()["messages"]))
+        self.tutor.current["revealed"] = False
+        view = self.tutor.answer(self.tutor.current["label"])
+        self.assertEqual(view["student"]["etapa"], 3)
+        self.assertIsNone(view["problem"]["origen"])
+        self.assertTrue(all("origen" not in m for m in view["messages"]))
+
     def test_already_speaks_catalan(self):
         for choice in ("cat", ""):
             view = self.tutor.start("Test", choice, 1, reset=True)
@@ -1082,7 +1140,7 @@ class TutorFlow(WithServers):
         view = self.tutor.answer(self.tutor.current["label"])
         self.assertEqual(self.tutor.student["etapa"], 3)
         change = next(m for m in view["messages"] if m["text"].startswith("Ja no et cal el botó"))
-        self.assertEqual(change["origen"]["text"], phrases.phrase("etapa3", "fra"))   # no button needed
+        self.assertNotIn("origen", change)                       # stage 3 starts immediately
         view = self.tutor.next()                                    # stage 3: Catalan only
         self.tutor.answer(self.wrong_letter())
         view = self.tutor.help()
@@ -1483,10 +1541,14 @@ class Scripts(WithServers):
                 with urllib.request.urlopen(base + "/", timeout=10) as page:
                     html = page.read().decode("utf-8")
                 self.assertIn("Ensenya el Cangur", html)
+                ui = call("/api/ui")                      # the page's own words, in the six languages
+                self.assertEqual(ui["langs"], list(phrases.LANGS))
+                self.assertEqual(set(ui["texts"]), set(ui_text.TEXTS))
                 self.assertNotIn("http://", html.replace("http://127.0.0.1", "").replace("http://www.w3.org/2000/svg", ""))   # nothing from the internet (the SVG namespace is a name, not a request)
                 self.assertNotIn("https://", html)
             finally:
                 server.shutdown()
+                server.server_close()
                 store.close()
 
 

@@ -1,0 +1,177 @@
+"""The page's own words (buttons, labels, notices) in the six languages of the bridge.
+
+The page (app/index.html) asks for this table once (/api/ui) and shows each text by the
+same stage rules as the Kangaroo's phrases: stage 1, Catalan with the student's language
+under it; stage 2, the student's language only once the problem has been shown in it (the
+"see it in my language" button, and the connection warning, always); stage 3, Catalan.
+
+The Catalan is the team's. The other languages were written by an LLM from it and checked
+by nobody who speaks them natively: the page says so (key "mt_note"). The teacher's panel
+stays in Catalan: it is for the teacher. No text from M3Kang.
+"""
+from .phrases import fields
+
+LANGS = ("cat", "eng", "esp", "fra", "arb", "zho")
+SOURCE = "llm (Claude Opus + Codex)"
+
+# key: (cat, eng, esp, fra, arb, zho). The school years are matched by age (eng: US grades).
+_TABLE = {
+    "lead": ("Un cangur que s'equivoca força. Tu l'ensenyes.",
+             "A kangaroo that gets things wrong quite often. You teach it.",
+             "Un canguro que se equivoca bastante. Tú le enseñas.",
+             "Un kangourou qui se trompe souvent. C'est toi qui lui apprends.",
+             "كنغر يخطئ كثيرًا. وأنت تعلّمه.",
+             "一只经常出错的袋鼠。由你来教它。"),
+    "start_title": ("Hola! Comencem?", "Hi! Shall we start?", "¡Hola! ¿Empezamos?",
+                    "Salut ! On commence ?", "مرحبًا! هل نبدأ؟", "你好！我们开始吧？"),
+    "name_label": ("Com et dius? (opcional)", "What's your name? (optional)",
+                   "¿Cómo te llamas? (opcional)", "Comment tu t'appelles ? (facultatif)",
+                   "ما اسمك؟ (اختياري)", "你叫什么名字？（可选）"),
+    "course_label": ("Quin curs fas?", "Which school year are you in?", "¿Qué curso haces?",
+                     "En quelle classe es-tu ?", "في أي صف أنت؟", "你上几年级？"),
+    "lang_label": ("Quina llengua entens millor? Ho veuràs tot en català i en la teva llengua.",
+                   "Which language do you understand best? You'll see everything in Catalan and in your language.",
+                   "¿Qué lengua entiendes mejor? Lo verás todo en catalán y en tu lengua.",
+                   "Quelle langue comprends-tu le mieux ? Tu verras tout en catalan et dans ta langue.",
+                   "ما اللغة التي تفهمها أفضل؟ سترى كل شيء بالكتالانية وبلغتك.",
+                   "你最懂哪种语言？所有内容都会用加泰罗尼亚语和你的语言显示。"),
+    "start": ("Comencem", "Let's start", "Empecemos", "Commençons", "لنبدأ", "开始"),
+    "starting": ("Preparant el primer problema…", "Getting the first problem ready…",
+                 "Preparando el primer problema…", "Préparation du premier problème…",
+                 "جارٍ تحضير المسألة الأولى…", "正在准备第一道题……"),
+    "fine": ("Tot el que facis es queda en aquesta placa.", "Everything you do stays on this board.",
+             "Todo lo que hagas se queda en esta placa.", "Tout ce que tu fais reste sur cette carte.",
+             "كل ما تفعله يبقى على هذه اللوحة.", "你做的一切都只保存在这块板子上。"),
+    "stage1": ("Dues llengües", "Two languages", "Dos lenguas", "Deux langues", "لغتان", "两种语言"),
+    "stage2": ("Català amb ajuda", "Catalan with help", "Catalán con ayuda", "Catalan avec aide",
+               "الكتالانية مع مساعدة", "加泰罗尼亚语加帮助"),
+    "stage3": ("Només català", "Catalan only", "Solo catalán", "Catalan seulement",
+               "الكتالانية فقط", "只用加泰罗尼亚语"),
+    "level": ("Nivell", "Level", "Nivel", "Niveau", "المستوى", "级别"),
+    "net": ("No hi ha connexió amb la placa. Comprova que està encesa i connectada i torna-ho a provar.",
+            "There's no connection with the board. Check that it is on and connected, and try again.",
+            "No hay conexión con la placa. Comprueba que está encendida y conectada y vuelve a intentarlo.",
+            "Pas de connexion avec la carte. Vérifie qu'elle est allumée et branchée, puis réessaie.",
+            "لا يوجد اتصال باللوحة. تأكّد من أنها تعمل ومتصلة، ثم حاول مرة أخرى.",
+            "无法连接到板子。请检查它是否已开机并连接好，然后再试一次。"),
+    "retry": ("Torna-ho a provar", "Try again", "Vuelve a intentarlo", "Réessaie", "حاول مرة أخرى",
+              "再试一次"),
+    "problem_level": ("Problema de nivell {level}", "Level {level} problem", "Problema de nivel {level}",
+                      "Problème de niveau {level}", "مسألة من المستوى {level}", "第{level}级题目"),
+    "own_problem": ("Problema teu", "Your problem", "Tu problema", "Ton problème", "مسألتك", "你的题目"),
+    "own_problem_level": ("Problema teu · nivell {level}", "Your problem · level {level}",
+                          "Tu problema · nivel {level}", "Ton problème · niveau {level}",
+                          "مسألتك · المستوى {level}", "你的题目 · 第{level}级"),
+    "ready": ("Tot a punt", "All set", "Todo listo", "Tout est prêt", "كل شيء جاهز", "一切就绪"),
+    "keys": ("Drecera de teclat: amb el focus en una opció, prem A–E per respondre.",
+             "Keyboard shortcut: with an option focused, press A–E to answer.",
+             "Atajo de teclado: con el foco en una opción, pulsa A–E para responder.",
+             "Raccourci clavier : quand une option est sélectionnée, appuie sur A–E pour répondre.",
+             "اختصار لوحة المفاتيح: عند تحديد خيار، اضغط A–E للإجابة.",
+             "键盘快捷键：选中一个选项后，按 A–E 作答。"),
+    "help_first": ("Demana una pista", "Ask for a hint", "Pide una pista", "Demande un indice",
+                   "اطلب تلميحًا", "要一个提示"),
+    "help_more": ("Una altra pista", "Another hint", "Otra pista", "Un autre indice", "تلميح آخر",
+                  "再给一个提示"),
+    "help_solution": ("Ensenya'm la solució", "Show me the solution", "Enséñame la solución",
+                      "Montre-moi la solution", "أرني الحل", "告诉我答案"),
+    "reveal": ("Veure en la meva llengua", "See it in my language", "Verlo en mi lengua",
+               "Voir dans ma langue", "اعرضها بلغتي", "用我的语言看"),
+    "first_problem": ("Primer problema", "First problem", "Primer problema", "Premier problème",
+                      "المسألة الأولى", "第一道题"),
+    "next": ("Problema següent", "Next problem", "Siguiente problema", "Problème suivant",
+             "المسألة التالية", "下一道题"),
+    "leave": ("Prou, següent problema", "That's enough, next problem", "Basta, siguiente problema",
+              "Ça suffit, problème suivant", "يكفي، المسألة التالية", "够了，下一道题"),
+    "own_summary": ("Tinc un problema meu", "I have a problem of my own", "Tengo un problema mío",
+                    "J'ai mon propre problème", "عندي مسألة خاصة بي", "我有自己的题目"),
+    "own_label": ("Escriu l'enunciat i les opcions (A) … B) … fins a E)).",
+                  "Write the problem and its options (A) … B) … up to E)).",
+                  "Escribe el enunciado y las opciones (A) … B) … hasta E)).",
+                  "Écris l'énoncé et les options (A) … B) … jusqu'à E)).",
+                  "اكتب نص المسألة والخيارات (A) … B) … حتى E)).",
+                  "写下题目和选项（A) … B) … 一直到 E)）。"),
+    "own_send": ("Envia'l al Cangur", "Send it to the Kangaroo", "Envíaselo al Canguro",
+                 "Envoie-le au Kangourou", "أرسلها إلى الكنغر", "发给袋鼠"),
+    "kangaroo": ("El Cangur", "The Kangaroo", "El Canguro", "Le Kangourou", "الكنغر", "袋鼠"),
+    "thinking": ("El Cangur hi està pensant", "The Kangaroo is thinking", "El Canguro está pensando",
+                 "Le Kangourou réfléchit", "الكنغر يفكّر", "袋鼠正在思考"),
+    "hint_label": ("Escriu-li una pista, sense dir-li la resposta.",
+                   "Write it a hint, without telling it the answer.",
+                   "Escríbele una pista, sin decirle la respuesta.",
+                   "Écris-lui un indice, sans lui dire la réponse.",
+                   "اكتب له تلميحًا، دون أن تخبره بالإجابة.",
+                   "给它写一个提示，但不要告诉它答案。"),
+    "hint_placeholder": ("Per exemple: compta de dos en dos…", "For example: count in twos…",
+                         "Por ejemplo: cuenta de dos en dos…", "Par exemple : compte de deux en deux…",
+                         "مثلًا: عُدّ اثنين اثنين…", "例如：两个两个地数……"),
+    "hint_tip": ("Enter l'envia · Maj+Enter fa una línia nova", "Enter sends it · Shift+Enter adds a new line",
+                 "Intro la envía · Mayús+Intro hace una línea nueva",
+                 "Entrée l'envoie · Maj+Entrée ajoute une ligne",
+                 "Enter للإرسال · Shift+Enter لسطر جديد", "按 Enter 发送 · Shift+Enter 换行"),
+    "send": ("Envia", "Send", "Envía", "Envoie", "أرسل", "发送"),
+    "practice": ("Practica un de semblant ({n})", "Practise a similar one ({n})",
+                 "Practica uno parecido ({n})", "Entraîne-toi sur un problème semblable ({n})",
+                 "تدرّب على مسألة مشابهة ({n})", "练习一道相似的题（{n}）"),
+    "back": ("Tornem als problemes", "Back to the problems", "Volvamos a los problemas",
+             "Revenons aux problèmes", "لنعد إلى المسائل", "回到题目"),
+    "only_cat": ("problemes només en català", "problems in Catalan only", "problemas solo en catalán",
+                 "problèmes en catalan seulement", "المسائل بالكتالانية فقط", "题目只有加泰罗尼亚语"),
+    "mt_note": ("Els textos en {llengua} són traducció automàtica, sense revisar.",
+                "The texts in {llengua} are machine translation, not reviewed.",
+                "Los textos en {llengua} son traducción automática, sin revisar.",
+                "Les textes en {llengua} sont une traduction automatique, non relue.",
+                "النصوص بلغة {llengua} ترجمة آلية لم تُراجَع.",
+                "{llengua}的文字是机器翻译，未经审校。"),
+    "skip": ("Salta al contingut", "Skip to content", "Salta al contenido", "Aller au contenu", "انتقل إلى المحتوى", "跳转到内容"),
+    "my_language": ("La meva llengua", "My language", "Mi lengua", "Ma langue", "لغتي", "我的语言"),
+    "language_stage": ("Etapa de llengua", "Language stage", "Etapa de lengua", "Étape de langue", "مرحلة اللغة", "语言阶段"),
+    "problem": ("Problema", "Problem", "Problema", "Problème", "المسألة", "题目"),
+    "answer_options": ("Opcions de resposta", "Answer options", "Opciones de respuesta", "Choix de réponse", "خيارات الإجابة", "答案选项"),
+    "missing_options": ("No hi ha traducció de les opcions; es mostren les disponibles.", "The options have no translation; the available options are shown.", "No hay traducción de las opciones; se muestran las disponibles.", "Les choix ne sont pas traduits ; les choix disponibles sont affichés.", "لا تتوفر ترجمة للخيارات؛ تُعرض الخيارات المتاحة.", "选项没有译文，现显示已有的选项。"),
+    "preference": ("Què prefereix el Cangur", "What the Kangaroo prefers", "Qué prefiere el Canguro", "Ce que préfère le Kangourou", "ما يفضّله الكنغر", "袋鼠更倾向于什么"),
+    "no_answer": ("El Cangur encara no ha donat cap resposta", "The Kangaroo has not answered yet", "El Canguro aún no ha respondido", "Le Kangourou n'a pas encore répondu", "لم يُجب الكنغر بعد", "袋鼠还没有作答"),
+    "prefers_right": ("El Cangur prefereix la resposta correcta", "The Kangaroo prefers the correct answer", "El Canguro prefiere la respuesta correcta", "Le Kangourou préfère la bonne réponse", "يفضّل الكنغر الإجابة الصحيحة", "袋鼠更倾向于正确答案"),
+    "prefers_wrong": ("El Cangur prefereix una resposta equivocada", "The Kangaroo prefers a wrong answer", "El Canguro prefiere una respuesta equivocada", "Le Kangourou préfère une mauvaise réponse", "يفضّل الكنغر إجابة خاطئة", "袋鼠更倾向于错误答案"),
+    "board": ("Placa", "Board", "Placa", "Carte", "اللوحة", "板子"),
+    "led_board": ("Matriu LED de la placa", "Board LED matrix", "Matriz LED de la placa", "Matrice LED de la carte", "مصفوفة الإضاءة في اللوحة", "板子的发光点阵"),
+    "conversation": ("Conversa amb el Cangur", "Conversation with the Kangaroo", "Conversación con el Canguro", "Conversation avec le Kangourou", "محادثة مع الكنغر", "与袋鼠的对话"),
+    "helps_used": ("Pistes demanades: {n} de {max}", "Hints requested: {n} of {max}", "Pistas pedidas: {n} de {max}", "Indices demandés : {n} sur {max}", "التلميحات المطلوبة: {n} من {max}", "已请求提示：{n}/{max}"),
+    "tries_left": ("Intents que et queden: {n}", "Attempts left: {n}", "Intentos que te quedan: {n}", "Essais restants : {n}", "المحاولات المتبقية: {n}", "剩余尝试次数：{n}"),
+    "wrong": ("equivocada", "incorrect", "incorrecta", "incorrecte", "خاطئة", "错误"),
+    "right": ("correcta", "correct", "correcta", "correcte", "صحيحة", "正确"),
+    "up": ("Ha pujat", "Moved up", "Ha subido", "A progressé", "تقدّم", "上升了"),
+    "same": ("Sense canvis", "No change", "Sin cambios", "Sans changement", "دون تغيير", "没有变化"),
+    "down": ("Ha baixat", "Moved down", "Ha bajado", "A reculé", "تراجع", "下降了"),
+    "char_limit": ("Has arribat al límit de {max} caràcters.", "You have reached the limit of {max} characters.", "Has llegado al límite de {max} caracteres.", "Tu as atteint la limite de {max} caractères.", "بلغت الحد الأقصى وهو {max} حرفًا.", "你已达到{max}个字符的上限。"),
+    "original_image": ("Enunciat original en {llengua}", "Original problem in {llengua}", "Enunciado original en {llengua}", "Énoncé original en {llengua}", "نص المسألة الأصلي بلغة {llengua}", "{llengua}的原题图片"),
+    "own_placeholder": ("Quant fa 2 + 3?", "What is 2 + 3?", "¿Cuánto es 2 + 3?", "Combien font 2 + 3 ?", "ما ناتج 2 + 3؟", "2 + 3 等于多少？"),
+    "level0": ("5è de primària", "Grade 5", "5.º de primaria", "CM2", "الصف الخامس", "小学五年级"),
+    "level1": ("6è de primària", "Grade 6", "6.º de primaria", "6e", "الصف السادس", "小学六年级"),
+    "level2": ("1r d'ESO", "Grade 7", "1.º de ESO", "5e", "الصف السابع", "初一"),
+    "level3": ("2n d'ESO", "Grade 8", "2.º de ESO", "4e", "الصف الثامن", "初二"),
+    "level4": ("3r d'ESO", "Grade 9", "3.º de ESO", "3e", "الصف التاسع", "初三"),
+    "level5": ("4t d'ESO", "Grade 10", "4.º de ESO", "2de", "الصف العاشر", "高一"),
+    "level6": ("1r de batxillerat", "Grade 11", "1.º de bachillerato", "1re", "الصف الحادي عشر", "高二"),
+    "level7": ("2n de batxillerat", "Grade 12", "2.º de bachillerato", "Terminale", "الصف الثاني عشر", "高三"),
+}
+
+TEXTS = {key: dict(zip(LANGS, texts)) for key, texts in _TABLE.items()}
+
+
+def table():
+    """What the page needs: every key in every language, and who translated them."""
+    return {"langs": list(LANGS), "source": SOURCE, "texts": TEXTS}
+
+
+def check():
+    """Problems with the table: a language missing, or a {marker} lost (tests)."""
+    problems = []
+    for key, by_lang in TEXTS.items():
+        for lang in LANGS:
+            text = by_lang.get(lang)
+            if not text or not text.strip():
+                problems.append((key, lang, "missing"))
+            elif fields(text) != fields(by_lang["cat"]):
+                problems.append((key, lang, "markers"))
+    return problems
