@@ -38,7 +38,7 @@ OPTIONAL_COMMON = {"model": str, "note": str}
 SCHEMAS = {
     "hint_experiment": ({"good": str, "bad": str, "leak": str},
                         {"label": str, "text": str, "options": dict, "lang": str}),
-    "hint_bank": ({"lang": str, "hint": str}, {"label": str}),
+    "hint_bank": ({"lang": str, "hint": str, "step": int}, {"label": str}),
     "solutions": ({"solution": str, "answer": str}, {"expression": str}),
     "problem_types": ({"type": str}, {"topic": str, "python_solvable": bool}),
     "leak_cases": ({"hint": str, "label": str, "leak": bool},
@@ -220,11 +220,14 @@ def check_hint_bank(row, ref, state):
     need(not reasons, f"rejected by copilot.leak ({reasons[0]})" if reasons else "")
     key = (row["id"], leak.plain(hint))
     need(key not in state["pairs"], "the same hint appears twice for this problem")
+    need(row["step"] in (1, 2), "step must be 1 (where to start) or 2 (the next step)")
+    need((row["id"], row["step"]) not in state["steps"], f"already a step {row['step']} hint for this problem")
     need(state["per_id"][row["id"]] < 2, "already two hints for this problem")
     state["pairs"].add(key)
+    state["steps"].add((row["id"], row["step"]))
     state["per_id"][row["id"]] += 1
     return {"id": row["id"], "kind": row["kind"], "source": row["source"], "lang": row["lang"],
-            "hint": hint}
+            "step": row["step"], "hint": hint}
 
 
 def check_solutions(row, ref, state):
@@ -356,7 +359,7 @@ def check_line(kind, row, ref, state):
 
 
 def new_state():
-    return {"ids": set(), "pairs": set(), "per_id": Counter(), "types": Counter(),
+    return {"ids": set(), "pairs": set(), "steps": set(), "per_id": Counter(), "types": Counter(),
             "leaks": Counter(), "agree": Counter(), "texts": []}
 
 

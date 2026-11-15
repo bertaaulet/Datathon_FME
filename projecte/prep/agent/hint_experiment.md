@@ -1,7 +1,7 @@
 # Lot `hint_experiment` — pistes de l'experiment D2
 
 ## Objectiu
-Decidir si la barra de confiança del Cangur té sentit: per a cada problema calen una pista **bona**, una **absurda** i una **amb fuita**. `prep/hint_experiment.py` mesura quant mou cadascuna el marge del model. Si les bones no guanyen clarament les absurdes, la barra es treu (decisió D2 de `docs/PLA.md`).
+Decidir si la barra de confiança del Cangur té sentit i fixar el llindar τ: per a cada problema calen una pista **bona**, una **absurda** i una **amb fuita**. `prep/hint_experiment.py` mesura quant mou cadascuna el marge del model, que llegeix el problema i la pista en català, com al tutor (`KANGAROO_LANG`). Només es fan servir problemes on el model prefereix una opció incorrecta: on ja prefereix la correcta, el Cangur fingeix i el Δ no mesura res. Si les bones no guanyen clarament les absurdes, la barra es treu (decisió D2 de `docs/PLA.md`).
 
 ## Entrada
 `python prep/hint_experiment.py --make-template 25` escriu `data/hints_experiment.jsonl` amb 25 problemes que el model falla. Cada línia té `id`, `text`, `options`, `label` i els camps `good`, `bad` i `leak` buits. Si encara no hi ha `tutor.db`, també serveix `python prep/agent/export_batch.py --kind hint_experiment --n 25`.

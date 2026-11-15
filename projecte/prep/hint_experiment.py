@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """The go / no-go experiment: does the Kangaroo tell a good hint from a nonsense one?
 
-Step 1. Make a file to fill in, with 25 problems the model gets wrong:
+Step 1. Make a file to fill in, with 25 problems the model gets wrong (the Kangaroo
+        reads them in Catalan, KANGAROO_LANG, like in the tutor):
 
     python3 prep/hint_experiment.py --make-template 25
 
@@ -39,13 +40,13 @@ from copilot import leak
 from copilot.config import CONFIG
 from copilot.llm import letter_probs
 from copilot.store import Store, default_path
-from copilot.tutor import NEUTRAL_HINT, kangaroo
+from copilot.tutor import KANGAROO_LANG, NEUTRAL_HINT, kangaroo
 
 KINDS = ("good", "bad", "leak")
 
 
 def make_template(store, count, path):
-    lang, shown = CONFIG.get("MODEL_LANG", "eng"), CONFIG.get("TUTOR_LANG", "cat")
+    lang, shown = KANGAROO_LANG, CONFIG.get("TUTOR_LANG", "cat")
     rows = store.rows("SELECT id, label, k_margin FROM problems WHERE eligible = 1 ORDER BY id")
     measured = [r for r in rows if r["k_margin"] is not None]
     pool = [r for r in measured if r["k_margin"] < 0] if measured else rows
@@ -89,7 +90,7 @@ def main():
     if not cases:
         raise SystemExit(f"No hints in {args.hints}. Start with --make-template 25.")
 
-    lang = CONFIG.get("MODEL_LANG", "eng")
+    lang = KANGAROO_LANG   # the Kangaroo reads the problem and the hint in Catalan
     os.makedirs("results", exist_ok=True)
     out_path = f"results/hints-{time.strftime('%Y%m%d-%H%M%S')}.csv"
     deltas = {kind: [] for kind in KINDS}
@@ -105,10 +106,15 @@ def main():
                 continue
             problem = {"id": case["id"], "text": text["text"], "options": text["options"]}
             try:
-                ref = kangaroo(letter_probs(problem, hint=NEUTRAL_HINT, timeout=180)["probs"],
-                               case["label"])
+                ref = kangaroo(letter_probs(problem, hint=NEUTRAL_HINT, timeout=180,
+                                            lang=lang)["probs"], case["label"])
             except Exception as error:
                 print(f"  {case['id']}: {error}")
+                continue
+            if ref["feigned"]:
+                # D2 only measures a Kangaroo that is really wrong: here the model already
+                # prefers the right answer, so delta would measure nothing (docs/PISTES.md)
+                print(f"  {case['id']}: the model already prefers the right answer here, skipped")
                 continue
             got = {}
             for kind in KINDS:
@@ -120,7 +126,7 @@ def main():
                 filter_hits[kind] += reason is not None
                 began = time.perf_counter()
                 try:
-                    answer = letter_probs(problem, hint=hint, timeout=180)
+                    answer = letter_probs(problem, hint=hint, timeout=180, lang=lang)
                 except Exception as error:
                     print(f"  {case['id']} {kind}: {error}")
                     continue

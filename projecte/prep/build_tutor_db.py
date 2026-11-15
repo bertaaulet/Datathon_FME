@@ -9,8 +9,11 @@ For every problem it stores: its level, year and question number, a topic, a
 first Elo rating, whether the tutor can use it, its text in every language you
 prepared, and its most similar problems.
 
-The tutor only uses problems that are text-only and whose five options OCR
-could read ("eligible"). The neighbours need the embedding server (step 7 of
+The tutor only uses training problems that are text-only, whose five options OCR
+could read, and that exist in the Kangaroo's language ("eligible"). Validation
+problems are stored but never eligible: the agent only writes hints for training
+problems, because it never sees a validation answer (docs/DECISIONS.md,
+2026-11-15). --include-val makes them eligible anyway. The neighbours need the embedding server (step 7 of
 the base README); with --no-neighbours, or if the server is down, a problem's
 neighbours are the closest-rated problems of the same topic.
 
@@ -22,6 +25,7 @@ The database holds M3Kang text: never commit it (.gitignore excludes *.db).
 import argparse
 import json
 import operator
+import os
 import re
 from array import array
 from collections import Counter, defaultdict
@@ -31,6 +35,7 @@ from copilot import elo, topics
 from copilot.config import CONFIG
 from copilot.llm import format_problem
 from copilot.store import Store, default_path
+from copilot.tutor import KANGAROO_LANG
 
 ID = re.compile(r"^lvl-(\d+)_(\d{4})_(\d+)")
 
@@ -78,11 +83,18 @@ def main():
     p.add_argument("--db", default=default_path())
     p.add_argument("--neighbours", type=int, default=5)
     p.add_argument("--no-neighbours", action="store_true")
+    p.add_argument("--include-val", action="store_true",
+                   help="let the tutor use validation problems too (they have no agent hints)")
     p.add_argument("--show-topics", type=int, default=0, metavar="N")
     args = p.parse_args()
 
     model_lang = CONFIG.get("MODEL_LANG", "eng")
-    rows = common.read_jsonl(*args.inputs)
+    rows, from_val = [], set()
+    for path in args.inputs:
+        found = common.read_jsonl(path)
+        rows += found
+        if os.path.basename(path).startswith("val"):
+            from_val |= {row["id"] for row in found}
     if not rows:
         raise SystemExit("No problems found. Prepare M3Kang first (step 9 of the base README).")
     texts = defaultdict(dict)
@@ -109,7 +121,8 @@ def main():
             "tram": tram, "topic": topics.classify(base["text"]), "label": base["label"],
             "text_only": int(bool(base.get("text_only", True))),
             "eligible": int(bool(base.get("text_only", True)) and common.has_options(base)
-                            and model_lang in versions),
+                            and model_lang in versions and KANGAROO_LANG in versions
+                            and (args.include_val or problem_id not in from_val)),
             "elo": elo.initial_problem(level, tram), "base": base,
         })
     eligible = [q for q in problems if q["eligible"]]
@@ -143,7 +156,8 @@ def main():
     languages = Counter(row["language"] for row in rows)
     print(f"\nWrote {args.db}")
     print(f"  problems: {len(problems)}, the tutor can use {len(eligible)} "
-          f"(text-only, five readable options, with a {model_lang} version)")
+          f"(training only{' and validation' if args.include_val else ''}, text-only, five readable "
+          f"options, with {model_lang} and {KANGAROO_LANG} versions)")
     print(f"  languages: " + ", ".join(f"{lang} {n}" for lang, n in sorted(languages.items())))
     print(f"  neighbours: {how}")
     print("  topics of the usable problems:")

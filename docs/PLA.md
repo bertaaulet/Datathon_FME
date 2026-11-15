@@ -12,7 +12,7 @@ El document inclou tot el que diu el pla del projecte, sense deixar res per si s
 
 ## Com funciona el projecte i què expliquem
 
-L'alumne resol problemes de M3Kang. Quan n'encerta un, ensenya el Cangur, el company fluix que fa el model: li escriu una pista que no pot donar la resposta, i la placa mesura si la pista l'ha mogut cap a la resposta correcta. Si l'alumne falla, l'ajuda arriba per graons: un problema semblant més fàcil, el tema i el mètode, una pista, i la solució només si la demana. El pont d'idioma i el doble Elo ajuden l'alumne que encara no domina el català.
+L'alumne resol problemes de M3Kang. Quan n'encerta un, ensenya el Cangur, el company fluix que fa el model: li escriu una pista que no pot donar la resposta, i la placa mesura si la pista l'ha mogut cap a la resposta correcta. Si l'alumne falla, l'ajuda arriba per cinc graons: el tema i el mètode, una pista, una altra pista, un problema semblant més fàcil per intentar (sense la resposta), i la solució només si la demana. El detall és a [`PISTES.md`](PISTES.md). El pont d'idioma i el doble Elo ajuden l'alumne que encara no domina el català.
 
 ### Què fa el model i amb quines dades
 
@@ -20,12 +20,12 @@ L'alumne resol problemes de M3Kang. Quan n'encerta un, ensenya el Cangur, el com
 | --- | --- | --- | --- |
 | Resposta correcta | Banc: l'etiqueta de M3Kang. Externs: el harness de `predict.py` | Segura | La del harness, amb l'avís |
 | Correcció de la resposta de l'alumne (✓/✗) | Python | Contra l'etiqueta | Contra la resposta del harness, amb l'avís |
-| El Cangur (ensenyar) | El Qwen: probabilitats abans i després de la pista | Igual | Igual, prenent com a correcta la resposta del harness |
-| Pistes del graó 3 | El Qwen, amb exemples del banc (en context i RAG) | Pistes generades per endavant | Generades en el moment |
+| El Cangur (ensenyar) | El Qwen, en català: probabilitats abans i després de la pista. Sempre diu una opció incorrecta (fingeix si el model ja prefereix la correcta) | Igual | Igual, prenent com a correcta la resposta del harness |
+| Pistes dels graons 2 i 3 | Banc: l'agent (Claude Code), per endavant. Externs: el Qwen, amb 1 veí del banc com a exemple | 2 pistes de l'agent per problema | Una pista generada en segon pla, i una frase de mètode |
 | Filtre de fuites | Python | Amb l'etiqueta | Amb la resposta del harness, i a més el filtre estricte (cap lletra ni valor d'opció) |
 | Problema semblant, tema, nivell i Elo | Embeddings (bge), paraules clau i Python | Igual | Igual. El nivell s'estima amb els veïns, i els intents queden marcats com a externs |
-| Solució (graó 4) | Python | L'etiqueta | La resposta del harness, amb l'avís |
-| Banc de pistes de referència | Un agent (Claude Code) al portàtil, per endavant | Sí | Fa d'exemple per al model |
+| Solució (graó 5) | Python | L'etiqueta | La resposta del harness, amb l'avís |
+| Banc de pistes | Un agent (Claude Code) al portàtil, per endavant | Graons 2 i 3 | Fa d'exemple per al model |
 
 **Avís per als problemes externs**, sempre visible quan el problema no és del banc: *"No podem assegurar les respostes per a problemes externs. Confirma la solució en fonts oficials o amb el teu professor."*
 
@@ -100,9 +100,9 @@ El 22,5% és el model sol, amb un prompt i una crida. Un **harness** és tot el 
 
 ## Pistes
 
-> **2026-11-14:** cada alumne té la seva placa. No hi ha pistes de companys: les pistes que escriu l'alumne per ensenyar el Cangur només es desen com a dades. El graó 3 i el flux de pistes s'estan redissenyant (Berta).
+El flux complet, explicat per a l'equip, és a [`PISTES.md`](PISTES.md): escala d'ajuda, el Cangur, què es guarda i els pendents. Aquí hi ha com es preparen i es mesuren. Cada alumne té la seva placa: no hi ha pistes de companys.
 
-Les pistes surten de dos llocs. Un agent prepara al portàtil un banc de pistes de referència. Després, el model de la placa genera pistes noves fent servir aquest banc com a exemple. Totes passen pel filtre de fuites i es mesuren. No s'escriu cap pista a mà.
+Les pistes surten de dos llocs. Un agent prepara al portàtil un banc de pistes per als problemes del banc. Per als problemes externs, el model de la placa n'escriu una fent servir el banc com a exemple. Totes passen pel filtre de fuites. No s'escriu cap pista a mà.
 
 ### 1. El banc de l'agent (al portàtil, per endavant)
 
@@ -110,53 +110,44 @@ Un agent (Claude Code) genera els textos que el pla deixava per escriure a mà. 
 
 | Lot | Quantitat | Fitxer | Per a què serveix |
 | --- | --- | --- | --- |
-| Pistes de l'experiment | 25 problemes × 3 (bona, absurda, amb fuita) | `data/hints_experiment.jsonl` | Decidir si es manté la barra de confiança (D2) |
-| Banc de pistes | 2 pistes en català per a cada problema elegible | `data/agent_hints.jsonl` | Exemples per al model, referència amb què comparar, i reserva |
+| Pistes de l'experiment | 25 problemes × 3 (bona, absurda, amb fuita) | `data/hints_experiment.jsonl` | Decidir si es manté la barra de confiança i fixar τ (D2) |
+| Banc de pistes | 2 pistes ordenades en català (pas 1: per on començar; pas 2: el pas següent) per a cada problema elegible del train | `data/agent_hints.jsonl` | Graons 2 i 3 del tutor, i exemple per a la pista generada dels problemes externs |
 | Solucions breus | Una per a cada problema del train | `data/agent_solutions.jsonl` | Etapa 4 del harness i ajust fi |
 | Tipus de problema | Tots els problemes del train i de la validació | `data/problem_types.jsonl` | Triar quins solucionadors de Python fer (etapa 2) i l'anàlisi d'errors |
 | Casos de prova del filtre | 200 (100 amb fuita i 100 netes), incloent-hi fuites indirectes | `data/leak_cases.jsonl` | Encert del filtre |
 | Temes de referència | 100 problemes | `data/topics_gold.jsonl` | Encert de `topics.py` |
 | Problemes inventats | \~100, amb la resposta | `data/invented.jsonl` | Exemples publicables i proves dels problemes externs (la seva resposta permet mesurar el tutor en mode extern) |
 
+El tutor només fa servir problemes del **train**: l'agent no veu mai la resposta d'un problema de validació, i per tant aquests no tenen pistes (`build_tutor_db.py` els marca com a no elegibles; `--include-val` ho canvia).
+
 Control de qualitat:
 
-- `prep/check_agent_output.py` comprova l'esquema i passa `leak.py` per totes les pistes.
-- `kangaroo_baseline.py` i `hint_experiment.py` en calculen el Δ.
+- `prep/check_agent_output.py` comprova l'esquema (amb `step` 1 o 2) i passa `leak.py` per totes les pistes.
 - Una persona en revisa 20 de cada lot. El nombre de pistes correctes es publica.
+- `prep/kangaroo_agent_hints.py` passa cada pista de l'agent pel Cangur i en desa el Δ i si el convenç (`results/agent-hints-kangaroo.csv`, sense text). El model que jutja és el mateix que fa de Cangur: el número s'interpreta amb cura.
 
-### 2. Generació amb el model (a la placa)
+### 2. La pista dels problemes externs (a la placa)
 
-El Qwen escriu una pista d'una frase per a qualsevol problema, també per als que introdueix l'alumne. Els exemples són les pistes del banc dels problemes més semblants (en context i RAG). És el graó 3 que proposen els organitzadors a `SETUP.md` 13.1.
+Un problema extern no té pistes de l'agent. El Qwen n'escriu una d'una frase (`copilot/hintgen.py`), en segon pla, després de la resposta del harness i de la referència del Cangur:
 
-1. **Cerca.** Es fa l'embedding del problema amb bge i es busquen els 1 o 2 problemes del banc més semblants. Per als problemes del banc, la cerca es fa amb la versió anglesa.
-2. **Prompt.** Una instrucció fixa, els veïns com a parells problema → pista, la pista de mètode del tema i el problema nou. La part fixa va al principi perquè `cache_prompt` la reaprofiti.
-3. **Generació.** Temperatura 0, `SEED=42`, uns 40 tokens com a màxim, i una gramàtica que obliga a escriure una sola frase.
-4. **Filtre.** Si el problema és del banc, es fa servir `leak.py` amb la resposta correcta. Si és extern, un filtre més estricte rebutja qualsevol lletra d'opció, qualsevol valor d'opció i els números que surten a les opcions però no a l'enunciat.
-5. **Reserva.** Si la pista es rebutja, surt la pista del banc de l'agent (problemes del banc) o la pista de mètode del tema (problemes externs).
+1. **Exemple.** El primer veí del banc (de l'índex del RAG) que tingui pistes de l'agent: el seu enunciat en català i la seva pista del pas 1. Un sol veí: amb dos, el temps s'acosta al límit.
+2. **Prompt.** Una instrucció fixa en català, l'exemple i el problema nou, **sense les opcions** (menys a llegir i menys fuites).
+3. **Generació.** Temperatura 0, `SEED=42`, `HINTGEN_MAX_TOKENS=48`, i una gramàtica que obliga a escriure una sola frase.
+4. **Filtre estricte.** Cap lletra, posició ni valor de cap opció (la resposta del harness pot fallar).
+5. **Reserva.** Si es rebutja, no hi ha veí amb pistes o no ha arribat a temps, el graó mostra la frase de mètode del tema. `HINTGEN=off` ho desactiva.
 
-**Temps estimat** amb les xifres dels organitzadors (llegeix uns 11 tokens/s i escriu uns 6 tokens/s; s'ha de verificar amb `prompt_n`):
-
-| Prompt | Tokens a llegir | Total aproximat |
-| --- | --- | --- |
-| 2 veïns complets + problema | \~560 | \~56 s |
-| 1 veí + problema | \~350 | \~37 s |
-| 2 veïns, només la pista + problema | \~250 | \~28 s |
-
-Per als problemes del banc, les pistes es generen per endavant i es desen a `tutor.db`. Com que la sortida és determinista, es poden generar en un portàtil amb el mateix model, comprovant en uns quants casos que el text és idèntic al de la placa. Per als problemes externs, la generació comença en segon pla quan l'alumne introdueix el problema.
-
-**Codi nou** (separat de `predict.py`): `copilot/hintgen.py`, el filtre estricte a `leak.py`, `prep/pregen_hints.py` i `prep/import_hints.py`, la columna `source` a la taula `hints`, i el graó 3 i els problemes externs del tutor fent servir aquestes pistes.
+**Temps estimat** amb les xifres de la placa (llegeix 10,8 tokens/s i escriu 5,8 tokens/s; s'ha de mesurar amb `prompt_n`): 1 veí + problema, \~350 tokens, \~37 s. Abans, el harness (\~7 s) i el Cangur (\~8 s) ocupen el model.
 
 ### Com es mesuren les pistes
 
 | Què | Com |
 | --- | --- |
-| Fuites | Percentatge de pistes rebutjades pel filtre, i fuites que se li escapen en una mostra revisada |
-| Correcció matemàtica | L'agent fa de jutge de 100 pistes generades, i una persona en revisa 20 |
-| Utilitat | Δ del Cangur amb cada tipus de pista: generada, de l'agent, neutra i de mètode. Com que el model que escriu la pista és el mateix que la valora, aquest senyal s'interpreta amb cura |
-| Temps | Lectura (`prompt_n`) i escriptura a la placa, amb 1 i 2 veïns |
+| Fuites | Pistes rebutjades pel filtre (comptadors de `hint_events`, sense text), i fuites que se li escapen en una mostra revisada |
+| Correcció matemàtica | Una persona revisa 20 pistes de l'agent per lot; l'agent fa de jutge de les pistes generades amb els problemes inventats |
+| Utilitat | Δ del Cangur (en català) amb cada tipus de pista: de l'agent, de l'experiment (bona, absurda, amb fuita), neutra i de mètode. Només on el model prefereix una incorrecta: en els casos fingits el Δ no mesura res |
+| Temps | Lectura (`prompt_n`) i escriptura a la placa de la pista generada, amb 1 veí |
 | Problemes externs | Amb els problemes inventats: qualitat de la cerca, fuites i correcció |
-| Llengua | Si la pista surt millor en català o en anglès |
-| Senyal humà | Si l'alumne resol el problema després de veure la pista (un sol alumne per placa: no hi ha pistes de companys, vegeu `DECISIONS.md`) |
+| Senyal humà | Si l'alumne resol el problema després de veure la pista (un sol alumne per placa) |
 
 ## Dades: què es pot pujar i què no
 
@@ -187,9 +178,10 @@ El que necessita internet o `pip` va al **portàtil**. El que necessita el model
 | `eval.py` | Model\* | `val.jsonl` | `ablations.csv`, `eval-*.csv` | 10 min (50), 45 min (tots) |
 | `prep/letter_bias.py` | Model\* | `train.jsonl` | `letter_bias.json`, `priors.json` | \~10 min |
 | `prep/build_tutor_db.py` | Model\* | `train`, `val`, `math-embed` | `tutor.db` | minuts |
-| `prep/kangaroo_baseline.py` | Model\* | `tutor.db` | Respostes del Cangur | \~9 s per problema |
+| `prep/kangaroo_baseline.py` | Model\* | `tutor.db` | Respostes del Cangur, en català | \~9 s per problema (0,5 s al portàtil) |
 | `prep/hint_experiment.py` | Model\* | Pistes de l'agent | `hints-*.csv`, `τ` | \~1 min per problema |
-| `prep/pregen_hints.py` | Model\* | `tutor.db`, banc de l'agent | Pistes generades | \~30–55 s per problema |
+| `prep/import_hints.py` | Qualsevol | Banc de l'agent validat | Pistes a `tutor.db` | segons |
+| `prep/kangaroo_agent_hints.py` | Model\* | `tutor.db` amb el banc i el Cangur | Δ de cada pista de l'agent, `agent-hints-kangaroo.csv` | \~10 s per pista (0,5 s al portàtil) |
 | `python3 -m copilot.leak` | Qualsevol | Casos de prova | `leak.json` | segons |
 | `app/server.py` i `applab/math-matrix` | Placa | `tutor.db`, models | Tutor (8090) i matriu LED | — |
 | `sim/students.py` | Qualsevol | `tutor.db` (opcional) | `sim-*.csv` | \~1 s |
@@ -206,7 +198,7 @@ Hi ha quatre resultats que poden canviar el pla. El servidor del model només at
 - **D1 · `check_model.py`.** Si el servidor no dona les probabilitats de les cinc lletres, es prova `/completion` amb `n_probs`. Si tampoc funciona, el biaix es corregeix comptant les lletres que respon el model, i la barra del Cangur només pot mostrar si la lletra canvia.
 - **D2 · Experiment de pistes.** Si les pistes bones i les absurdes mouen el Cangur igual, la barra es treu. Les pistes i el senyal humà es mantenen.
 - **D3 · Configuració final de `predict.py`.** Només s'accepta una millora que surti del soroll amb `--limit 0` i que, a la placa, tingui el pitjor cas per sota de 57 s.
-- **D4 · Pistes generades.** Si fallen massa (per fuites, errors matemàtics o temps), el graó 3 torna a fer servir el banc de l'agent (problemes del banc) i la pista de mètode (problemes externs). El llindar el fixa l'equip abans de mesurar.
+- **D4 · Pistes generades (només problemes externs).** Si fallen massa (per fuites, errors matemàtics o temps), `HINTGEN=off` i els graons 2 i 3 dels externs mostren frases de mètode. El llindar el fixa l'equip abans de mesurar.
 
 ### El model al portàtil
 
@@ -245,7 +237,9 @@ python3 eval.py --limit 50 --name baseline
 python3 prep/letter_bias.py && python3 eval.py --limit 50 --name debias
 python3 eval.py --limit 50 --rotations 2 --name rotations-2
 python3 prep/build_tutor_db.py --show-topics 50
-python3 prep/kangaroo_baseline.py
+python3 prep/kangaroo_baseline.py                    # en català (KANGAROO_LANG); --redo si canvia
+python3 prep/import_hints.py data/agent_hints.jsonl  # el banc de l'agent, validat
+python3 prep/kangaroo_agent_hints.py                 # el Δ de cada pista de l'agent
 python3 prep/hint_experiment.py --make-template 25   # l'agent l'omple
 python3 prep/hint_experiment.py
 
@@ -300,17 +294,17 @@ Aquesta és la llista completa, agrupada per àrees. Inclou tot el pla del proje
 
 - [x] `prepare_m3kang.py` amb `eng` i `cat` (segona volta d'OCR en marxa; sense imatges)
 - [ ] `prep/agent/` i els cinc lots, validats amb `check_agent_output.py`, i 20 textos de cada lot revisats per una persona
-- [ ] La columna `source`, `import_hints.py`, i el graó 3 llegint el banc
-- [ ] La línia base del Cangur per a tots els problemes elegibles
+- [x] La columna `source` i `step`, `import_hints.py`, i els graons 2 i 3 llegint el banc
+- [ ] La línia base del Cangur per a tots els problemes elegibles, **en català** (`kangaroo_baseline.py --redo`)
+- [ ] El banc de l'agent (2 pistes ordenades × problemes elegibles del train), importat, i `kangaroo_agent_hints.py`
 - [ ] L'experiment de pistes i el valor de `τ` (D2)
 - [ ] La regressió logística per valorar les pistes (pla 6.4)
-- [ ] `copilot/hintgen.py`, el filtre estricte per als problemes externs i `prep/pregen_hints.py`
-- [ ] Temps de la generació a la placa amb 1 i 2 veïns, i triar el prompt
-- [ ] Pistes generades per endavant per a tot el banc, comprovant en uns quants casos que la placa i el portàtil donen el mateix text
+- [x] `copilot/hintgen.py` (pista dels problemes externs amb 1 veí) i el filtre estricte
+- [ ] Temps de la generació a la placa amb 1 veí, i comprovar el prompt amb els problemes inventats
 - [ ] Mesures de les pistes (fuites, correcció, utilitat, temps, llengua) (D4)
 - [ ] L'encert de `topics.py` contra els temes de referència, i les pistes de mètode corregides
 - [ ] L'encert del filtre de fuites amb els 200 casos
-- [ ] Graó 1: en 20 problemes, el problema semblant és més fàcil i del mateix tema?
+- [ ] Graó 4: en 20 problemes, el problema semblant és més fàcil i del mateix tema?
 - [ ] El temps de cada graó d'ajuda i de cada crida del Cangur a la placa (`prompt_n`)
 
 **Tutor**
@@ -321,7 +315,7 @@ Aquesta és la llista completa, agrupada per àrees. Inclou tot el pla del proje
 - [ ] Problemes externs provats amb els problemes inventats: encert del harness, i el recorregut sencer
 - [ ] El pont d'idioma complet: tres etapes, amb la imatge original en la llengua d'origen
 - [ ] El doble Elo: `sim/students.py --db data/tutor.db`
-- [ ] Tot el recorregut a la placa: respondre, els quatre graons, ensenyar el Cangur, una pista rebutjada, una pista acceptada, i la matriu LED
+- [ ] Tot el recorregut a la placa: respondre, els cinc graons (amb el problema semblant per intentar), ensenyar el Cangur (també un cas fingit), una pista rebutjada, una pista acceptada, la pista generada d'un problema extern, i la matriu LED
 
 **Documentació i lliurables**
 

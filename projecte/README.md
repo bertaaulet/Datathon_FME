@@ -11,12 +11,12 @@ A math copilot that runs entirely on an Arduino UNO Q, offline. Built for the Qu
 The language model that fits on the board (Qwen3.5 0.8B) answers Kangaroo problems close to random: the organizers measured 22.5% on 40 problems, below always answering "D". So it can't be the teacher. This project turns that around:
 
 1. **The student solves a problem** from the M3Kang bank. M3Kang knows the right answer, so checking is exact.
-2. **If they're wrong**, they get help one rung at a time: a similar, easier problem; the topic and a method; a hint left by another student; and the solution only if they ask for it.
-3. **If they're right**, they teach the Kangaroo, a weak classmate played by the model. The Kangaroo always starts with a wrong answer. The student writes a hint that mustn't give the answer away, and the board measures whether the hint moved the Kangaroo towards the right option. A bar on the LED matrix goes up or down.
-4. **Hints that work are kept** on the board, and become the third rung of help for the next student.
+2. **If they're wrong**, they get help one rung at a time: the topic and a method; a hint; a second hint (both written ahead of time by an agent, in order); a similar, easier problem to try, without its answer; and the solution only if they ask for it.
+3. **If they're right**, they teach the Kangaroo, a weak classmate played by the model, which reads the problem and the hint in Catalan. The Kangaroo always starts with a wrong answer. The student writes a hint that mustn't give the answer away, and the board measures whether the hint moved the Kangaroo towards the right option. A bar on the LED matrix goes up or down.
+4. **Each student has their own board.** A hint is never shown to anyone else. Only a hint that really convinced the Kangaroo keeps its text, for the teacher; everything else is counted, without text.
 5. **The next problem** is chosen with Elo ratings (see Ratings below), so it's hard enough to learn from and easy enough to keep going.
 
-The model never writes text for the student. It only reports how likely it finds each letter, in one token. Everything the Kangaroo "says" is a sentence written by the team.
+For bank problems, the model never writes text for the student: it only reports how likely it finds each letter, in one token, and everything the Kangaroo "says" is a sentence written by the team. The one exception is an outside problem (below), whose hint the model writes in one sentence, always through the leak filter. The whole hint flow, in Catalan, is in [`docs/PISTES.md`](../docs/PISTES.md).
 
 ### The language bridge
 
@@ -50,10 +50,11 @@ A student can type their own problem, with its options `A) … E)`. It goes thro
 2. Otherwise the tutor places it (topic from keywords, a level estimated from the 5 most similar bank problems) and the harness, the same `solve()` that `predict.py` runs, works out an answer in the background. That answer plays the label: the student's answer is checked against it, the help ladder and the Kangaroo use it, and the solution step shows it. The answer is never shown before the student solves the problem or asks for the solution.
 3. This warning stays on screen the whole time: *"No podem assegurar les respostes per a problemes externs. Confirma la solució en fonts oficials o amb el teu professor."*
 4. The leak filter is stricter: a hint may name no option at all (no letter, position or option value), because the harness's answer may be wrong.
-5. The attempt is stored with `external = 1`. It moves no rating, doesn't count towards the language stages, the teacher's per-topic summary or the bank's hint statistics, and the teacher sees it as a separate count. Hints written for it aren't kept for other students.
-6. Without five readable options there's nothing to check against: the tutor only shows the topic, the estimated level and similar problems to practise.
+5. The attempt is stored with `external = 1`. It moves no rating, doesn't count towards the language stages, the teacher's per-topic summary or the hint counts, and the teacher sees it as a separate count. Hints written for it are never kept.
+6. It has no agent hints, so the model writes one (`copilot/hintgen.py`) in the background, after the harness and the Kangaroo: one sentence, with the most similar bank problem and its first agent hint as the example, and without the options. It goes through the strict filter; if it fails or isn't ready, a method hint takes its place. `HINTGEN=off` in `config.env` switches it off.
+7. Without five readable options there's nothing to check against: the tutor only shows the topic, the estimated level and similar problems to practise.
 
-How far to trust the check is the harness's accuracy (see Results). And since the harness's answer usually is the model's own favourite, the Kangaroo often already agrees with it, and there's nothing to teach.
+How far to trust the check is the harness's accuracy (see Results). And since the harness's answer usually is the model's own favourite, the model often already agrees with it: then the Kangaroo only pretends to be wrong (see Known limits).
 
 ### `predict.py`
 
@@ -78,6 +79,7 @@ eval.py               accuracy and latency, by level, topic and language
 copilot/llm.py        letter_probs(): a probability for each letter A to E
 copilot/pipeline.py   solve(): bias correction, rotations, time budget
 copilot/tutor.py      the tutor's flow
+copilot/hintgen.py    the model's one-sentence hint for an outside problem
 copilot/leak.py       does a hint give the answer away?
 copilot/elo.py        ratings and the choice of the next problem
 copilot/topics.py     a topic per problem, from keywords, and method hints
@@ -134,10 +136,17 @@ python3 prep/build_tutor_db.py --show-topics 50
 
 Read the 50 problems it prints, and check the topics by hand.
 
-**5. Ask the Kangaroo every problem once.** Run it overnight; it continues where it stopped.
+**5. Ask the Kangaroo every problem once**, in its language (`KANGAROO_LANG=cat`). Run it overnight on the board (0.5 s per problem on a laptop with the same model); it continues where it stopped. If you change `KANGAROO_LANG`, run it again with `--redo`.
 
 ```bash
 python3 prep/kangaroo_baseline.py
+```
+
+Then import the agent's hint bank (`prep/agent/hint_bank.md`: two ordered hints per usable training problem, checked with `prep/check_agent_output.py`) and show each hint to the Kangaroo once:
+
+```bash
+python3 prep/import_hints.py data/agent_hints.jsonl
+python3 prep/kangaroo_agent_hints.py
 ```
 
 **6. The go / no-go experiment for the hints** (about 1 hour).
@@ -216,10 +225,11 @@ M3Kang has no topic field. Topics come from keywords (`copilot/topics.py`): fast
 
 ## Known limits
 
-- The Kangaroo's first answer is forced: it's always the likeliest *wrong* option, even when the model prefers the right one. In that case the tutor skips the teaching step.
-- The bar measures whether a hint moved the model, not whether it's good teaching. The second signal, how many students solve the problem after seeing a hint, needs real use to build up.
+- The Kangaroo's first answer is forced: it's always the likeliest *wrong* option. When the model already prefers the right one (about 22% of the bank), the Kangaroo only pretends: its bar starts below half, a hint convinces it if the model still prefers the right answer afterwards, and nothing from that case is measured or kept except the count of leaks.
+- The bar measures whether a hint moved the model, not whether it's good teaching. The model that judges the agent's hints (`kangaroo_agent_hints.py`) is the same one that plays the Kangaroo. The second signal, whether the student solves the problem after a hint, needs real use to build up.
 - The leak filter is rules. It catches the letter, the value and the position of the answer, not indirect leaks such as "it's twice five".
-- The tutor only uses problems that are text-only and whose five options OCR could read.
+- The tutor only uses training problems that are text-only, whose five options OCR could read, and that exist in Catalan. Validation problems have no agent hints, because the agent never sees their answers (`build_tutor_db.py --include-val` uses them anyway).
+- The model-written hint of an outside problem takes about 37 s on the board (an estimate, to be measured), after the harness and the Kangaroo: a student who asks for help sooner gets a method hint first.
 - The embedding model is English-only: an outside problem typed in Catalan finds worse neighbours.
 - One student at a time. The model server has one slot and its cache holds one problem.
 - `cache_prompt` can make the model's numbers differ very slightly between a cached and an uncached call (see the llama.cpp server documentation). The base repository already uses it.

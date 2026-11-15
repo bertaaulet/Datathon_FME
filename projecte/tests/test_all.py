@@ -25,10 +25,11 @@ sys.path.insert(0, HERE)
 
 import demo_data  # noqa: E402
 import fake_llama  # noqa: E402
-from copilot import calib, elo, hintsim, led, leak, llm, pipeline, topics  # noqa: E402
+from copilot import calib, elo, hintgen, led, leak, llm, pipeline, topics  # noqa: E402
 from copilot.config import CONFIG  # noqa: E402
 from copilot.store import Store  # noqa: E402
-from copilot.tutor import NEUTRAL_HINT, Tutor, bar_value, kangaroo  # noqa: E402
+from copilot.tutor import (FEIGNED_BAR, HELP_RUNGS, NEUTRAL_HINT, Tutor, bar_value,  # noqa: E402
+                           kangaroo)
 
 TRAIN, VAL = demo_data.make(90)
 SAMPLE = {"id": "s1", "level": 0,
@@ -38,26 +39,6 @@ SAMPLE = {"id": "s1", "level": 0,
 
 def english(rows):
     return [r for r in rows if r["language"] == "eng"]
-
-
-def fake_embedder(texts, timeout=None):
-    """A deterministic bag of words, 64 numbers per text: enough to test the plumbing.
-
-    It says nothing about how bge-small would score the same texts.
-    """
-    out = []
-    for text in texts:
-        vector = [0.0] * 64
-        for word in leak.plain(text).split():
-            word = "".join(ch for ch in word if ch.isalnum())
-            if word:
-                vector[sum(map(ord, word)) % 64] += 1.0
-        out.append(vector)
-    return out
-
-
-def dead_embedder(texts, timeout=None):
-    raise OSError("no embedding server")
 
 
 class WithServers(unittest.TestCase):
@@ -98,6 +79,14 @@ class Prompt(unittest.TestCase):
         shared = plain[:-len("\nAnswer:")]
         self.assertTrue(hinted.startswith(shared))    # so the cache is reused
         self.assertTrue(hinted.endswith("Hint from a classmate: Count them all\nAnswer:"))
+
+    def test_kangaroo_prompt_in_catalan(self):
+        english_prompt = llm.build_messages(SAMPLE, hint="Count them")
+        catalan = llm.build_messages(SAMPLE, hint="Compta-les", lang="cat")
+        self.assertTrue(catalan[-1]["content"].endswith("Pista d'un company: Compta-les\nResposta:"))
+        self.assertIn("Resols problemes", catalan[0]["content"])
+        self.assertEqual(llm.build_messages(SAMPLE, hint="Count them", lang="eng"), english_prompt)
+        self.assertEqual(english_prompt[0]["content"], llm.SYSTEM)   # predict.py's prompt as before
 
     def test_rotation_moves_the_options(self):
         text = llm.format_problem(SAMPLE, order=pipeline.rotation(2))
@@ -467,11 +456,13 @@ class Ratings(unittest.TestCase):
         probs = {"A": 0.30, "B": 0.10, "C": 0.15, "D": 0.40, "E": 0.05}
         state = kangaroo(probs, "C")
         self.assertEqual(state["answer"], "D")
-        self.assertAlmostEqual(state["sure"], 0.40 / 0.85)
+        self.assertAlmostEqual(state["sure"], 0.40)           # the model's real probability
+        self.assertFalse(state["feigned"])
         self.assertAlmostEqual(state["margin"], -0.9808, places=3)
         sure = kangaroo({"A": 0.05, "B": 0.05, "C": 0.8, "D": 0.05, "E": 0.05}, "C")
         self.assertNotEqual(sure["answer"], "C")      # even when the model prefers the right one
         self.assertGreater(sure["margin"], 0)
+        self.assertTrue(sure["feigned"])                  # it only pretends
         self.assertAlmostEqual(bar_value(0), 0.5)
 
     def test_topics_and_led(self):
@@ -533,7 +524,8 @@ class TutorFlow(WithServers):
         self.store = Store(self.path)
         self.addCleanup(self.store.close)
         self.tutor = Tutor(self.store, ask=self.ask, background=False,
-                           images_dir=self.folder.name, embedder=fake_embedder, solver=self.solve)
+                           images_dir=self.folder.name, solver=self.solve,
+                           hint_writer=lambda *args: hintgen.generate(*args, url=self.url))
 
     def solve(self, problem):
         return pipeline.solve(problem, llm_url=self.url)
@@ -544,7 +536,9 @@ class TutorFlow(WithServers):
 
     def test_database(self):
         usable = self.store.one("SELECT COUNT(*) AS n FROM problems WHERE eligible = 1")["n"]
-        self.assertEqual(usable, 90)
+        self.assertEqual(usable, len(english(TRAIN)))             # training problems only
+        val_id = english(VAL)[0]["id"]
+        self.assertEqual(self.store.problem(val_id)["eligible"], 0)
         self.assertEqual(self.store.languages(), ["cat", "eng", "esp"])
         row = self.store.problem(english(TRAIN)[0]["id"])
         self.assertEqual(len(row["neighbours"]), 5)
@@ -565,22 +559,26 @@ class TutorFlow(WithServers):
         self.assertEqual(self.tutor.store.problem(problem_id)["elo"], problem_before)
         self.assertIsNone(view["problem"]["label"])
         kinds = []
-        for _ in range(4):
+        for rung in range(1, HELP_RUNGS + 1):
             view = self.tutor.help()
             kinds.append(view["messages"][-1]["kind"])
-        self.assertEqual(kinds, ["exemple", "pista", "pista", "solucio"])
+            if rung == 4:                                      # a similar problem, no answer yet
+                self.assertIsNone(view["problem"]["side"]["label"])
+        self.assertTrue(any(m["text"].startswith("És un problema de") for m in view["messages"]))
+        self.assertEqual(kinds, ["pista", "pista", "pista", "pista", "solucio"])
         self.assertEqual(view["phase"], "done")
         self.assertEqual(view["problem"]["label"], self.tutor.current["label"])
         self.assertEqual(len(self.store.attempts()), 1)         # one attempt, however many clicks
 
-    def teachable(self):
-        """Go through problems until the Kangaroo has something to learn."""
+    def teachable(self, feigned=False):
+        """Go through problems until the model prefers a wrong option (or the right one)."""
         for _ in range(40):
             self.tutor.next()
             view = self.tutor.answer(self.tutor.current["label"])
-            if view["phase"] == "teach":
+            self.assertEqual(view["phase"], "teach")               # the Kangaroo is always wrong
+            if self.tutor.current["ref"]["feigned"] == feigned:
                 return view
-        self.fail("the fake model never preferred a wrong option")
+        self.fail("no problem of that kind")
 
     def test_teach_the_kangaroo(self):
         self.tutor.start("Test", "", 1)
@@ -595,23 +593,61 @@ class TutorFlow(WithServers):
         self.assertEqual(view["messages"][-1]["kind"], "fuita")
         self.assertEqual((len(self.model.calls), current["tries"]), (calls, 0))
 
+        self.assertEqual(self.store.hint_events()[-1]["outcome"], "rejected")
         self.store.set_meta("tau", "0.5")
         words = sorted(fake_llama.words(current["model"]["text"]))[:3]
         view = self.tutor.hint("Fixa't en: " + " ".join(words))    # the fake likes shared words
-        hint = self.store.hints()[-1]
-        self.assertGreater(hint["delta"], 0.5)
+        event = self.store.hint_events()[-1]
+        self.assertGreater(event["delta"], 0.5)
         self.assertEqual(len(self.model.calls), calls + 1)
         self.assertEqual(self.model.calls[-1]["hint"], "Fixa't en: " + " ".join(words))
-        self.assertLess(self.model.calls[-1]["prompt_n"], 40)      # only the hint was read
         self.assertGreater(view["problem"]["bar"], bar_value(current["ref"]["margin"]))
-        if hint["convinced"]:
+        kept = self.store.student_hints()
+        if event["outcome"] == "convinced":                        # only then is the text kept
             self.assertEqual(view["phase"], "done")
+            self.assertEqual([h["text"] for h in kept], ["Fixa't en: " + " ".join(words)])
+        else:
+            self.assertEqual(kept, [])
+
+    def test_kangaroo_reads_catalan(self):
+        self.tutor.start("Test", "", 1)
+        self.teachable()
+        current = self.tutor.current
+        self.assertEqual(current["model"]["text"], self.store.text(current["id"], "cat")["text"])
+        self.tutor.hint("Compta-les totes amb calma, una per una.")
+        self.assertEqual(self.model.calls[-1]["hint"], "Compta-les totes amb calma, una per una.")
+
+    def test_feigned_kangaroo(self):
+        """The model already prefers the right answer: the Kangaroo pretends, nothing is kept."""
+        self.tutor.start("Test", "", 1)
+        view = self.teachable(feigned=True)
+        current = self.tutor.current
+        self.assertNotEqual(current["ref"]["answer"], current["label"])
+        self.assertEqual(view["problem"]["bar"], FEIGNED_BAR)
+        said = view["messages"][-1]["text"]
+        self.assertIn(f"jo he dit la {current['ref']['answer']}", said)
+        probs = self.ask(current["model"], hint=NEUTRAL_HINT, lang="cat")["probs"]
+        self.assertIn(f"{round(100 * probs[current['ref']['answer']])} %", said)   # its real share
+        view = self.tutor.hint(f"És la {current['label']}")         # a leak is still counted
+        self.tutor.hint("Compta-les totes amb calma, una per una.")
+        events = self.store.hint_events()
+        self.assertEqual([e["outcome"] for e in events][0], "rejected")
+        self.assertTrue(all(e["feigned"] == 1 and e["delta"] is None for e in events))
+        self.assertEqual(self.store.student_hints(), [])             # never the text
+        counts = self.store.hint_counts()
+        self.assertEqual(counts["rejected"], {"lletra": 1})
+        self.assertEqual(counts["feigned"], 1)
 
     def test_precomputed_kangaroo_does_not_call_the_model(self):
         # Wrong-leaning probabilities for every problem, as prep/kangaroo_baseline.py stores them
         self.store.run("UPDATE problems SET k_probs = ?",
                        (json.dumps({"A": 0.4, "B": 0.3, "C": 0.1, "D": 0.1, "E": 0.1}),))
         self.tutor.start("Test", "", 1)
+        calls = len(self.model.calls)
+        self.tutor.next()
+        current = self.tutor.current
+        self.assertEqual(len(self.model.calls), calls + 1)            # measured in English: asked again
+        self.store.set_meta("kangaroo_lang", "cat")                   # as kangaroo_baseline.py marks it
         calls = len(self.model.calls)
         self.tutor.next()
         current = self.tutor.current
@@ -636,7 +672,8 @@ class TutorFlow(WithServers):
         for n in range(3):
             view = self.tutor.hint(f"zzzz qqqq xxxx {n} kkkk")
         self.assertEqual(view["phase"], "done")                    # three tries, then it stops
-        self.assertTrue(all(not h["convinced"] for h in self.store.hints()))
+        self.assertEqual(self.store.student_hints(), [])           # no text kept
+        self.assertEqual(self.store.hint_counts()["not_convinced"], 3)
 
     def test_leave_the_kangaroo(self):
         self.tutor.start("Test", "", 1)
@@ -666,76 +703,67 @@ class TutorFlow(WithServers):
     def test_hint_limit_is_sent_to_the_page(self):
         self.assertEqual(self.tutor.view()["hint_max_chars"], int(CONFIG.get("HINT_MAX_CHARS", 200)))
 
-    def test_peer_hint_reaches_the_next_student(self):
+    def test_agent_hints_in_order(self):
         self.tutor.start("Test", "", 1)
         self.tutor.next()
         problem_id = self.tutor.current["id"]
-        self.store.add_hint(problem_id, 1, "Compta-les per grups.", 2.0, True)
+        self.store.add_hint(problem_id, None, "Després resta les que es menja.", None, None,
+                            source="agent", step=2)
+        self.store.add_hint(problem_id, None, "Compta primer totes les pomes.", None, None,
+                            source="agent", step=1)
         self.tutor.answer(self.wrong_letter())
-        for _ in range(3):
-            view = self.tutor.help()
-        self.assertIn("Compta-les per grups.", view["messages"][-1]["text"])
-        self.tutor.answer(self.tutor.current["label"])
-        hint = self.store.hints()[0]
-        self.assertEqual((hint["shown"], hint["solved_after"]), (1, 1))
+        texts = [self.tutor.help()["messages"][-1]["text"] for _ in range(3)]
+        self.assertTrue(texts[0].startswith("És un problema de"))
+        self.assertEqual(texts[1:], ["Una pista: «Compta primer totes les pomes.»",
+                                     "Una altra pista: «Després resta les que es menja.»"])
 
-    def test_rejected_hint_is_kept_as_data_only(self):
+    def test_without_agent_hints_the_method_hints_follow(self):
+        self.tutor.start("Test", "", 1)
+        self.tutor.next()
+        topic = self.tutor.current["row"]["topic"]
+        self.tutor.answer(self.wrong_letter())
+        texts = [self.tutor.help()["messages"][-1]["text"] for _ in range(3)]
+        self.assertEqual(texts[1:], [topics.method_hint(topic, 1), topics.method_hint(topic, 2)])
+
+    def test_rejected_hint_is_only_counted(self):
         self.tutor.start("Test", "", 1)
         self.teachable()
         current = self.tutor.current
         calls = len(self.model.calls)
         view = self.tutor.hint(f"És la {current['label']}")
-        self.assertEqual(view["messages"][-1]["kind"], "fuita")   # the student sees the same
+        self.assertEqual(view["messages"][-1]["kind"], "fuita")   # the student sees why
         self.assertEqual((len(self.model.calls), current["tries"]), (calls, 0))
-        hint = self.store.hints()[-1]
-        self.assertEqual((hint["rejected"], hint["delta"], hint["convinced"], hint["vec"]),
-                         ("lletra", None, 0, None))
-        self.store.run("UPDATE hints SET convinced = 1, solved_after = 9 WHERE n = ?", (hint["n"],))
-        self.assertIsNone(self.store.best_hint(current["id"]))     # never shown to anyone
-        self.assertIsNone(self.store.best_neighbour_hint([current["id"]]))
-        self.assertEqual(self.store.hint_vectors(current["id"]), [])
+        self.assertEqual(self.store.hints(), [])                  # no text anywhere
+        self.assertEqual(self.store.hint_counts()["rejected"], {"lletra": 1})
+        self.assertEqual(self.tutor.teacher()["hint_counts"]["rejected"], {"lletra": 1})
 
-    def test_duplicate_hint_is_not_stored_twice(self):
-        import embed_refs
-        embed_refs.run(self.store, fake_embedder)                  # the topics' method hints
-        self.tutor.start("Test", "", 1)
-        self.teachable()
-        self.store.set_meta("tau", "100")                          # nothing convinces: three tries
-        self.tutor.hint("Compta quantes pomes hi ha a cada bossa.")
-        self.tutor.hint("Compta quantes pomes hi ha a cada bossa!")  # the same words
-        self.tutor.hint("Dibuixa un esquema amb totes les dades.")
-        hints = self.store.hints()
-        self.assertEqual(len(hints), 2)
-        self.assertEqual(hints[0]["dups"], 1)
-        self.assertIsNotNone(hints[0]["vec"])
-        self.assertIsNotNone(hints[1]["relevance"])                # the topic's method hints
-
-    def test_without_embedding_server_the_hint_is_stored_anyway(self):
-        self.tutor.embedder = dead_embedder
-        self.tutor.start("Test", "", 1)
-        self.teachable()
-        self.store.set_meta("tau", "100")
-        for _ in range(2):
-            view = self.tutor.hint("Compta quantes pomes hi ha a cada bossa.")
-        hints = self.store.hints()
-        self.assertEqual(len(hints), 2)                            # no duplicate check without vectors
-        self.assertTrue(all(h["relevance"] is None and h["vec"] is None for h in hints))
-        self.assertIn(view["phase"], ("teach", "done"))            # the student carries on
-
-    def test_hint_of_a_similar_problem(self):
+    def test_similar_problem_to_try(self):
         self.tutor.start("Test", "", 1)
         self.tutor.next()
-        current = self.tutor.current
-        neighbour = current["row"]["neighbours"][0]
-        self.store.add_hint(neighbour, 1, "Agrupa-les de dues en dues.", 2.0, True)
         self.tutor.answer(self.wrong_letter())
-        for _ in range(3):
+        for _ in range(4):
             view = self.tutor.help()
-        self.assertIn("Una pista d'un problema semblant: «Agrupa-les de dues en dues.»",
-                      [m["text"] for m in view["messages"]])
-        self.assertEqual(self.store.hints()[0]["shown"], 0)       # its counts stay its own
-        self.store.add_hint(current["id"], None, "La del banc.", None, False, source="agent")
-        self.assertEqual(self.store.best_hint(current["id"])["text"], "La del banc.")
+        side = view["problem"]["side"]
+        self.assertIsNone(side["label"])                         # no answer until it is tried
+        self.assertNotEqual(view["phase"], "done")
+        right = self.tutor.current["side"]["label"]
+        wrong = next(letter for letter in side["options"] if letter != right)
+        view = self.tutor.side_answer(wrong)
+        self.assertEqual(view["problem"]["side"]["label"], right)
+        self.assertIn(f"la resposta era la {right})", view["messages"][-1]["text"])
+        self.assertEqual(self.tutor.side_answer(right)["problem"]["side"]["answer"], wrong)  # once
+        self.assertEqual(view["phase"], "help")                  # its own problem goes on
+        self.assertEqual(self.tutor.help()["phase"], "done")      # rung 5: the solution
+
+    def test_similar_problem_answer_on_request(self):
+        self.tutor.start("Test", "", 1)
+        self.tutor.next()
+        self.tutor.answer(self.wrong_letter())
+        for _ in range(4):
+            self.tutor.help()
+        view = self.tutor.side_reveal()
+        self.assertEqual(view["problem"]["side"]["label"], self.tutor.current["side"]["label"])
+        self.assertEqual(view["messages"][-1]["kind"], "exemple")
 
     def test_language_stages_and_two_ratings(self):
         view = self.tutor.start("Test", "esp", 1)
@@ -828,7 +856,7 @@ class TutorFlow(WithServers):
             self.assertEqual(self.tutor.student[key], before[key])
         self.assertEqual(self.tutor.teacher()["external_attempts"], 1)
         self.assertEqual(self.tutor.teacher()["attempts"], 0)
-        for _ in range(4):                                         # the same ladder, to the end
+        for _ in range(HELP_RUNGS):                                # the same ladder, to the end
             view = self.tutor.help()
         self.assertEqual(view["phase"], "done")
         self.assertEqual(view["problem"]["label"], self.tutor.current["label"])
@@ -846,6 +874,7 @@ class TutorFlow(WithServers):
         self.tutor.start("Test", "", 1)
         self.tutor.external(self.SPIDERS)
         hints_before = len(self.store.hints())
+        events_before = len(self.store.hint_events())
         view = self.tutor.answer(self.tutor.current["label"])
         self.assertEqual(view["phase"], "teach")
         self.assertEqual(self.store.attempts(external=True)[0]["correct"], 1)
@@ -855,9 +884,42 @@ class TutorFlow(WithServers):
         view = self.tutor.hint("Compta quantes potes té una aranya i multiplica")
         self.assertNotEqual(view["messages"][-1]["kind"], "fuita")
         self.assertEqual(self.tutor.current["tries"], 1)           # it reached the Kangaroo
-        self.assertEqual(len(self.store.hints()), hints_before)   # never stored for others
+        self.assertEqual(len(self.store.hints()), hints_before)   # an outside hint is never kept
+        self.assertEqual(len(self.store.hint_events()), events_before)   # nor counted
         self.assertEqual(self.tutor.leave_teaching()["phase"], "solving")
         self.assertEqual(self.store.teach_exits(), [])
+
+    def test_outside_problem_gets_a_written_hint(self):
+        self.tutor.start("Test", "", 1)
+        self.tutor.external(self.SPIDERS)
+        current = self.tutor.current
+        # Without the retrieval index the tests have no neighbours: give it two bank problems
+        current["row"]["neighbours"] = [r["id"] for r in english(TRAIN)[:2]]
+        for other in current["row"]["neighbours"]:
+            self.store.add_hint(other, None, "Multiplica el nombre de coses per les seves parts.",
+                                None, None, source="agent", step=1)
+        self.tutor._write_hint(current)                            # as after the harness, in the background
+        self.assertEqual(current["generated"], fake_llama.GENERATED_HINT)
+        written = [c for c in self.model.calls if c.get("hint_writer")][-1]
+        self.assertNotIn("A) 42", written["question"])             # the options are left out
+        self.tutor.answer(self.wrong_letter())
+        texts = [self.tutor.help()["messages"][-1]["text"] for _ in range(3)]
+        self.assertEqual(texts[1], f"Una pista: «{fake_llama.GENERATED_HINT}»")
+        self.assertEqual(texts[2], topics.method_hint(current["row"]["topic"], 1))
+
+    def test_written_hint_goes_through_the_strict_filter(self):
+        def reply(text):
+            return lambda url, payload, timeout: {"choices": [{"message": {"content": text}}]}
+        problem = {"text": "How many legs do 7 spiders have?",
+                   "options": {"A": "42", "B": "49", "C": "56", "D": "63", "E": "70"}}
+        self.assertEqual(hintgen.generate(problem, "x", "y", post_fn=reply("Són 56 potes."))[1], "valor")
+        self.assertEqual(hintgen.generate(problem, "x", "y", post_fn=reply("Mira la B."))[1], "lletra")
+        hint, reason = hintgen.generate(problem, "x", "y",
+                                        post_fn=reply("Pensa quantes potes té una aranya. I ja."))
+        self.assertEqual((hint, reason), ("Pensa quantes potes té una aranya.", None))
+        def down(url, payload, timeout):
+            raise OSError("down")
+        self.assertEqual(hintgen.generate(problem, "x", "y", post_fn=down), (None, "error"))
 
     def test_outside_problem_without_options_is_only_placed(self):
         self.tutor.start("Test", "", 1)
@@ -870,7 +932,7 @@ class TutorFlow(WithServers):
     def test_outside_problem_model_down(self):
         def fallback(problem):
             return {"answer": "D", "status": "error: x", "calls": 0}   # what solve() gives then
-        tutor = Tutor(self.store, ask=self.ask, background=False, embedder=None, solver=fallback)
+        tutor = Tutor(self.store, ask=self.ask, background=False, solver=fallback)
         tutor.start("Test", "", 1)
         view = tutor.external(self.SPIDERS)
         self.assertEqual(view["phase"], "done")                   # nothing graded against a guess
@@ -881,7 +943,7 @@ class TutorFlow(WithServers):
     def test_model_down(self):
         def dead(problem, **kwargs):
             raise OSError("down")
-        tutor = Tutor(self.store, ask=dead, background=False, embedder=None)
+        tutor = Tutor(self.store, ask=dead, background=False)
         tutor.start("Test", "", 1)
         tutor.next()
         view = tutor.answer(tutor.current["label"])
@@ -969,7 +1031,7 @@ class Scripts(WithServers):
             path = os.path.join(folder, "tutor.db")
             self.assertEqual(build_db(path, self.embed.server_port).returncode, 0)
             store = Store(path)
-            tutor = Tutor(store, ask=self.ask, background=False, embedder=None)
+            tutor = Tutor(store, ask=self.ask, background=False)
             server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(tutor, folder))
             threading.Thread(target=server.serve_forever, daemon=True).start()
             base = f"http://127.0.0.1:{server.server_port}"
@@ -989,6 +1051,13 @@ class Scripts(WithServers):
                 self.assertNotIn(tutor.current["label"], json.dumps(view["problem"]["label"]))
                 self.assertEqual(len(call("/api/led")["frame"]), 8)
                 self.assertIn(call("/api/answer", {"letter": "A"})["phase"], ("help", "teach", "done"))
+                if tutor.phase == "help":
+                    for _ in range(4):
+                        view = call("/api/help", {})
+                    if view["problem"]["side"]:
+                        letter = next(iter(view["problem"]["side"]["options"]))
+                        view = call("/api/side-answer", {"letter": letter})
+                        self.assertIsNotNone(view["problem"]["side"]["label"])
                 self.assertEqual(call("/api/teacher")["attempts"], 1)
                 with urllib.request.urlopen(base + "/", timeout=10) as page:
                     html = page.read().decode("utf-8")
@@ -1029,6 +1098,8 @@ GOOD_HINT = "Compta primer quantes pomes hi ha en total i després treu les que 
 
 
 def agent_line(kind, problem_id, **fields):
+    if kind == "hint_bank":
+        fields.setdefault("step", 1)
     return {"id": problem_id, "kind": kind, "source": "agent", **fields}
 
 
@@ -1063,10 +1134,11 @@ class AgentBatches(unittest.TestCase):
 
     def test_hint_bank(self):
         code, kept, printed = self.check("hint_bank", [
-            agent_line("hint_bank", "t1", lang="cat", hint=GOOD_HINT),
-            agent_line("hint_bank", "t1", lang="cat", hint="Fixa't en la resposta C, és la bona."),
-            agent_line("hint_bank", "t1", lang="cat", hint="Multiplica les bosses per les pomes de cada bossa."),
-            agent_line("hint_bank", "t1", lang="cat", hint="Fes un dibuix de les bosses i les pomes."),
+            agent_line("hint_bank", "t1", lang="cat", hint=GOOD_HINT, step=1),
+            agent_line("hint_bank", "t1", lang="cat", hint="Fixa't en la resposta C, és la bona.", step=2),
+            agent_line("hint_bank", "t1", lang="cat", hint="Multiplica les bosses per les pomes de cada bossa.", step=2),
+            agent_line("hint_bank", "t1", lang="cat", hint="Fes un dibuix de les bosses i les pomes.", step=1),
+            agent_line("hint_bank", "t1", lang="cat", hint="Fes un dibuix de les pomes.", step=3),
             agent_line("hint_bank", "t1", lang="cat", hint=GOOD_HINT),
             agent_line("hint_bank", "zz", lang="cat", hint=GOOD_HINT),
             agent_line("hint_bank", "t2", lang="cat", hint="Mira bé quina figura està pintada."),
@@ -1076,7 +1148,9 @@ class AgentBatches(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertEqual([row["hint"] for row in kept],
                          [GOOD_HINT, "Multiplica les bosses per les pomes de cada bossa."])
-        for expected in ("line 2 (t1): rejected by copilot.leak (lletra)", "already two hints",
+        self.assertEqual([row["step"] for row in kept], [1, 2])
+        for expected in ("line 2 (t1): rejected by copilot.leak (lletra)", "already a step 1 hint",
+                         "step must be 1", "the same hint appears twice",
                          "unknown problem id 'zz'", "isn't eligible", "lang must be 'cat'",
                          "one sentence", "not valid JSON"):
             self.assertIn(expected, printed)
@@ -1090,9 +1164,10 @@ class AgentBatches(unittest.TestCase):
 
     def test_schema(self):
         code, kept, printed = self.check("hint_bank", [
-            {"id": "t1", "kind": "hint_bank", "source": "human", "lang": "cat", "hint": GOOD_HINT},
+            {"id": "t1", "kind": "hint_bank", "source": "human", "lang": "cat", "hint": GOOD_HINT,
+             "step": 1},
             agent_line("hint_bank", "t1", lang="cat", hint=GOOD_HINT, extra=1),
-            agent_line("solutions", "t1", lang="cat", hint=GOOD_HINT),
+            agent_line("solutions", "t1", lang="cat", hint=GOOD_HINT, step=1),
             agent_line("hint_bank", "t1", lang="cat"),
             agent_line("hint_bank", "t1", lang="cat", hint=7),
         ])
@@ -1254,12 +1329,13 @@ class HintSource(unittest.TestCase):
         self.addCleanup(folder.cleanup)
         self.path = os.path.join(folder.name, "tutor.db")
 
-    def test_old_database_gets_the_column(self):
+    def test_old_database_still_opens(self):
         import sqlite3
         old = sqlite3.connect(self.path)
         old.execute("CREATE TABLE hints (n INTEGER PRIMARY KEY AUTOINCREMENT, problem_id TEXT, "
                     "student INTEGER, text TEXT, delta REAL, convinced INTEGER, "
-                    "shown INTEGER DEFAULT 0, solved_after INTEGER DEFAULT 0, ts REAL)")
+                    "shown INTEGER DEFAULT 0, solved_after INTEGER DEFAULT 0, ts REAL, "
+                    "relevance REAL, dups INTEGER DEFAULT 0, vec BLOB, rejected TEXT)")
         old.execute("INSERT INTO hints (problem_id, student, text, delta, convinced, ts) "
                     "VALUES ('p1', 1, 'old hint', 0.5, 1, 0)")
         old.commit()
@@ -1267,80 +1343,38 @@ class HintSource(unittest.TestCase):
         for _ in range(2):   # opening it twice must not fail on the second ALTER
             store = Store(self.path)
             hint = store.hints()[0]
-            self.assertEqual((hint["source"], hint["dups"], hint["relevance"], hint["vec"],
-                              hint["rejected"]), ("student", 0, None, None, None))
-            self.assertEqual(store.ref_vectors("method", "geometria"), [])
+            self.assertEqual((hint["source"], hint["step"]), ("student", None))
+            store.add_hint("p1", None, "new", None, None, source="agent", step=1)
+            self.assertEqual(store.hint_counts()["convinced"], 0)
             store.close()
 
-    def test_best_hint_order(self):
+    def test_agent_hints_and_events(self):
         store = Store(self.path)
         self.addCleanup(store.close)
-        self.assertIsNone(store.best_hint("p1"))
-        bank = store.add_hint("p1", None, "from the bank", None, False, source="agent")
-        store.add_hint("p1", 1, "did not convince", 3.0, False)
-        self.assertEqual(store.best_hint("p1")["n"], bank)          # the bank is the fallback
-        first = store.add_hint("p1", 1, "convinced, older", 1.0, True, relevance=0.2)
-        second = store.add_hint("p1", 2, "convinced, newer", 1.0, True, relevance=0.2)
-        self.assertEqual(store.best_hint("p1")["n"], first)         # a tie: the oldest
-        store.run("UPDATE hints SET relevance = 0.5 WHERE n = ?", (second,))
-        self.assertEqual(store.best_hint("p1")["n"], second)        # then relevance
-        for _ in range(3):
-            store.hint_shown(first)
-            store.hint_solved(first)
-        self.assertEqual(store.best_hint("p1")["n"], first)         # the human signal first
-        for _ in range(3):
-            store.hint_shown(bank)
-            store.hint_solved(bank)
-        self.assertEqual(store.best_hint("p1")["n"], first)         # students before the bank
-        self.assertEqual(store.best_hint("p1", min_relevance=0.6)["n"], bank)
-        store.add_hint("p2", None, "other bank", None, False, source="agent")
-        found = store.best_neighbour_hint(["p3", "p2", "p1"])
-        self.assertEqual((found["from_problem"], found["n"]), ("p1", first))  # a student's first
-        self.assertEqual(store.best_neighbour_hint(["p2"])["text"], "other bank")
-        self.assertIsNone(store.best_neighbour_hint(["p3"]))
-
-    def test_assess_and_reference_vectors(self):
-        store = Store(self.path)
-        self.addCleanup(store.close)
-        self.assertIsNone(hintsim.assess(store, "p1", "geometria", "x", None))
-        self.assertIsNone(hintsim.assess(store, "p1", "geometria", "x", dead_embedder))
-        import embed_refs
-        store.add_hint("p1", None, "Fes un dibuix del quadrat.", None, False, source="agent")
-        solutions = os.path.join(os.path.dirname(self.path), "solutions.jsonl")
-        with open(solutions, "w", encoding="utf-8") as f:
-            f.write(json.dumps({"id": "p1", "solution": "Side 9, area 81."}) + "\n")
-        store.run("INSERT INTO problems (id, topic) VALUES ('p1', 'geometria')")
-        counts = embed_refs.run(store, fake_embedder, solutions)
-        self.assertEqual(counts, {"agent_hints": 1, "method": 3 * len(topics.NAMES), "solutions": 1})
-        self.assertEqual(embed_refs.run(store, fake_embedder, solutions)["agent_hints"], 0)
-        result = hintsim.assess(store, "p1", "geometria", "Fes un dibuix del quadrat!", fake_embedder)
-        self.assertAlmostEqual(result["relevance"], 1.0, places=5)  # same words as the bank hint
-        self.assertIsNone(result["duplicate_of"])                   # but the bank never duplicates
-        first = store.add_hint("p1", 1, "Fes un dibuix del quadrat!", 1.0, True, vec=result["vec"])
-        again = hintsim.assess(store, "p1", "geometria", "Fes un dibuix del quadrat.", fake_embedder)
-        self.assertEqual(again["duplicate_of"], first)               # another student's hint does
-        other = hintsim.assess(store, "p1", "geometria", "Pensa en els angles rectes.", fake_embedder)
-        self.assertIsNone(other["duplicate_of"])
-        self.assertLess(other["relevance"], 1.0)
-        self.assertEqual(len(hintsim.from_blob(result["vec"])), 64)
-
-    def test_add_hint_source(self):
-        store = Store(self.path)
-        self.addCleanup(store.close)
-        store.add_hint("p1", 1, "from a student", 0.3, True)
-        store.add_hint("p1", None, "from the bank", None, False, source="agent")
-        self.assertEqual([h["source"] for h in store.hints()], ["student", "agent"])
-        self.assertTrue(store.has_hint("p1", "from the bank", "agent"))
-        self.assertFalse(store.has_hint("p1", "from the bank", "student"))
+        second = store.add_hint("p1", None, "the next step", None, None, source="agent", step=2)
+        first = store.add_hint("p1", None, "where to start", None, None, source="agent", step=1)
+        store.add_hint("p1", 1, "from a student", 1.5, True)
+        self.assertEqual([h["n"] for h in store.agent_hints("p1")], [first, second])
+        self.assertIsNone(store.agent_hints("p1")[0]["convinced"])   # not measured yet
+        store.set_hint_measure(first, 1.2, True)
+        self.assertEqual(store.agent_hints("p1")[0]["convinced"], 1)
+        self.assertEqual([h["text"] for h in store.student_hints()], ["from a student"])
+        store.add_hint_event("p1", "rejected", "valor")
+        store.add_hint_event("p1", "not_convinced", delta=0.2)
+        store.add_hint_event("p1", "convinced", feigned=True)
+        self.assertEqual(store.hint_counts(), {"rejected": {"valor": 1}, "not_convinced": 1,
+                                               "convinced": 1, "feigned": 1})
         with self.assertRaises(ValueError):
             store.add_hint("p1", 1, "x", None, False, source="teacher")
+        with self.assertRaises(ValueError):
+            store.add_hint_event("p1", "maybe")
 
     def test_import_hints_is_idempotent(self):
         store = Store(self.path)
         store.run("INSERT INTO problems (id, label, eligible) VALUES ('t1', 'C', 1)")
         store.close()
-        rows = [agent_line("hint_bank", "t1", lang="cat", hint=GOOD_HINT),
-                agent_line("hint_bank", "t1", lang="cat", hint="Multiplica abans de restar."),
+        rows = [agent_line("hint_bank", "t1", lang="cat", hint="Multiplica abans de restar.", step=2),
+                agent_line("hint_bank", "t1", lang="cat", hint=GOOD_HINT, step=1),
                 agent_line("hint_bank", "zz", lang="cat", hint=GOOD_HINT)]
         path = os.path.join(os.path.dirname(self.path), "agent_hints.jsonl")
         with open(path, "w", encoding="utf-8") as f:
@@ -1352,10 +1386,10 @@ class HintSource(unittest.TestCase):
             self.assertIn(f"Added {added} hints", printed.getvalue())
         store = Store(self.path)
         self.addCleanup(store.close)
-        hints = store.hints()
-        self.assertEqual(len(hints), 2)
-        self.assertEqual({h["source"] for h in hints}, {"agent"})
-        self.assertEqual(store.best_hint("t1")["source"], "agent")   # the fallback for rung 3
+        hints = store.agent_hints("t1")
+        self.assertEqual([(h["step"], h["text"]) for h in hints],
+                         [(1, GOOD_HINT), (2, "Multiplica abans de restar.")])
+        self.assertTrue(all(h["convinced"] is None for h in hints))
 
 
 class OcrPass2(unittest.TestCase):
