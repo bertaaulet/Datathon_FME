@@ -117,6 +117,7 @@ button:disabled { cursor: default; }
 .text small { display: block; font: 600 12px/1 var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--soft); margin-bottom: 8px; }
 .text.second { border-left: 1px solid var(--line); padding-left: 22px; }
 /* a machine translation says so, next to the language's name */
+.msg small .mt, #p-warning small .mt { display: inline-block; margin-inline-start: 6px; padding: 0 5px; border: 1px solid currentColor; border-radius: 4px; font-size: .78em; opacity: .8; }
 .text small .mt { margin-inline-start: 8px; padding: 2px 6px; border: 1px solid currentColor; border-radius: 4px; letter-spacing: .04em; text-transform: none; font-weight: 500; }
 @media (max-width: 640px) { .text.second { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); padding-top: 16px; } }
 .text img { max-width: 100%; height: auto; border-radius: 8px; outline: 1px solid rgba(0,0,0,.1); outline-offset: -1px; background: #fff; }
@@ -639,6 +640,11 @@ function drawLevels() {
 drawLevels();
 
 /* a piece of text in the student's language: its direction (Arabic runs right to left) and its language */
+/* machine translation, never reviewed by a native speaker: always said on screen */
+function mtTag(source) {
+  return el("span", {class: "mt", lang: "ca", dir: "ltr", title: "Traduït per una màquina (" + source + "), sense revisar"}, "traducció automàtica");
+}
+function withMt(node, source) { if (source) node.append(mtTag(source)); return node; }
 function inLang(node, lang) {
   node.setAttribute("dir", "auto");
   if (ISO1[lang]) node.setAttribute("lang", ISO1[lang]);
@@ -842,7 +848,7 @@ function render(view) {
       const name = el("small", {}, LANG_NAMES[problem.origen_lang] || problem.origen_lang);
       // anything that isn't M3Kang's own text was translated by a machine, and nobody reviewed it
       if (problem.origen_source && problem.origen_source !== "official" && !problem.origen_image)
-        name.append(el("span", {class: "mt", lang: "ca", title: "Traduït per una màquina (" + problem.origen_source + "), sense revisar"}, "traducció automàtica"));
+        name.append(mtTag(problem.origen_source));
       box.append(name);
       if (problem.origen_image) box.append(el("img", {src: "/img/" + problem.origen_image, decoding: "async",
         alt: "Enunciat original en " + (LANG_NAMES[problem.origen_lang] || problem.origen_lang)}));
@@ -886,7 +892,8 @@ function render(view) {
   // always visible while working on an outside problem (CLAUDE.md)
   $("p-warning").textContent = problem && problem.warning ? problem.warning : "";
   if (problem && problem.warning && problem.warning_origen)
-    $("p-warning").append(inLang(el("small", {}, problem.warning_origen.text), problem.warning_origen.lang));
+    $("p-warning").append(withMt(inLang(el("small", {}, problem.warning_origen.text), problem.warning_origen.lang),
+                                 problem.warning_origen.source));
   $("p-warning").classList.toggle("hidden", !(problem && problem.warning));
 
   // short answers (numbers, single words) sit side by side instead of one per line
@@ -915,7 +922,7 @@ function render(view) {
   view.messages.forEach((message, i) => {
     const bubble = el("div", {class: "msg " + message.who + " " + (message.kind || "") + (i >= seenMessages ? " new" : "")}, message.text);
     if (message.origen)    // the same words in the student's language (language bridge)
-      bubble.append(inLang(el("small", {}, message.origen.text), message.origen.lang));
+      bubble.append(withMt(inLang(el("small", {}, message.origen.text), message.origen.lang), message.origen.source));
     const kind = problem && marks.get(problem.id + ":" + i);
     if (kind) bubble.append(resultGlyph(kind));
     chat.append(bubble);

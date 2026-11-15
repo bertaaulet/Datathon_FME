@@ -86,13 +86,14 @@ class Tutor:
 
     # ------------------------------------------------------------------ helpers
 
-    def _say(self, who, text, kind="", own=None):
+    def _say(self, who, text, kind="", own=None, source=None):
         """Say a text as it is (a student's hint, a problem). own: the same text in the
-        student's language, shown by the same stage rules as a template."""
+        student's language, shown by the same stage rules as a template; source: who
+        translated it (None for an official text)."""
         message = {"who": who, "text": text, "kind": kind}
         origin = self._origin()
         if own and own != text and origin and self.student["etapa"] in (1, 2):
-            message["origen"] = {"lang": origin, "text": own,
+            message["origen"] = {"lang": origin, "text": own, "source": source,
                                  "behind_button": self._behind_button()}
         self.messages.append(message)
 
@@ -134,8 +135,23 @@ class Tutor:
             translated = self._render(origin, parts)
             if translated != message["text"]:
                 message["origen"] = {"lang": origin, "text": translated,
+                                     "source": self._provenance(origin, parts),
                                      "behind_button": not bridge and self._behind_button()}
         self.messages.append(message)
+
+    @staticmethod
+    def _provenance(lang, parts):
+        """Who translated the parts of a message into lang: never a native speaker, so the
+        page marks it as machine translation. None when it is all the team's Catalan."""
+        found = set()
+        for part in parts:
+            key = part if isinstance(part, str) else part[0]
+            if key == "method":
+                found.add(topics.TRANSLATION_SOURCE if lang in topics.TRANSLATIONS_LANGS else None)
+            else:
+                found.add(phrases.provenance(key, lang))
+        found.discard(None)
+        return ", ".join(sorted(found)) or None
 
     def _show(self, frame):
         self.frame = frame
@@ -564,7 +580,7 @@ class Tutor:
                 example = self._easier_neighbour(current)
                 if example:
                     self._tell("sistema", "semblant_facil", kind="pista")
-                    self._say("sistema", example[0], "exemple", own=example[1])
+                    self._say("sistema", example[0], "exemple", own=example[1], source=example[2])
                 else:
                     rung = 2
             if rung == 2:
@@ -650,8 +666,10 @@ class Tutor:
             return f"{text['text']}\n{answer}".strip()
         origin = self._origin()
         own = self.store.text(best["id"], origin) if origin else None
+        source = (own or {}).get("source")
         return (example(shown, options, LANG),
-                example(own, own["options"] or options, origin) if own else None)
+                example(own, own["options"] or options, origin) if own else None,
+                None if source in (None, "official") else source)
 
     # ------------------------------------------------------------------ problems from outside
 
@@ -799,7 +817,8 @@ class Tutor:
             origen = message.get("origen")
             message = {k: v for k, v in message.items() if k != "origen"}
             if origen and (not origen["behind_button"] or revealed):
-                message["origen"] = {"lang": origen["lang"], "text": origen["text"]}
+                message["origen"] = {"lang": origen["lang"], "text": origen["text"],
+                                     "source": origen.get("source")}
             out.append(message)
         return out
 
@@ -831,7 +850,8 @@ class Tutor:
                     "level": "?" if current["row"]["level"] is None else current["row"]["level"],
                     "external": current["external"],
                     "warning": EXTERNAL_WARNING if current["external"] else None,
-                    "warning_origen": {"lang": origin, "text": phrases.phrase("avis_extern", origin)}
+                    "warning_origen": {"lang": origin, "text": phrases.phrase("avis_extern", origin),
+                                       "source": phrases.provenance("avis_extern", origin)}
                     if current["external"] and bridge_on else None,
                     "topic": topics.name(current["row"]["topic"]),
                     "shown": current["shown"],

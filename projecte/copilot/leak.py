@@ -105,6 +105,7 @@ MIDDLE = (r"(?:la del mig|la del medio|the middle one|la del centre|la del centr
           r"中间的?(?:那个|一个|选项|答案|项))")
 NUMBER = re.compile(r"\d+(?:[.,]\d+)?(?:\s*/\s*\d+)?")
 WORD = re.compile(r"[^\W\d_]+")
+LONE_A_GRAVE = re.compile(r"(?<![^\W\d_])[àÀ](?![^\W\d_])")
 
 
 def normal(text):
@@ -243,7 +244,9 @@ def numbers(text, words=True):
 
 def says_letter(hint, label, statements):
     """The correct letter, written as an answer: 'la C', 'C)', 'opció c', '答案是C', or a lone 'C'."""
-    hint = normal(hint)
+    # A lone "à" is the French (and Catalan) preposition, never the option A: "la réponse
+    # à ce problème" names no option. plain() would take its accent away.
+    hint = LONE_A_GRAVE.sub("·", unicodedata.normalize("NFC", normal(hint)))
     lowered = plain(hint)
     letter = label.lower()
     if re.search(rf"\(\s*{letter}\s*\)|{START}{letter}\s*\)", lowered):

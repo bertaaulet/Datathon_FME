@@ -30,13 +30,15 @@ from copilot.config import CONFIG  # noqa: E402
 from copilot.store import Store  # noqa: E402
 from copilot.tutor import NEUTRAL_HINT, Tutor, bar_value, kangaroo  # noqa: E402
 
-# The tests don't depend on the machine translations of the phrases (phrases_mt.json):
-# every phrase and topic gets a stand-in "translation", the Catalan text with a language tag.
-REAL_PHRASES, REAL_TOPICS = phrases.load()
+# The tests don't depend on the machine translations of the phrases (phrases_mt.json and
+# its corrections, phrases_fix.json): every phrase and topic gets a stand-in
+# "translation", the Catalan text with a language tag. They check logic, not language.
+REAL_PHRASES, REAL_PROVENANCE, REAL_TOPICS, _ = phrases.build()
 for _key, _by_lang in phrases.PHRASES.items():
     for _lang in phrases.LANGS:
         if _lang != "cat":
             _by_lang[_lang] = f"‹{_lang}› {_by_lang['cat']}"
+            phrases.PROVENANCE.setdefault(_key, {})[_lang] = "stand-in"
 phrases.TOPIC_NAMES.clear()
 phrases.TOPIC_NAMES.update({_key: {_lang: f"‹{_lang}› {_name}" for _lang in phrases.LANGS if _lang != "cat"}
                             for _key, _name in topics.NAMES.items()})
@@ -520,6 +522,14 @@ class Leaks(unittest.TestCase):
         text = ["三角形的边长是 a、b 和 c，求周长。"]
         self.assertIsNone(self.check("把 a、b 和 c 加起来就行了", "C", self.OPTIONS_97, text))
 
+    def test_french_preposition_a_is_no_option(self):
+        for label in "AC":
+            for hint in ("Pour trouver la réponse à ce problème, multiplie d'abord.",
+                         "Il faut ajouter à la fin ce qu'elle a mangé."):
+                self.assertIsNone(self.check(hint, label, self.OPTIONS_97), (label, hint))
+        self.assertEqual(self.check("la réponse est A", "A", self.OPTIONS_97), "lletra")
+        self.assertEqual(self.check("c'est la A", "A", self.OPTIONS_97), "lletra")
+
     def test_ordinal_alone_is_a_position(self):
         for hint in ("és la tercera", "Es la tercera, oi?", "it's the third one", "the third one",
                      "c'est la troisième !", "la respuesta es la tercera"):
@@ -558,7 +568,8 @@ class Phrases(unittest.TestCase):
         self.assertEqual(phrases.phrase("correcte", "deu"), "Correcte!")           # no German
         self.assertEqual(phrases.phrase("solucio", "esp", label="C", value="10"),
                          "‹esp› La resposta és la C) 10.")
-        self.assertEqual(phrases.phrase("solucio", "esp"), phrases.PHRASES["solucio"]["cat"])
+        # a value missing even for Catalan: dots, never a raw {marker} on screen
+        self.assertEqual(phrases.phrase("solucio", "esp"), "La resposta és la …) ….")
         self.assertEqual(phrases.topic_name("logica", "zho"), "‹zho› Lògica")
         self.assertEqual(phrases.topic_name("logica", "deu"), topics.name("logica"))
         self.assertEqual(phrases.phrase("avis_extern"), phrases.EXTERNAL_WARNING)
@@ -583,10 +594,62 @@ class Phrases(unittest.TestCase):
                    | {"extern_sense_opcions"})
         for key, by_lang in REAL_PHRASES.items():
             for lang, template in by_lang.items():
+                self.assertFalse(phrases.garbled(lang, template), (key, lang))
                 text = template.format(**self.values(lang))
                 if key not in allowed:
                     self.assertNotIn(leak.check_strict(text, self.OPTIONS, self.TEXT),
                                      ("lletra", "valor", "posicio"), (key, lang))
+
+    def test_real_files_cover_every_phrase(self):
+        # OPUS-MT plus the corrections: every phrase and topic exists in the five languages,
+        # and says where it came from. Not a check of the language itself (no native speaker).
+        for key in phrases.CATALAN:
+            self.assertEqual(set(REAL_PHRASES.get(key, {})), set(phrases.LANGS) - {"cat"}, key)
+            self.assertTrue(all(REAL_PROVENANCE[key].values()), key)
+        for key in topics.NAMES:
+            self.assertEqual(set(REAL_TOPICS.get(key, {})), set(phrases.LANGS) - {"cat"}, key)
+        with open(phrases.FIX_PATH, encoding="utf-8") as f:
+            fixes = json.load(f)["phrases"]
+        for key, by_lang in fixes.items():                  # every correction is used
+            for lang, text in by_lang.items():
+                self.assertEqual(REAL_PHRASES[key][lang], text, (key, lang))
+
+    def test_garbled_translations_are_not_used(self):
+        for lang, text in (("eng", "A lead: ascii{text} Mutz"), ("esp", "Parece de TABASA{topic}len"),
+                           ("arb", "دليل: Ascii {text} Mutz"), ("zho", "看起来像是Kolab {topic}节点"),
+                           ("zho", "我们一起解决问题?3⁄4 ̄ ̧B")):
+            self.assertTrue(phrases.garbled(lang, text), text)
+        for lang, text in (("eng", "A hint: «{text}»"), ("fra", "Un indice : « {text} »"),
+                           ("zho", "一个提示：「{text}」"), ("arb", "الإجابة: {label}) {value}"),
+                           ("zho", "我没能读出五个选项 A) … E)，所以没法批改你的答案。"),
+                           ("esp", "Es un problema de «{topic}».")):
+            self.assertFalse(phrases.garbled(lang, text), text)
+
+    def test_corrections_win_and_say_where_they_come_from(self):
+        with tempfile.TemporaryDirectory() as folder:
+            mt, fix = os.path.join(folder, "mt.json"), os.path.join(folder, "fix.json")
+            with open(mt, "w", encoding="utf-8") as f:
+                json.dump({"source": "opus-mt", "phrases": {
+                    "correcte": {"fra": "C'est exact !", "esp": "¡Correcto!"},
+                    "pista": {"eng": "A lead: ascii{text} Mutz"}}}, f)
+            with open(fix, "w", encoding="utf-8") as f:
+                json.dump({"source": "reviewer", "phrases": {
+                    "correcte": {"fra": "Correct !"}, "pista": {"eng": "A hint: «{text}»"}},
+                    "topics": {"logica": {"eng": "Logic"}}}, f)
+            texts, sources, names, name_sources = phrases.build(mt, fix)
+            self.assertEqual(texts, {"correcte": {"fra": "Correct !", "esp": "¡Correcto!"},
+                                     "pista": {"eng": "A hint: «{text}»"}})
+            self.assertEqual(sources, {"correcte": {"fra": "reviewer", "esp": "opus-mt"},
+                                       "pista": {"eng": "reviewer"}})
+            self.assertEqual((names, name_sources), ({"logica": {"eng": "Logic"}},
+                                                     {"logica": {"eng": "reviewer"}}))
+            # no corrections file: OPUS-MT alone, without the garbled one
+            texts, sources, _, _ = phrases.build(mt, fix + ".missing")
+            self.assertEqual(texts, {"correcte": {"fra": "C'est exact !", "esp": "¡Correcto!"}})
+        self.assertIsNone(phrases.provenance("correcte", "cat"))
+        self.assertIsNone(phrases.provenance("correcte", "deu"))       # Catalan fallback
+        self.assertEqual(phrases.provenance("correcte", "fra"), "stand-in")
+        self.assertEqual(phrases.phrase("solucio", "deu"), "La resposta és la …) ….")
 
     def test_no_phrase_leaks_in_any_language(self):
         # Every template, filled in, goes through the leak filter in its six versions.
@@ -991,6 +1054,16 @@ class TutorFlow(WithServers):
             for message in said:
                 self.assertEqual(message["origen"]["lang"], lang, message["text"])
                 self.assertNotEqual(message["origen"]["text"], message["text"])
+                # translated by a machine: the page marks it, and says by whom. A similar
+                # problem's own text is marked only when it isn't M3Kang's (official) one.
+                if message["kind"] != "exemple":
+                    self.assertTrue(message["origen"]["source"], message["text"])
+                elif lang == "fra":
+                    self.assertEqual(message["origen"]["source"], "opus-mt")
+                else:
+                    self.assertIsNone(message["origen"]["source"])
+            method = next(m for m in said if "És un problema de" in m["text"])
+            self.assertEqual(method["origen"]["source"], "llm (back-translated), stand-in")
         self.tutor.start("Test", "fra", 1, reset=True)              # stage 2: behind the button
         self.tutor.student["etapa"] = 2
         view = self.tutor.next()
