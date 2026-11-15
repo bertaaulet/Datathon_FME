@@ -63,6 +63,7 @@ Els problemes 3, 9 i 10 toquen els mateixos fitxers (`app/index.html` i `copilot
 - **Causes possibles (no comprovades):** el model és molt petit. El problema li arriba en anglès (`MODEL_LANG=eng`) i la pista en català. I en la prova, la pista arribava tallada (problema 3).
 - **Com es comprova:** amb `prep/hint_experiment.py`, sobre els mateixos problemes, comparar pistes en anglès amb pistes en català, i provar diferents valors de `HINT_TAU`. Mesurar a la placa.
 - **Decisió:** B i qui porti el tutor, després de mesurar.
+- **Actualització 2026-11-15:** el Cangur ara llegeix el problema, les instruccions i la pista en català (`KANGAROO_LANG=cat`, `DECISIONS.md`). Cal tornar a calcular el Cangur (`kangaroo_baseline.py --redo`) i mesurar amb D2 en català.
 
 ## 5. La matriu LED necessita el tutor a `0.0.0.0` i no arrenca sola
 
