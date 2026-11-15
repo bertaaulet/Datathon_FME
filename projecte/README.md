@@ -73,7 +73,7 @@ The official entry point answers one letter per problem, as the challenge requir
 | SQLite (`data/tutor.db`) | Linux on the board | The student, attempts, hints, ratings, problem texts |
 | App Lab app (`applab/math-matrix`) | Linux + microcontroller | Draws the tutor's picture on the 8x13 LED matrix |
 
-How M3Kang is used: as the answer key, as a difficulty map (level and position in the paper give each problem a fixed rating), as a library of similar problems (embeddings), as the same problem in several languages, and as the base of a bank of hints written by students.
+How M3Kang is used: as the answer key, as a difficulty map (level and position in the paper give each problem a fixed rating), as a library of similar problems (embeddings), as the same problem in several languages, and as the base of a bank of hints written ahead of time by an agent.
 
 ```text
 predict.py            official entry point (same command line as the base repository)
@@ -130,7 +130,7 @@ python3 eval.py --limit 50 --rotations 2 --name rotations-2
 
 Fifty problems only rule things out. Confirm a candidate on the whole validation set with `--limit 0` (about 45 minutes), then set `PREDICT_ROTATIONS` in `config.env`.
 
-**4. Build the tutor's database.** Prepare the languages you want on your laptop first (`laptop/prepare_m3kang.py --languages eng,cat,esp,arb --save-images`) and copy `data/` over.
+**4. Build the tutor's database.** Prepare the languages you want on your laptop first (`laptop/prepare_m3kang.py --languages eng,cat,esp,fra,arb,zho --save-images`) and copy `data/` over.
 
 ```bash
 python3 prep/build_tutor_db.py --show-topics 50

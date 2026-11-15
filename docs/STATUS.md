@@ -1,10 +1,10 @@
 # Estat actual
 
-_Última actualització: 2026-11-15 09:20 — Irene (amb Claude): nit final a la placa (`NIT_FINAL.md`): pistes, pas 4 amb el conjunt de pràctica, configuració final + reinici, i experiment d'imatge; resultats a [`RESULTATS_NIT_FINAL.md`](RESULTATS_NIT_FINAL.md). 04:05 — Irene (amb Claude): proves B1 (D2) i B3 del paquet de la Berta a la placa (secció "Pont d'idioma i pistes"). 03:15 — Irene (amb Codex i Claude): banc de pistes de l'agent i desplegament del tutor a la placa (secció "Pont d'idioma i pistes"). 02:45 — Irene (amb Claude): segona ronda de `predict.py` a la placa amb `dev50` (resultats i incidència USB). Pont d'idioma: Irene (amb Codex). La resta, de les 01:45 (Berta)._
+_Última actualització: 2026-11-15 10:00 — Elsa (amb Claude): auditoria del repo; corregides les contradiccions d'aquest fitxer (pas 4, branca de pistes, `letter_bias.json`), README d'`irene/readme-entrega` portat a la branca `elsa/arreglos-auditoria`. 09:20 — Irene (amb Claude): nit final a la placa (`NIT_FINAL.md`): pistes, pas 4 amb el conjunt de pràctica, configuració final + reinici, i experiment d'imatge; resultats a [`RESULTATS_NIT_FINAL.md`](RESULTATS_NIT_FINAL.md). 04:05 — Irene (amb Claude): proves B1 (D2) i B3 del paquet de la Berta a la placa (secció "Pont d'idioma i pistes"). 03:15 — Irene (amb Codex i Claude): banc de pistes de l'agent i desplegament del tutor a la placa (secció "Pont d'idioma i pistes"). 02:45 — Irene (amb Claude): segona ronda de `predict.py` a la placa amb `dev50` (resultats i incidència USB). Pont d'idioma: Irene (amb Codex). La resta, de les 01:45 (Berta)._
 
 ## Fase
 - **Tutor:** funciona a la placa amb el banc real (`tutor.db`, 601 problemes utilitzables, el Cangur precalculat), arrenca sol amb la placa i amb la matriu LED, i els problemes externs segueixen el mateix recorregut que els del banc (provat amb problemes inventats).
-- **`predict.py`:** primera ronda (validació antiga) i **segona ronda amb `dev50` feta a la placa** (taules de sota). Cap configuració surt del soroll; el RAG no ajuda i dobla el temps. **Pendent: decidir el pas 4** (confirmació amb el conjunt de pràctica, `data/demo.jsonl`) i triar `config.env`.
+- **`predict.py`:** primera ronda (validació antiga) i **segona ronda amb `dev50` feta a la placa** (taules de sota). Cap configuració surt del soroll; el RAG no ajuda i dobla el temps. **Pas 4 fet** (conjunt de pràctica, `data/demo.jsonl`: `demo-debias` 25/100) i **configuració final triada**: per defecte, debias amb `letter_bias.json`, sense RAG.
 - **Test final:** 20 problemes nous, executats amb el nostre `predict.py` **a la nostra placa** després del *last call* de les 12:00 (detall a `PLA.md`).
 - **Lliuraments** (README, `LICENSE`, pitch, vídeo, Project Hub, dashboard): sense començar.
 - La presentació és **diumenge**. El pla és a [`PLA.md`](PLA.md), i els problemes trobats a la placa a [`PROBLEMES.md`](PROBLEMES.md).
@@ -24,7 +24,7 @@ Les tasques s'assignen en veu alta a l'equip; aquí només hi ha què queda i de
 | Línia | Fet | Pendent | Depèn de |
 | --- | --- | --- | --- |
 | `predict.py` | Calibració, guardrails, biaix per lot, expressió (descartada), RAG amb pregunta + valor correcte, biaix robust | Segona ronda d'experiments; triar la configuració de `config.env`; `letter_bias.json` bo a la placa; confirmar amb el conjunt de pràctica; anàlisi d'errors; placa a punt per al *last call* | La placa |
-| Pistes (Berta) | Flux nou a `main` i desplegat (616 problemes, 1.232 pistes de l'agent, Cangur en català). D2 a la placa: el 0.8B no distingeix pistes bones d'absurdes (13–11, p = 0,84) → **`KANGAROO_RULE=clean`** (qualsevol pista neta convenç) i **`HINTGEN=off`** (branca `berta/docs-pistes-main`) | Fusionar `berta/docs-pistes-main`; última prova a la placa ([`PROVES_FINALS_PISTES.md`](PROVES_FINALS_PISTES.md), ~25 min); revisió humana d'una mostra de pistes | La placa lliure |
+| Pistes (Berta) | Flux nou a `main` i desplegat (616 problemes, 1.232 pistes de l'agent, Cangur en català). D2 a la placa: el 0.8B no distingeix pistes bones d'absurdes (13–11, p = 0,84) → **`KANGAROO_RULE=clean`** (qualsevol pista neta convenç) i **`HINTGEN=off`** (branca `berta/docs-pistes-main`) | Fet: `berta/docs-pistes-main` fusionada i última prova a la placa ([`PROVES_FINALS_PISTES.md`](PROVES_FINALS_PISTES.md), 67/67). Pendent: revisió humana d'una mostra de pistes | La placa lliure |
 | Tutor (Teach) | Escala d'ajuda, Cangur, pont d'idioma, Elo de l'alumne (el dels problemes és fix), problemes externs, interfície nova, servei i reinici | Problemes 11–14 de `PROBLEMES.md`; revisar l'Elo i el pont d'idioma; reconstruir `tutor.db` amb les dades noves de l'OCR (si es vol) | — |
 | Lliuraments | — | README, `LICENSE`, xifres de PISA, pitch, vídeo de reserva, Project Hub, dashboard Tukey | Resultats per als números |
 
@@ -116,7 +116,7 @@ Revisió humana de mostra (Berta, 20 línies de cada, triades a l'atzar amb llav
 - **Abast:** `PLA.md` té moltes tasques obertes. Cal decidir què es fa per diumenge i què s'explica com a "no fet".
 - **Les opcions del test final passen per l'OCR:** els problemes amb figura o mal llegits es queden sense opcions i reben la lletra de reserva. Cal mesurar-ho amb el conjunt de pràctica.
 - **Amb 20 problemes, la correcció per lot no s'aplica:** el que compta és `letter_bias.json` a la placa.
-- **`letter_bias.json` actual de la placa** (60 problemes, 23:33): C = 0,004 i D = 0,56, el mateix patró que el de la primera ronda que es va considerar dolent (C = 0,005). Amb `dev50` encara prediu poc la C (5/50). Cal decidir si és prou bo per al *last call*.
+- **`letter_bias.json` actual de la placa** (60 problemes, 23:33): C = 0,004 i D = 0,56, el mateix patró que el de la primera ronda que es va considerar dolent (C = 0,005). Amb `dev50` encara prediu poc la C (5/50). **Decidit: es fa servir** (al conjunt de pràctica reparteix les lletres 21/24/20/18/17 i dona 25/100 contra 22/100 sense). **Només existeix a la placa**: no és a git ni a cap portàtil; cal copiar-lo (`adb pull`) i pujar-lo abans del *last call*.
 - **Placa inestable per USB/alimentació** (`PROBLEMES.md` 15): un tall durant el *last call* o la demo és un risc. Un altre reinici sol el 2026-11-15 a les 02:33 (hora de la placa), amb el model treballant (D2).
 
 ## Per decidir com a equip
@@ -130,7 +130,7 @@ Revisió humana de mostra (Berta, 20 línies de cada, triades a l'atzar amb llav
 
 ## Resolt
 - Repo base importat a `projecte/` (commit `d6e3f1b` dels organitzadors). Idea final: "Ensenya el Cangur" amb `predict.py` millorat.
-- Dades: `eng` i `cat`, segona volta d'OCR (75% de files amb les 5 opcions; sempre 5 o cap) i la partició de `prepare_m3kang.py`: train 1.461 i validació 280 problemes. Test: el conjunt de pràctica dels organitzadors (50 problemes nous).
+- Dades: `eng` i `cat`, segona volta d'OCR (75% de files amb les 5 opcions; sempre 5 o cap) i la partició de `prepare_m3kang.py`: train 1.461 i validació 280 problemes. Test: el conjunt de pràctica dels organitzadors (50 problemes nous, en anglès i català: 100 files).
 - Placa: passos 0–8, D1, placa contra portàtil, matriu LED, servei del tutor i reinici.
 - Es poden preparar pistes i altres lots amb un model gran fora de la placa (Marc).
 - `predict.py`: etapa 1 i expressió descartades; reserva global (D).

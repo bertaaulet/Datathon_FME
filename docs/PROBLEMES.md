@@ -20,7 +20,7 @@ Cada problema porta què passa, la causa (comprovada o no), l'arreglo, de qui é
 | 8 | El servei del tutor fallaria en bucle sense `tutor.db` | Baixa | C | — | 🟨 fet a `irene/tutor-fixes`, provat a la placa |
 | 9 | El tutor passa a l'anglès en silenci si falta el català | Mitjana | Tutor | — | 🟨 fet a `irene/tutor-fixes`, provat a la placa |
 | 10 | No es pot sortir de la fase "ensenyar el Cangur" | Mitjana | Tutor | — | 🟨 fet a `irene/tutor-fixes`, provat a la placa |
-| 11 | El tutor torna a preguntar al model encara que el Cangur estigui precalculat | Mitjana | Tutor | — | ⬜ proposta |
+| 11 | El tutor torna a preguntar al model encara que el Cangur estigui precalculat | Mitjana | Tutor | — | ✅ a `main` (`irene/tutor-kprobs`): amb `k_probs` en el mateix idioma no es crida el model |
 | 12 | Un problema extern sense opcions no mostra l'avís | Baixa | Tutor | — | ⬜ proposta |
 | 13 | La matriu no ensenya el ✓ si la referència ja ha acabat | Baixa | Tutor | — | ⬜ proposta |
 | 14 | Desplegaments a la placa que es trepitgen | Mitjana | Tothom (C) | — | ⬜ proposta |
